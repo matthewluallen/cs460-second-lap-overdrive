@@ -1,0 +1,27 @@
+Your commission from Casey and Matt
+
+Each student receives an assigned kit, subject to the instructors' inventory and
+hardware validation. Teams of three or four investigate together and present one
+investment recommendation. Every student submits an individual evidence note.
+The simulator provides an equivalent route when a kit or battery is unavailable.
+
+Deliver a useful controller improvement, a reproducible security assessment,
+an evidence-based rights and provenance analysis, and a recommendation to fund,
+fund with conditions, pivot, or decline. You may reach different conclusions.
+
+Maintain an evidence register: claim, source, date obtained, hash if applicable,
+observation, inference, alternative explanation, confidence, next question.
+Separate what you observed from what somebody told you. Preserve originals.
+Do not treat a persuasive interview, an old commit date or a successful demo as
+independent proof. Identify which questions require an owner, expert or counsel.
+
+Final presentation: 8 minutes plus 5 minutes of investor questions. Show a
+controlled before-and-after demonstration, identify your three material risks,
+cite your strongest evidence, and state measurable funding conditions.
+Each member must explain a different part of the evidence or implementation.
+
+Authorized targets: your local simulation, your assigned course repository and
+only the devices specifically assigned for supervised physical testing.
+The fictional founder may disagree with you. An instructor safety instruction
+always takes precedence over an in-character request. No real purchases,
+contracts, public accusations, third-party account access or unsolicited contact.
