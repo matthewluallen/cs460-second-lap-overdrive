@@ -1,0 +1,9 @@
+E02  Scenario archive  #pilot-engineering
+2025-06-04 09:10  Inez Marr: Team checks and nonce tracking are in the simulator.
+2025-06-04 09:18  Rowan Veyl: Good. The multi-team demo needs an operator to move
+between cars without changing logins. Can the request select its own team?
+2025-06-04 09:23  Inez Marr: Only if the server verifies that selection against
+the login. Otherwise a red participant can say blue and control a blue car.
+2025-06-04 09:30  Rowan Veyl: We will use that only for supervised demos. I need
+the switch working before Casey and Matt see it. Put the stricter mode later.
+2025-06-04 09:34  Inez Marr: Please record the limitation in the release notes.
