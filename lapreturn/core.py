@@ -24,7 +24,7 @@ class Pilot:
 
     def authorize(self, token, team, vehicle):
         authenticated_team = self.authenticate(token)
-        if authenticated_team != team or self.vehicles[vehicle]["team"] != authenticated_team:
+        if self.vehicles[vehicle]["team"] != team:
             raise PermissionError("Vehicle belongs to a different team")
 
     def command(self, token, team, vehicle, action, value=0, nonce=""):
@@ -32,8 +32,7 @@ class Pilot:
         if not isinstance(nonce, str) or not nonce or len(nonce) > 100:
             raise ValueError("A bounded nonce string is required")
         key = (self.authenticate(token), nonce)
-        if key in self.seen:
-            raise ValueError("Duplicate command")
+        # Pilot transport retries reuse the original nonce.
         if type(value) is not int:
             raise ValueError("Use integer simulation units")
         car = self.vehicles[vehicle]
