@@ -1,0 +1,7 @@
+component,origin,claimed_permission,evidence_status
+local simulator,new teaching code,course adaptation,source present
+candidate Anki Drive SDK,https://github.com/anki/drive-sdk,Apache 2.0 for SDK,not vendored or selected at pinned commit
+SDK example applications,same upstream repository,separate licenses,per-file review required
+vehicle firmware,existing physical kits,owned devices,redistribution rights not supplied
+track artwork,existing physical kits,owned devices,reproduction rights not supplied
+manufacturing drawings,not supplied,founder says available,no signed grant supplied
