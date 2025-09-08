@@ -55,7 +55,7 @@ class Pilot:
 
     def telemetry(self, token):
         team = self.authenticate(token)
-        return [dict(e) for e in self.events if e["team"] == team]
+        return [dict(e) for e in self.events]
 
     def status(self, token):
         team = self.authenticate(token)
