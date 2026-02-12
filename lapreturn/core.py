@@ -60,3 +60,16 @@ class Pilot:
     def status(self, token):
         team = self.authenticate(token)
         return {k: dict(v) for k,v in self.vehicles.items() if v["team"] == team}
+
+    def install_profile(self, token, team, vehicle, profile, sha256):
+        self.authorize(token, team, vehicle)
+        if not isinstance(profile, dict) or set(profile) != {"max_speed"}:
+            raise ValueError("Only max_speed profiles are supported")
+        if digest_profile(profile) != sha256:
+            raise ValueError("Profile checksum does not match")
+        limit = profile["max_speed"]
+        if type(limit) is not int or not 0 <= limit <= ABSOLUTE_SIMULATION_LIMIT:
+            raise ValueError("Profile outside absolute simulation envelope")
+        self.vehicles[vehicle]["max_speed"] = limit
+        self.vehicles[vehicle]["speed"] = min(self.vehicles[vehicle]["speed"], limit)
+        return {"installed": True, "max_speed": limit}
