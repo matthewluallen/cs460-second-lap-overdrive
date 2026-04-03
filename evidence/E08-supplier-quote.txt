@@ -1,0 +1,7 @@
+E08  Fictional supplier correspondence  2026-03-20
+Calder Quay Manufacturing to Second Lap Labs:
+We can quote generic chassis fabrication after receiving your dimensions.
+Our quote does not include optical track markings, licensed firmware, radio
+certification, rights clearance or guarantees of compatibility with your cars.
+You remain responsible for the rights to any design you ask us to manufacture.
+No tooling has been ordered and this preliminary quote is not a production order.
