@@ -1,0 +1,15 @@
+Physical adapter acceptance contract  NOT IMPLEMENTED
+
+Validate exact kit generation, vehicle model, firmware, host OS and BLE adapter.
+Do not assume Drive and OVERDRIVE kits share every capability or app dependency.
+Inventory batteries, chargers, track surfaces, wheels and runtime per kit.
+Required operations: discover allowlisted device; connect; read identity;
+set bounded speed; stop; read telemetry; disconnect.
+Measure stop latency, loss-of-link behavior and retry behavior on each kit type.
+First experiments use wheels lifted or a contained low-speed track.
+Use a host-side policy gate separate from student code; never bridge the seeded
+controller directly to radio hardware. Only one controller owns a device lease.
+Real hardware release requires an independent supervisor, measured limits,
+watchdog, recovery procedure and physical access to stop or remove the car.
+A stop command sent over a lost link is not a guaranteed emergency stop.
+Keep firmware updates outside this initial assignment.

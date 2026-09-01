@@ -1,0 +1,16 @@
+Local teaching protocol
+
+shell accepts JSON lines; no HTTP service or remote server is started.
+op=status: token
+op=telemetry: token
+op=command: token, team, vehicle, action, value, nonce
+op=install_profile: token, team, vehicle, profile, sha256
+Tokens: pilot-red and pilot-blue. Vehicles: sim-red and sim-blue.
+Actions: drive sets speed, advance increments synthetic distance, stop sets zero.
+drive and profile speeds are abstract integer simulation units. advance accepts
+0 through 10. A hard simulator bound of 500 is always enforced. No physical
+safety meaning attaches to these numbers. Stopping ends simulated motion only.
+Profile example: {"max_speed":120}. sha256 covers UTF-8 JSON with sorted keys
+and separators comma and colon, without spaces. The sample is in profiles/.
+No executable files or firmware are accepted. Profile state is lost on exit.
+Record original and modified outputs when evaluating a claim.
