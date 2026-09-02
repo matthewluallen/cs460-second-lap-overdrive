@@ -1,0 +1,11 @@
+Second Lap investigation rooms
+Your team is trying to reach an evidence-based investment decision before the
+fictional board deadline. The facilitator releases new packets as you demonstrate
+concepts. Ask questions supported by evidence; there are no secret phrases.
+Rooms cover protocol analysis, control logic, trust boundaries, update assurance,
+adversary emulation, AI evidence handling and the final investment decision.
+You can investigate repository clues in any order. Preserve full Git history.
+Each room requires an artifact, an explanation and a consequence for the product.
+Hints and equivalent accessible exercises are available without mastery penalty.
+Only packets released to your team are in scope. Never target the course portal,
+facilitator ledger or other teams to bypass an educational gate.
