@@ -34,6 +34,16 @@ The fleet and engine LED controls are available on `main` through
 Existing Codespaces must pull the updated `main` and reload the bench; opening a
 Codespace does not automatically update its checkout. Look for `fleet-led-v2`.
 
+The separate `codex/car-identification-checks` branch adds the optional
+[power-cycle, near/far and visual identification trial](bench/IDENTIFY.md).
+Look for `identify-v1` on that branch; this new trial is not yet on `main`.
+It listens for one selected candidate while the student powers their own car
+off/on, then moves it near/far three times. A separate bounded lights-only
+signal is available before enrollment; ordinary light/SDK controls still require
+confirmation. Neither result confirms or saves a car automatically. Advertisement
+monitoring is experimental and may be unavailable; all physical behavior remains
+hardware-unverified.
+
 For the Node platform, use Node 22 or 24. Run this from the repo root,
 then open the private forwarded port in a separate tab in desktop Google Chrome,
 or open http://localhost:8000 locally:

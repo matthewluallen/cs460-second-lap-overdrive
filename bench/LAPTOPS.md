@@ -9,6 +9,10 @@ Repeated Ice Charger or International MXT names do not identify your car.
 and record its served revision. Look for `fleet-led-v2`. Do not assume an older
 Codespace includes the fleet/engine controls.
 
+The optional [power/proximity and visible-pattern trial](IDENTIFY.md) is on
+`codex/car-identification-checks`, not `main`. Trying it requires that reviewed
+branch. Its radio sampling and light behavior remain hardware-unverified.
+
 Use **desktop Google Chrome on the student's physical laptop** for all four platforms.
 A Codespace can serve the page; it cannot use its remote host as your laptop's radio.
 Use your own normal Chrome profile and the private forwarded HTTPS address for
@@ -79,6 +83,19 @@ a reload plus **Refresh remembered cars** on this exact laptop/profile/origin.
 Record support and outcomes; ordinary Bluetooth support does not guarantee
 saved-device lookup or persistent permissions. See [FLEET.md](FLEET.md) for the
 home trial and a crowded-class first-enrollment plan. No flags are changed by the app.
+
+## Optional candidate check
+
+Follow [IDENTIFY.md](IDENTIFY.md) to select one candidate while disconnected,
+compare your own car's off/on and three near/far cycles, then explicitly connect
+that retained candidate for a fixed light pattern. `watchAdvertisements()` is
+an optional experimental capability; ordinary Chrome GATT support and a working
+Battery button do not establish that advertisement sampling is available.
+The bench changes no browser flags. If sampling is unavailable or inconclusive,
+the coordinated visible-pattern trial or isolated enrollment remains available.
+Signal strength is not distance or identity proof. Record what you physically
+observed, then confirm and remember deliberately; the app never infers a match
+or saves a label from the radio result.
 
 ## Positive control, then live observation
 1. Label the kit; charge it, take the car **off the charger**, power it on and

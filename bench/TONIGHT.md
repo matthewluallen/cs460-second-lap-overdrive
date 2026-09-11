@@ -14,6 +14,12 @@ International MXT names repeat; physical labels `S01-A`/`S01-B` through
 `S15-A`/`S15-B` identify your own pair. Save your mappings locally; no central
 instructor enrollment database is required.
 
+The optional [guided identification trial](IDENTIFY.md) is on
+`codex/car-identification-checks`, not `main`. It combines manual off/on and
+near/far observations with a separate visible light pattern. Use that reviewed
+branch for the extra controls; keep its results labelled hardware-unverified
+until observed on your kit. The ordinary activity below remains available on `main`.
+
 For this documented activity, open the [evidence page](evidence.html) **before
 starting replay or connecting a car** (`http://localhost:8000/evidence.html`
 locally). The main [Quick activity](index.html) page has compact car controls;
@@ -61,6 +67,15 @@ and evidence record.
 
 ## 3. Choose and confirm the right car
 
+If you want to compare a candidate with a physical power cycle and repeated
+near/far movement, use [IDENTIFY.md](IDENTIFY.md) before this ordinary connection
+path. It starts disconnected and requires each physical step explicitly. A
+consistent signal-strength result does not confirm or enroll the candidate.
+The dedicated **Signal selected car** action is the only pre-confirmation light
+trial: watch your car, record the visible pattern, then confirm and remember.
+Coordinate with nearby owners and keep failures or missing browser support as
+inconclusive evidence.
+
 1. On the evidence page, enter the assigned car label and charging/context notes. These
    notes are captured when connecting. Later edits prepare the next session;
    use the LED observation’s final-detail field for the current attempt’s outcome.
@@ -79,7 +94,7 @@ and evidence record.
    it is **not a hardware serial number, MAC address or proof of ownership**.
 5. Use **Confirm assigned car** only after matching the physical kit to the
    selection. This records your assertion, not an automatic identity check.
-   LED and SDK controls remain locked until confirmation. If the choice is
+   Ordinary LED and SDK controls remain locked until confirmation. If the choice is
    wrong, disconnect and select again; no command is sent just by connecting.
 6. During enrollment, click **Remember confirmed car** to save that label against
    the browser-scoped device ID. In the same open page, select that label and
@@ -118,8 +133,9 @@ and evidence record.
   lamp attempt and write outcome. The form clears for each lamp attempt and
   after recording so an old choice cannot be submitted accidentally. A completed
   write is not proof that a light changed. Use the steady green/off observation
-  only after physical assignment; do not blink or command a fleet to discover
-  which car belongs to whom. A replay light command cannot supply physical evidence.
+  only after physical assignment. The separate candidate signal is covered in
+  [IDENTIFY.md](IDENTIFY.md); do not blink or command a fleet to discover which
+  car belongs to whom. A replay light command cannot supply physical evidence.
 - Battery behavior is unchanged. For an optional SDK retry after a battery
   timeout/error, disconnect and reconnect to the
   assigned car, confirm it again, enable SDK mode, then make one new Battery

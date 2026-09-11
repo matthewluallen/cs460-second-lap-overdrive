@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {CarLink,Replay} from './link.mjs';
 import {TraceLog} from './trace.mjs';
 import {CarLabels} from './car-labels.mjs';
+import {EnrollmentProbe} from './detection.mjs';
 import {uuids} from './protocol.mjs';
 
 // A minimal DOM runs the actual UI and transport without a browser, radio, or
@@ -12,7 +13,7 @@ import {uuids} from './protocol.mjs';
 const evidenceHtml=await readFile(new URL('./evidence.html',import.meta.url),'utf8');
 const compactHtml=await readFile(new URL('./index.html',import.meta.url),'utf8');
 const ui=(await readFile(new URL('./ui.mjs',import.meta.url),'utf8'))
-  .replace(/^import .* from '\.\/(?:link|records|trace|car-labels)\.mjs';\n/gm,'');
+  .replace(/^import .* from '\.\/(?:link|records|trace|car-labels|detection|protocol)\.mjs';\n/gm,'');
 const labelsModule=(await readFile(new URL('./car-labels.mjs',import.meta.url),'utf8'))
   .replace(/^export /gm,'');
 class Element {
@@ -42,16 +43,19 @@ function harness(bluetooth,traceOptions,page='evidence',storage=memoryStore()){
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(([,id])=>[id,new Element()]));
   const operations=new Map([...html.matchAll(/data-op="([^"]+)"/g)].map(([,op])=>{const b=new Element();b.dataset.op=op;return [op,b];}));
   if(elements.has('trace'))elements.get('trace').textContent='No traffic yet.';
-  const timers=new Map(),events=new Map(),downloads=[];let timerId=0;
+  const timers=new Map(),events=new Map(),downloads=[];let timerId=0,time=0;
+  const setTimer=(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms,at:time+ms});return id;},clearTimer=id=>timers.delete(id);
   const window={isSecureContext:true,localStorage:storage,location:{origin:'http://localhost:8000',pathname:'/evidence.html',search:'?token=not-for-traces',hash:'#private'},addEventListener:(name,fn)=>events.set(name,fn)};window.top=window.self=window;
   const blobs=new Map();
-  const document={getElementById:id=>elements.get(id)??null,
+  const document={hidden:false,addEventListener:(name,fn)=>events.set(name,fn),getElementById:id=>elements.get(id)??null,
     querySelectorAll:selector=>{assert.equal(selector,'[data-op]');return [...operations.values()];},
     createElement:tag=>{assert.equal(tag,'a');const a={click:()=>downloads.push({name:a.download,blob:blobs.get(a.href)})};return a;}};
-  const context={CarLink,Replay,TextEncoder,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
+  const context={CarLink:class extends CarLink {constructor(note,closed){super(note,closed,{setTimer,clearTimer});}},Replay,uuids,TextEncoder,
+    EnrollmentProbe:class extends EnrollmentProbe {constructor(note,change){super(note,change,{now:()=>time,setTimer,clearTimer});}},
+    TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
     Option:class {constructor(text,value){this.text=text;this.value=value;}},
     URL:{createObjectURL:blob=>{const key='blob:mock-'+blobs.size;blobs.set(key,blob);return key;},revokeObjectURL:key=>blobs.delete(key)},
-    setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id)};
+    setTimeout:setTimer,clearTimeout:clearTimer};
   // Plain-record validation must share the UI's realm, as it does in a browser.
   vm.runInNewContext('const CarLabels=(()=>{'+labelsModule+'\nreturn CarLabels;})();\n'+ui,context,{filename:'bench/ui.mjs'});
   const instance={elements,operations,timers,downloads,
@@ -59,7 +63,9 @@ function harness(bluetooth,traceOptions,page='evidence',storage=memoryStore()){
     click:async id=>{const element=elements.get(id)??operations.get(id);if(!element.disabled)await element.onclick();},
     set:(id,value)=>{const element=elements.get(id);element.value=value;element.oninput?.();element.onchange?.();},
     expire:ms=>{const ready=[...timers].filter(([,t])=>t.ms===ms);assert.ok(ready.length,'Expected timer '+ms);for(const [id,t] of ready){timers.delete(id);t.fn();}},
-    event:name=>events.get(name)?.()};
+    event:name=>events.get(name)?.(),
+    hide:()=>{document.hidden=true;events.get('visibilitychange')?.();},
+    tick:async ms=>{const end=time+ms;for(let i=0;i<20;i++)await Promise.resolve();for(;;){const due=[...timers].filter(([,t])=>t.at<=end).sort((a,b)=>a[1].at-b[1].at);if(!due.length)break;const [id,t]=due[0];time=t.at;timers.delete(id);t.fn();for(let i=0;i<12;i++)await Promise.resolve();}time=end;for(let i=0;i<12;i++)await Promise.resolve();}};
   harnesses.add(instance);return instance;
 }
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
@@ -82,7 +88,7 @@ test('MOCK UI live commands stay gated until assigned-car confirmation, then res
   assert.equal(h.el('status').textContent,'Live car connected');assert.equal(m.writes.length,0);
   assert.deepEqual(m.choices,[{filters:[{services:[uuids.service]}]}]);
   assert.match(h.el('selection').textContent,/browser device ID: browser-scoped-mock-id/);
-  assert.match(h.el('trace').textContent,/bench fleet-led-v2; page http:\/\/localhost:8000\/evidence.html/);
+  assert.match(h.el('trace').textContent,/bench identify-v1; page http:\/\/localhost:8000\/evidence.html/);
   assert.doesNotMatch(h.el('trace').textContent,/not-for-traces|#private/);
   for(const op of ['lampOn','lampOff','sdkOn','sdkOff']){assert.equal(h.op(op).disabled,true);await h.op(op).onclick();}
   assert.equal(m.writes.length,0);assert.equal(h.op('battery').disabled,false);
@@ -449,4 +455,100 @@ test('MOCK UI reload without getDevices reconnects saved IDs through a guarded c
   assert.equal(secondConnects,before[1]+1);assert.equal(reloaded.el('assignedCar').value,'S01-B');
   assert.equal(reloaded.op('engineGreen').disabled,true);assert.equal(first.writes.length+second.writes.length,0);
   assert.equal(choices,5);assert.match(reloaded.el('trace').textContent,/LIVE recognition guard.*Chrome chooser selection must match before GATT/);
+});
+
+function advertisements(m){
+  let watches=0;
+  m.device.watchingAdvertisements=false;
+  m.device.watchAdvertisements=async({signal})=>{
+    watches++;m.device.watchingAdvertisements=true;
+    signal.addEventListener('abort',()=>{m.device.watchingAdvertisements=false;},{once:true});
+  };
+  return {get watches(){return watches;},emit(rssi,device=m.device){
+    const event=new Event('advertisementreceived');Object.assign(event,{device,rssi});m.device.dispatchEvent(event);
+  }};
+}
+async function chooseCandidate(h){h.set('assignedCar','S01-A');await h.click('identifyChoose');}
+
+test('MOCK UI unsupported proximity check stays inconclusive and explicitly connects the same candidate for a gated light trial',async()=>{
+  const m=mockCar(),storage=memoryStore(),h=harness(m.bluetooth,undefined,'evidence',storage);
+  let connects=0;const open=m.device.gatt.connect;m.device.gatt.connect=async()=>{connects++;return open();};
+  await chooseCandidate(h);assert.equal(m.choices.length,1);assert.equal(connects,0);assert.equal(m.writes.length,0);
+  assert.equal(h.el('rememberCar').disabled,true);await h.click('identifyStart');
+  assert.match(h.el('identifyStatus').textContent,/unavailable|unsupported|not supported|does not support|does not provide/i);
+  assert.equal(h.el('identifyConnect').disabled,false);await h.click('identifyConnect');
+  assert.equal(connects,1);assert.equal(m.choices.length,1);assert.equal(h.el('confirm').disabled,false);
+  assert.equal(h.op('engineGreen').disabled,true);assert.equal(h.el('identifySignal').disabled,false);
+  const signaling=h.click('identifySignal');await h.tick(2000);await signaling;
+  assert.deepEqual(m.writes.map(bytes=>bytes[1]),[0x90,0x33,0x33,0x33,0x90]);
+  assert.equal(h.op('engineGreen').disabled,true);assert.equal(h.el('rememberCar').disabled,true);
+  await h.click('identifyMatch');assert.match(h.el('trace').textContent,/LIVE identification observation.*operator reports off\/green\/off/);
+  assert.equal(new CarLabels(storage).entries().length,0);assert.equal(h.el('rememberCar').disabled,true);
+  await h.click('confirm');await h.click('rememberCar');assert.equal(new CarLabels(storage).find(m.device.id).label,'S01-A');
+});
+
+test('MOCK UI power-off/on and three near/far cycles retain supporting evidence without auto-connection or enrollment',async()=>{
+  const m=mockCar(),radio=advertisements(m),storage=memoryStore(),h=harness(m.bluetooth,undefined,'evidence',storage);
+  await chooseCandidate(h);await h.click('identifyStart');assert.equal(radio.watches,1);
+  assert.equal(h.el('live').disabled,true);assert.equal(h.el('replay').disabled,true);assert.equal(h.el('identifyConnect').disabled,true);
+  const windows=[{ms:5000,rssi:-45},{ms:8000,rssi:null},{ms:8000,rssi:-44},
+    {ms:5000,rssi:-40},{ms:5000,rssi:-65},{ms:5000,rssi:-41},{ms:5000,rssi:-66},{ms:5000,rssi:-40},{ms:5000,rssi:-67}];
+  for(const {ms,rssi} of windows){
+    assert.equal(h.el('identifyNext').disabled,false);await h.click('identifyNext');
+    if(rssi!==null){for(let i=0;i<4;i++){await h.tick(200);radio.emit(rssi+i%2);}await h.tick(ms-800);}
+    else await h.tick(ms);
+  }
+  assert.match(h.el('identifyStatus').textContent,/consistent/i);assert.doesNotMatch(h.el('identifyStatus').textContent,/authenticated|ownership verified/i);
+  assert.equal(m.device.watchingAdvertisements,false);assert.equal(m.device.gatt.connected,false);assert.equal(m.writes.length,0);
+  assert.equal(new CarLabels(storage).entries().length,0);assert.equal(h.el('confirm').disabled,true);assert.equal(h.el('rememberCar').disabled,true);
+  assert.match(h.el('trace').textContent,/LIVE identification/);assert.doesNotMatch(h.el('trace').textContent,/REPLAY.*identification/);
+  await h.click('identifyConnect');assert.equal(m.choices.length,1);assert.equal(h.op('engineGreen').disabled,true);
+});
+
+test('MOCK UI cancels advertisement monitoring on hidden page and ignores a cancelled late picker',async()=>{
+  const m=mockCar(),radio=advertisements(m),h=harness(m.bluetooth);
+  await chooseCandidate(h);await h.click('identifyStart');await h.click('identifyNext');h.hide();
+  assert.equal(m.device.watchingAdvertisements,false);const trace=h.el('trace').textContent;radio.emit(-30);await h.tick(180000);
+  assert.equal(h.el('trace').textContent,trace);assert.equal(h.el('identifyNext').disabled,true);assert.equal(m.writes.length,0);
+  const gate=deferred(),late=harness({requestDevice:()=>gate.promise});late.set('assignedCar','S02-A');const selecting=late.click('identifyChoose');
+  await late.click('identifyCancel');assert.equal(late.el('live').disabled,true);gate.resolve(m.device);await selecting;
+  assert.equal(late.el('identifyConnect').disabled,true);assert.equal(late.el('live').disabled,false);assert.equal(m.device.gatt.connected,false);
+});
+
+test('MOCK UI candidate selection rejects a saved-label mismatch without monitoring or GATT',async()=>{
+  const m=mockCar(),radio=advertisements(m),storage=memoryStore();new CarLabels(storage).remember({name:'Ice Charger',browserId:'my-saved-id'},'S01-A');
+  const h=harness(m.bluetooth,undefined,'evidence',storage);await chooseCandidate(h);
+  assert.match(h.el('identifyStatus').textContent,/does not match your saved car/);assert.equal(h.el('identifyStart').disabled,true);
+  assert.equal(h.el('identifyConnect').disabled,true);assert.equal(radio.watches,0);assert.equal(m.device.gatt.connected,false);assert.equal(m.writes.length,0);
+});
+
+test('MOCK UI signal cancellation cannot confirm, persist, or write cleanup onto a later replay session',async()=>{
+  const m=mockCar(),storage=memoryStore(),h=harness(m.bluetooth,undefined,'evidence',storage);await chooseCandidate(h);await h.click('identifyConnect');
+  const signaling=h.click('identifySignal');await h.tick(100);await h.click('close');await signaling;
+  assert.equal(h.el('identifyMatch').disabled,true);assert.equal(h.el('rememberCar').disabled,true);assert.equal(new CarLabels(storage).entries().length,0);
+  const writes=m.writes.length;await h.click('replay');await h.tick(20000);assert.equal(m.writes.length,writes);
+  assert.equal(h.el('identifySignal').disabled,true);await h.click('battery');assert.match(h.el('batteryResult').textContent,/REPLAY RX: battery 3700 mV/);
+});
+
+test('MOCK UI changing the physical label clears a previously selected candidate',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await chooseCandidate(h);h.set('assignedCar','S01-B');
+  assert.equal(h.el('identifyConnect').disabled,true);assert.equal(h.el('identifyStart').disabled,true);
+  assert.match(h.el('identifySelection').textContent,/No identification candidate/);assert.equal(m.writes.length,0);
+});
+
+test('MOCK UI hiding the page interrupts a candidate signal without affecting a later session',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await chooseCandidate(h);await h.click('identifyConnect');
+  const signaling=h.click('identifySignal');await h.tick(600);h.hide();await signaling;
+  assert.equal(m.device.gatt.connected,false);assert.equal(h.el('identifyMatch').disabled,true);
+  assert.match(h.el('identifyLight').textContent,/Disconnected.*unknown/);
+  const writes=m.writes.length;await h.tick(20000);assert.equal(m.writes.length,writes);
+});
+
+test('MOCK UI signal trial requires trace headroom before any SDK or light write',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,{maxLines:32,maxChars:2000000,visibleLines:200});
+  await chooseCandidate(h);assert.match(h.el('trace').textContent,/LIVE identification browser.*MOCK Chrome/);
+  assert.doesNotMatch(h.el('trace').textContent,/not-for-traces|#private/);
+  await h.click('identifyConnect');await h.click('identifySignal');
+  assert.match(h.el('identifyLight').textContent,/Not enough trace space/);assert.equal(m.writes.length,0);
+  assert.equal(h.el('identifyMatch').disabled,true);assert.equal(h.el('rememberCar').disabled,true);
 });

@@ -6,6 +6,11 @@ integrated through PR #1; look for `fleet-led-v2`. Missing
 controls mean the revision needs checking. Successful engine LED behavior and
 the full remembered-car workflow remain hardware-unverified on the course kits.
 
+An optional [power, proximity and visible-pattern trial](IDENTIFY.md) is being
+prepared on `codex/car-identification-checks`; it is not part of `main`. Use its
+reviewed branch and record the revision when trying those additional controls.
+It never assigns a car automatically from signal strength.
+
 Each of the 15 students owns two Fast & Furious cars. Give your own pair unique
 physical labels such as `S01-A` and `S01-B`, using your student number, and record
 which is your Ice Charger and which is your International MXT. Other students
@@ -68,8 +73,9 @@ with the nearby groups; replay remains available while you wait.
    attempt for an isolated car missing from that filter. It can show unrelated
    devices too. If duplicate or unknown entries remain, cancel and improve the
    isolation. A repeated model name, signal strength/RSSI or a dropped connection
-   does not establish which physical car you selected. Do not connect candidates
-   or send light commands just to work out whose car they are.
+   does not establish which physical car you selected. For a coordinated
+   candidate trial, use the dedicated [identification workflow](IDENTIFY.md)
+   on its branch rather than treating the ordinary controls as a search tool.
 3. Match the selection to the isolated physical car and click **Confirm assigned
    car** before any LED/SDK command. Click **Remember confirmed car** to save its
    browser device ID against your label. The saved mapping records your assertion;
@@ -77,6 +83,20 @@ with the nearby groups; replay remains available while you wait.
 4. Perform the LED sequence below. Disconnect and power this car off before
    repeating enrollment for your second car. Both saved labels remain local to
    this browser and origin.
+
+### When you want to compare a candidate with your actions
+
+The optional [identification trial](IDENTIFY.md) combines a physical off/on check
+with three repeated near/far observations of only your car. It watches one
+selected browser candidate while disconnected, then offers an explicit
+connection to that same candidate and a fixed off/green/off light signal.
+Coordinate with nearby owners before this limited light trial. Advertisement
+watching may be unavailable; the visible-pattern trial remains separate.
+Missing advertisements, a stronger signal or a dropped connection alone are
+not proof. A consistent radio result never unlocks ordinary light controls or
+saves a label. Observe the pattern on your physical car, record that observation,
+then confirm and remember deliberately. Neither part has been qualified on
+the classroom hardware.
 
 ## Reconnect deliberately
 
@@ -138,6 +158,9 @@ requested through both attempts, then **Leave SDK mode → Disconnect**. A compl
 write does not establish SDK state or visible illumination. Record no change,
 unexpected color or failed cleanup as observed. Legacy **Headlight on/off** is a
 separate comparison. Do not blink the fleet to identify cars or run batch commands.
+The dedicated candidate signal on the identification branch is a limited
+pre-confirmation exception; follow [IDENTIFY.md](IDENTIFY.md), not this ordinary
+confirmed-car sequence, for that trial.
 
 Rehearse **Start replay → Battery** and keep the REPLAY fixture result separate
 from LIVE replies. On the evidence page, save, disconnect and clear that replay

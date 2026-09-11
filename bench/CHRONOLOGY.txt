@@ -23,3 +23,8 @@ its constructed scenario date, at the course author's request. The merge was
 actually performed on November 5, 2026. Its Git date intentionally precedes some
 parent commits; existing history was not rewritten to hide that discrepancy.
 GitHub's merge event, hosted checks and runtime traces retain their actual dates.
+
+The identification-trial follow-up uses a constructed September 11, 2026 at
+17:15 America/Chicago checkpoint. Its power-cycle/RSSI and candidate light code
+was implemented and software-tested on November 5, 2026; no physical kit result
+is implied. Actual traces and GitHub publication events retain their own dates.
