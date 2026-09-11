@@ -1,0 +1,19 @@
+{
+  "name": "cs460-second-lap-overdrive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CS460 scenario platform with deliberately vulnerable pinned dependencies",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node platform/server.mjs",
+    "test": "node --test bench/*.test.mjs platform/*.test.mjs",
+    "test:platform": "node --test platform/*.test.mjs",
+    "dependency-lab": "node platform/dependency-lab.mjs"
+  },
+  "dependencies": {
+    "express": "https://codeload.github.com/expressjs/express/tar.gz/e1b45ebd050b6f06aa38cda5aaf0c21708b0c71e",
+    "lodash": "https://codeload.github.com/lodash/lodash/tar.gz/f9cd8f552b7c8dc4aaa6be48eb9adf026ce4cd30"
+  }
+}

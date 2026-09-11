@@ -3,8 +3,12 @@ import sys
 from .core import Pilot
 
 def dispatch(pilot, request):
+    if type(request) is not dict:
+        raise ValueError("Each request must be a JSON object")
     request = dict(request)
     operation = request.pop("op")
+    if type(operation) is not str:
+        raise ValueError("Operation must be a string")
     methods = {"command": pilot.command, "status": pilot.status, "telemetry": pilot.telemetry}
     if hasattr(pilot, "install_profile"):
         methods["install_profile"] = pilot.install_profile
@@ -32,6 +36,10 @@ def main():
         try:
             result = dispatch(pilot, json.loads(line))
             print(json.dumps({"ok":True,"result":result}))
+        except RecursionError:
+            # Parser nesting limits vary by Python version. Keep the session alive
+            # without reflecting the payload or a traceback into the evidence log.
+            print(json.dumps({"ok":False,"error":"JSON nesting is too deep"}))
         except (KeyError, TypeError, ValueError, PermissionError) as exc:
             print(json.dumps({"ok":False,"error":str(exc)}))
 

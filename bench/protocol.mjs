@@ -4,6 +4,9 @@ export const uuids = Object.freeze({service:uuid('beef'), notify:uuid('bee0'), w
 const allowed = new Map(Object.entries({
   ping:[1,0x16], version:[1,0x18], battery:[1,0x1a],
   lampOn:[2,0x1d,0x11], lampOff:[2,0x1d,0x01],
+  // OVERDRIVE engine RGB: red (0), green (3), blue (2), steady, 0..14.
+  engineGreen:[17,0x33,3,0,0,0,0,0,3,0,14,14,0,2,0,0,0,0],
+  engineOff:[17,0x33,3,0,0,0,0,0,3,0,0,0,0,2,0,0,0,0],
   sdkOn:[3,0x90,1,0], sdkOff:[3,0x90,0,0]
 }));
 export function frame(action) {
@@ -23,6 +26,12 @@ export function decode(bytes) {
     if((id===0x19 || id===0x1b) && n===3) {
       const value=bytes[i+2]+256*bytes[i+3];
       text=id===0x19?'firmware version '+value:'battery '+value+' mV';
+    }
+    // OVERDRIVE also reports a 32-bit little-endian version (Partydrive).
+    // This is a firmware-reported number, never an inferred model/serial.
+    if(id===0x19 && n===5) {
+      const value=bytes[i+2]+256*bytes[i+3]+65536*bytes[i+4]+16777216*bytes[i+5];
+      text='firmware version '+value+' (32-bit reply; 0x'+value.toString(16)+')';
     }
     rows.push({id,raw,text});i=end;
   }

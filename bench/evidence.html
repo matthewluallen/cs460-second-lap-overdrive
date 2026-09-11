@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Second Lap evidence bench</title><style>
+:root{font:16px/1.5 system-ui;color:#142e35;background:#f3f2ea}body{max-width:58rem;margin:auto;padding:1.6rem}h1{font-size:2.5rem;margin:.3rem 0}h2{font-size:1.3rem}h1,h2{line-height:1.18}section{border-top:1px solid #aab8ae;padding:.7rem 0 1.1rem}button,select,input{font:inherit;padding:.45rem .7rem;margin:.15rem;border:1px solid #83968a;border-radius:.25rem}button{background:#173d40;color:white;cursor:pointer}button:disabled{opacity:.5;cursor:auto}label{display:inline-block}input:not([type="checkbox"]){max-width:100%;box-sizing:border-box}#sessionNotes{width:42rem}#selection{overflow-wrap:anywhere}pre{padding:1rem;background:#153338;color:#e6f5de;white-space:pre-wrap;overflow:auto;max-height:20rem}small{color:#485a53}</style></head><body>
+<small>SECOND LAP LABS · PILOT ENGINEERING · fleet-led-v2</small><h1>OVERDRIVE evidence bench</h1><p>Start with a fixture, then compare one assigned stationary car. The trace identifies its source on every line. A completed write does not prove the car responded.</p>
+<section><h2>Tonight: charge, connect, light</h2>
+<p><a href="index.html">Classroom bench</a> · <a href="worksheet.html">Optional worksheet</a> · <a href="TONIGHT.md">Activity checklist</a> · <a href="LAPTOPS.md">Chrome laptop setup</a></p>
+<p>Save your trace and disconnect before switching pages; sessions and observations do not transfer.</p>
+<p id="context"></p>
+<ol><li>Label and charge your assigned kit with the provided equipment. Record charger indicators and times. Tell the instructor if a car is damaged, swollen or unusually hot.</li><li>Rehearse <strong>Start replay → Battery</strong> (3700 mV). Save, disconnect and clear the trace.</li><li>Take your car off the charger, power it on, keep wheels clear and release other controllers. Choose only your assigned car; cancel if uncertain.</li></ol>
+<label>Assigned car label <input id="assignedCar" maxlength="80" placeholder="Your kit label and model"></label><br>
+<label>Charging / session context (captured when connecting) <input id="sessionNotes" maxlength="600" placeholder="Charger, times, indicators, off-charger state, OS/Chrome, Git revision, observer"></label>
+<p><small>These fields are operator notes, not measurements. Editing them after disconnect prepares the next connection; it does not change the saved session. No charging, motion or firmware-update commands are provided.</small></p>
+<h2>Your cars</h2>
+<p>Enroll your own two cars here, using physical labels such as S01-A and S01-B. Your saved labels belong to this Chrome profile and this site. Use the same Codespace and forwarded port at home and in class. <a href="FLEET.md">Your pair: home and classroom setup</a>.</p>
+<p>For first enrollment, power only your intended car in a place without competing cars in range. In class, use a separate enrollment area or coordinate with nearby owners. Ice Charger and International MXT names repeat; cancel if uncertain.</p>
+<p>Choose a saved label and reconnect. If Chrome needs its picker again, the page checks the saved browser ID before connecting. A different car is rejected. Lost permissions or a new Codespace may require enrollment again; saved names alone cannot identify a car.</p>
+<p><small>If you recorded the car’s Bluetooth address elsewhere, include it in your car label or session context. This is your inventory note: this page cannot read a MAC address or connect using a typed one. The browser device ID is a different identifier.</small></p>
+<label>Remembered car <select id="rememberedCar"><option value="">Choose a remembered car</option></select></label>
+<button id="refreshCars">Refresh remembered cars</button><button id="connectRemembered" disabled>Reconnect remembered car</button><button id="forgetRemembered" disabled>Forget selected label</button>
+<p id="fleetStatus" role="status"></p>
+<h2>Connection</h2>
+<p>The default chooser shows devices advertising the Anki service. Names may be missing or shared. Confirm against the physical assignment; a name or browser ID alone does not identify your kit.</p>
+<label><input id="allDevices" type="checkbox"> All-devices fallback: I isolated my assigned car after the filtered chooser failed.</label>
+<p><small>The fallback also shows unrelated devices. Cancel if ambiguous. Start here in Chrome; do not guess an OS pairing PIN.</small></p>
+<button id="replay">Start replay</button><button id="live">Choose assigned car</button><button id="close" disabled>Disconnect</button> <strong id="status" role="status">Disconnected</strong>
+<p id="commandResult" role="status"></p>
+<p id="selection" role="status">No live car selected.</p><p id="recognition" role="status"></p>
+<p><small>The browser device ID belongs to this browser/site permission. It is not a hardware serial, MAC address or proof of ownership.</small></p>
+<button id="confirm" disabled>Confirm assigned car</button><small> I matched the selection to my physical assigned kit. Unlock light and SDK controls.</small>
+<p><button id="rememberCar" disabled>Remember confirmed car</button><small> Saves the physical label against this browser’s device ID, on this site only.</small></p>
+<h2>Battery and lights</h2>
+<p id="ops"><button data-op="ping">Ping</button><button data-op="version">Version</button><button data-op="battery">Battery</button><button data-op="engineGreen">Engine LED green / identify</button><button data-op="engineOff">Engine LED off</button><button data-op="lampOn">Headlight on</button><button data-op="lampOff">Headlight off</button><button data-op="sdkOn">Enable SDK mode</button><button data-op="sdkOff">Leave SDK mode</button></p>
+<p id="sdkResult" role="status">No SDK request this session; actual car mode unknown.</p>
+<p><strong>For OVERDRIVE, try Engine LED green / identify, observe the selected car, then Engine LED off.</strong> These two buttons enable SDK mode first when needed, without localization override. Keep SDK mode enabled through the light trial; use Leave SDK mode afterward. A completed write does not prove a visible light change. Older Headlight commands remain available separately.</p>
+<p id="batteryResult" role="status">No battery request this session.</p>
+<p id="lampResult" role="status">No light command this session.</p>
+<p>Request Battery once and wait up to five seconds for an RX reply. A reply is observed during that request window; the protocol cannot prove which request caused it. After a timeout or write error, disconnect and reconnect before another Battery request. For engine lights, use Green / identify → observe → Engine LED off → observe → Leave SDK mode. For a legacy headlight retry, use Enable SDK mode → Headlight on → observe → Headlight off → observe → Leave SDK mode. Record a fresh physical observation for each attempt. Live LED behavior still needs verification on your exact kit.</p>
+<p id="observationContext" role="status"></p>
+<p><small>After disconnect, you can still record the last confirmed car’s visible result or failed cleanup. Choose a fresh observation and enter final details before starting another session or clearing the trace. Recording sends no command.</small></p>
+<label>Visible LED observation <select id="observation"><option value="">Choose an observation</option><option>Light visibly on</option><option>Light visibly off</option><option>No visible change</option><option>Unable to tell</option></select></label>
+<label>Observer / final detail <input id="observationNote" maxlength="240" placeholder="Who observed what? Include failed cleanup or observations after disconnect."></label><button id="recordObservation" disabled>Record LED observation</button>
+<p id="traceNotice" role="status"></p>
+<pre id="trace" aria-label="Session trace">No traffic yet.</pre><button id="save">Save trace</button><button id="clear">Clear trace</button>
+<p><small>Save before clearing or reloading. Clear is available after disconnect. A battery reply proves communication at that instant, not capacity or runtime. A completed LED write is not a visible observation.</small></p></section>
+<script type="module" src="ui.mjs"></script></body></html>

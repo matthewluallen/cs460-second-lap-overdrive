@@ -1,4 +1,5 @@
 // In-memory support worksheet. Data are disposable fixtures in this browser tab.
+export const MAX_RECORDS=1000;
 const teams=new Map(['red','blue','green','gold'].map(t=>['pilot-'+t,t]));
 export class Records {
   constructor(){
@@ -13,6 +14,7 @@ export class Records {
     this.actor(token);
     if(![...teams.values()].includes(workgroup))throw new Error('Unknown workgroup');
     const clean=String(note).trim();if(!clean || clean.length>160)throw new Error('Use 1–160 characters');
+    if(this.rows.size>=MAX_RECORDS)throw new Error('Worksheet session full; save your investigation notes and reload to reset');
     const row={id:this.next++,team:workgroup,note:clean};this.rows.set(row.id,row);return {...row};
   }
 }
