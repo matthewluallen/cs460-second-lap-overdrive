@@ -177,3 +177,22 @@ control bytes. The optional saved display name is now escaped and bounded so it
 cannot prevent enrollment, while the browser ID is unchanged and the original
 selection remains trace evidence. This is a compatibility precaution from
 primary-source review, not an observed cause of this user's LED issue.
+
+## Power-cycle and candidate signal review
+
+AI advisory reviews separated a browser-permitted candidate from a confirmed
+physical assignment. The optional advertisement probe never connects GATT or
+writes to a car. Silence alone does not establish power-off: baseline, return
+and all three near/far pairs must contribute measured samples before the
+uncalibrated consistency rule can be met. Invalid or absent RSSI stays missing;
+sample limits cannot turn continued advertisements into a quiet result.
+
+The separate candidate signal uses one selected device and one write lock.
+SDK/LED completion and a human visual report remain distinct; neither sets the
+assigned label or saves a registry entry. Disconnect, hidden-page cancellation,
+a deadline, refused evidence or a late wire completion cannot switch targets or
+write cleanup to a replacement session. Cleanup may be unavailable, so the UI
+reports an unknown physical outcome instead of promising a restored state.
+Integration testing found and fixed closing a never-opened link when no pending
+write existed. Legacy battery/replay evidence and deliberate vulnerability
+exercises remain in regression coverage. Physical acceptance is still required.

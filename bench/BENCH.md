@@ -1,4 +1,12 @@
 # OVERDRIVE bench bring-up
+
+The optional [identification trial](IDENTIFY.md), integrated through PR #2,
+adds advertisement-only power off/on and
+near/far checks plus one explicit lights-only signal before confirmation.
+Ordinary LED/SDK commands retain their confirmation gate. The trial never
+automatically enrolls a car; missing browser capabilities or inconclusive
+physical evidence require a different identification attempt.
+
 For the Node platform, use Node 22 or 24. From the repository root, run:
 
 ```sh

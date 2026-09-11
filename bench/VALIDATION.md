@@ -231,3 +231,32 @@ and reproduced red reading blue record 102. An initial browser-only fetch
 receiver error was fixed and given a regression test before the successful
 rehearsal. Response-read timeouts and unknown addition outcomes are also covered;
 no addition is automatically retried. These are software observations only.
+
+## Optional identification trial: November 5 software checks
+
+**160 JavaScript tests** (142 bench and 18 platform) and **28 Python tests**
+passed locally on November 5, 2026.
+
+PR #2 integrates the `identify-v1` controls described in
+[IDENTIFY.md](IDENTIFY.md) into `main`. Mock checks exercise
+one candidate's on/off/on advertisements and three manually started near/far
+pairs, missing/invalid samples, continued broadcasts during the off window,
+record caps, setup and overall deadlines, cancellation, lost watching, and
+refused evidence. The rule uses a 6 dB gap plus observed spread; these constants
+are uncalibrated and do not establish identity, distance, ownership or power state.
+
+Transport checks exercise the fixed candidate signal before assignment, ordinary
+command gates, one write lock, SDK preparation, successful/failed cleanup,
+disconnects, a hung write and late completion after a replacement session. UI
+checks combine both paths and verify no automatic connection, confirmation or
+registry save. Hidden pages cancel monitoring and interrupt an unfinished signal.
+The small trace-headroom check can refuse a signal before any write; incoming
+traffic can still exhaust the trace mid-trial, leaving physical cleanup unknown.
+
+A real Chrome-based preview loaded both the new controls and their disabled
+states, and replay still returned the labelled 3700 mV fixture result. This was
+not a radio trial. No student's car was selected, power-cycled, moved or signalled
+by the reviewers. Every physical part of the new workflow remains unverified,
+including car startup timing, advertisement continuity across power cycles, RSSI
+trends, visible engine color and cleanup. Use the student procedure to collect
+that evidence on each actual browser/kit combination.

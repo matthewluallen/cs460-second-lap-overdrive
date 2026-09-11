@@ -32,7 +32,17 @@ All motion commands remain simulation-only.
 The fleet and engine LED controls are available on `main` through
 [PR #1](https://github.com/matthewluallen/cs460-second-lap-overdrive/pull/1).
 Existing Codespaces must pull the updated `main` and reload the bench; opening a
-Codespace does not automatically update its checkout. Look for `fleet-led-v2`.
+Codespace does not automatically update its checkout. Look for `identify-v1`.
+
+The optional [power-cycle, near/far and visual identification trial](bench/IDENTIFY.md)
+is available on `main` through
+[PR #2](https://github.com/matthewluallen/cs460-second-lap-overdrive/pull/2).
+It listens for one selected candidate while the student powers their own car
+off/on, then moves it near/far three times. A separate bounded lights-only
+signal is available before enrollment; ordinary light/SDK controls still require
+confirmation. Neither result confirms or saves a car automatically. Advertisement
+monitoring is experimental and may be unavailable; all physical behavior remains
+hardware-unverified.
 
 For the Node platform, use Node 22 or 24. Run this from the repo root,
 then open the private forwarded port in a separate tab in desktop Google Chrome,

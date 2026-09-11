@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {CarLink,Replay} from './link.mjs';
 import {uuids,frame} from './protocol.mjs';
 
-function mockCar({withResponse=false,failStage=null}={}) {
+function mockCar({withResponse=false,failStage=null,timers}={}) {
   const log=[],writes=[],choices=[],device=new EventTarget(),rx=new EventTarget();
   device.name='Course car';device.id='browser-scoped-test-id';
   rx.startNotifications=async()=>{if(failStage==='notify')throw Error('notify failed');log.push(['MOCK','notify']);return rx;};
@@ -20,15 +20,36 @@ function mockCar({withResponse=false,failStage=null}={}) {
     getPrimaryService:async u=>{assert.equal(u,uuids.service);if(failStage==='service')throw Error('service absent');return service;}
   };
   const api={requestDevice:async opts=>{choices.push(opts);return device;}};
-  const link=new CarLink((...row)=>log.push(row));
+  const link=new CarLink((...row)=>log.push(row),undefined,timers);
   const notify=bytes=>{rx.value=new DataView(Uint8Array.from(bytes).buffer);rx.dispatchEvent(new Event('characteristicvaluechanged'));};
   return {log,writes,choices,device,rx,tx,api,link,notify};
 }
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
+function mockTimers(){
+  let now=0,next=0;const pending=new Map();
+  return {setTimer:(fn,delay)=>{const id=++next;pending.set(id,{fn,at:now+delay,delay});return id;},
+    clearTimer:id=>pending.delete(id),has:delay=>[...pending.values()].some(timer=>timer.delay===delay),
+    advance:milliseconds=>{now+=milliseconds;for(const [id,timer] of [...pending])if(timer.at<=now){pending.delete(id);timer.fn();}},
+    get size(){return pending.size;}};
+}
+async function until(predicate){
+  for(let i=0;i<100;i++){if(predicate())return;await Promise.resolve();}
+  assert.fail('MOCK operation did not reach the expected state');
+}
 
 test('fixture mode completes a battery request without access to Bluetooth',async()=>{
   const log=[];const link=new Replay((a,b)=>log.push([a,b]));await link.open();await link.send('battery');link.close();
   assert.ok(log.some(([a,b])=>a==='REPLAY RX'&&b.includes('3700 mV')));await assert.rejects(link.send('ping'));
+});
+test('MOCK close is harmless before open, after an unavailable browser, and when repeated',async()=>{
+  const m=mockCar();
+  assert.doesNotThrow(()=>m.link.close());assert.doesNotThrow(()=>m.link.close());
+  await assert.rejects(m.link.open(undefined),/Web Bluetooth unavailable/);
+  assert.doesNotThrow(()=>m.link.close());assert.equal(m.log.length,0);assert.equal(m.writes.length,0);
+  await m.link.open(m.api);m.link.close();const count=m.log.length;
+  assert.doesNotThrow(()=>m.link.close());assert.equal(m.log.length,count);
+  await m.link.open(m.api);await m.link.send('battery');m.link.close();
+  assert.deepEqual(m.writes,[[...frame('battery')]]);
 });
 test('MOCK default chooser filters Anki service; setup sends no commands and exposes browser selection',async()=>{
   const m=mockCar();await m.link.open(m.api);
@@ -232,4 +253,104 @@ test('MOCK remembered device uses its exact permission object without a new choo
   await m.link.open({requestDevice:async()=>{chooser++;throw Error('must not choose another car');}},{rememberedDevice:m.device});
   assert.equal(chooser,0);assert.equal(m.link.selection.browserId,m.device.id);assert.equal(m.writes.length,0);
   await assert.rejects(m.link.send('engineGreen'),/Confirm the assigned car/);m.link.close();
+});
+
+test('MOCK candidate signal uses only the fixed light sequence and never confirms assignment',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  const trial=m.link.identifyCandidate();await until(()=>timers.has(400));
+  assert.deepEqual(m.writes,['sdkOn','engineOff'].map(action=>[...frame(action)]));
+  timers.advance(399);assert.equal(m.writes.length,2);timers.advance(1);
+  await until(()=>timers.has(1200));assert.deepEqual(m.writes.at(-1),[...frame('engineGreen')]);
+  timers.advance(1199);assert.equal(m.writes.length,3);timers.advance(1);await trial;
+  assert.deepEqual(m.writes,['sdkOn','engineOff','engineGreen','engineOff','sdkOff'].map(action=>[...frame(action)]));
+  assert.equal(m.link.assignedLabel,null);assert.equal(m.link.sdkRequestedOn,false);assert.equal(timers.size,0);
+  assert.ok(m.log.some(([source,message])=>source==='LIVE identification'&&message.startsWith('started')));
+  assert.ok(m.log.some(([source,message])=>source==='LIVE identification'&&message.includes('identity unverified')));
+  await assert.rejects(m.link.send('engineGreen'),/Confirm the assigned car/);
+  await m.link.send('battery');m.link.close();
+});
+test('MOCK candidate signal owns the command lock during both pauses and writes',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  const trial=m.link.identifyCandidate();await until(()=>timers.has(400));
+  await assert.rejects(m.link.send('battery'),/already in progress/);
+  await assert.rejects(m.link.identifyCandidate(),/already in progress/);
+  timers.advance(400);await until(()=>timers.has(1200));
+  await assert.rejects(m.link.send('ping'),/already in progress/);
+  timers.advance(1200);await trial;m.link.close();
+});
+test('MOCK first SDK failure prevents green and attempts explicit same-session cleanup',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  m.tx.writeValueWithoutResponse=async bytes=>{m.writes.push([...bytes]);if(m.writes.length===1)throw Error('SDK refused');};
+  await assert.rejects(m.link.identifyCandidate(),/SDK refused.*cleanup writes completed/);
+  assert.deepEqual(m.writes,['sdkOn','engineOff','sdkOff'].map(action=>[...frame(action)]));
+  assert.equal(m.link.assignedLabel,null);assert.equal(m.link.pendingWrite,null);assert.equal(timers.size,0);m.link.close();
+});
+test('MOCK cleanup write failures are reported without losing the original failure',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  m.tx.writeValueWithoutResponse=async bytes=>{m.writes.push([...bytes]);throw Error('wire rejected');};
+  await assert.rejects(m.link.identifyCandidate(),/wire rejected.*cleanup failed: engineOff: wire rejected; sdkOff: wire rejected/);
+  assert.deepEqual(m.writes,['sdkOn','engineOff','sdkOff'].map(action=>[...frame(action)]));
+  assert.equal(timers.size,0);m.link.close();
+});
+for(const delay of [400,1200])test('MOCK disconnect during candidate pause '+delay+' stops promptly without cleanup or later writes',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  const trial=m.link.identifyCandidate();await until(()=>timers.has(400));
+  if(delay===1200){timers.advance(400);await until(()=>timers.has(1200));}
+  const written=m.writes.length;m.link.close();await assert.rejects(trial,/interrupted by disconnect.*cleanup unavailable/);
+  assert.equal(timers.size,0);timers.advance(10000);assert.equal(m.writes.length,written);
+  assert.equal(m.link.pendingWrite,null);
+});
+test('MOCK candidate hung write deadline releases caller without overlapping cleanup or harming a new owner',async()=>{
+  const timers=mockTimers(),m=mockCar({timers}),gate=deferred();await m.link.open(m.api);
+  const original=m.tx.writeValueWithoutResponse;
+  m.tx.writeValueWithoutResponse=bytes=>{m.writes.push([...bytes]);return gate.promise;};
+  const trial=m.link.identifyCandidate();await until(()=>m.writes.length===1);
+  timers.advance(10000);await assert.rejects(trial,/timed out.*cleanup unavailable/);
+  assert.equal(m.device.gatt.connected,false);assert.equal(m.link.pendingWrite,null);assert.equal(timers.size,0);
+  assert.deepEqual(m.writes,[[...frame('sdkOn')]]);assert.ok(!m.log.some(([kind])=>kind==='LIVE TX'));
+  const replacement=new CarLink(()=>{}),wrapper=Object.assign(new EventTarget(),{id:m.device.id,name:m.device.name,gatt:m.device.gatt});
+  m.tx.writeValueWithoutResponse=original;await replacement.open({requestDevice:async()=>wrapper});
+  const count=m.log.length;gate.resolve();await until(()=>!m.link.pendingWrite);
+  for(let i=0;i<10;i++)await Promise.resolve();
+  assert.equal(m.log.length,count);assert.equal(wrapper.gatt.connected,true);assert.equal(m.writes.length,1);
+  await replacement.send('battery');assert.deepEqual(m.writes.at(-1),[...frame('battery')]);replacement.close();
+});
+test('MOCK candidate rejects exhausted capture before start and never writes cleanup after capture refusal',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  m.link.note=kind=>kind==='LIVE identification'?false:undefined;
+  await assert.rejects(m.link.identifyCandidate(),/Trace capture refused identification/);
+  assert.equal(m.writes.length,0);assert.equal(timers.size,0);
+  m.link.note=(kind,message)=>kind==='LIVE TX attempt'&&message.includes('engineGreen')?false:undefined;
+  const trial=m.link.identifyCandidate();await until(()=>timers.has(400));timers.advance(400);
+  await assert.rejects(trial,/Trace capture refused.*cleanup unavailable/);
+  assert.deepEqual(m.writes,['sdkOn','engineOff'].map(action=>[...frame(action)]));
+  assert.equal(timers.size,0);assert.equal(m.link.assignedLabel,null);m.link.close();
+});
+test('MOCK native connection loss ends a candidate trial and releases its ownership immediately',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  const trial=m.link.identifyCandidate();await until(()=>timers.has(400));
+  m.device.gatt.connected=false;m.device.dispatchEvent(new Event('gattserverdisconnected'));
+  await assert.rejects(trial,/interrupted by disconnect/);
+  assert.ok(m.log.some(([kind,message])=>kind==='LIVE identification'&&message.startsWith('ended:')));
+  assert.equal(m.link.device,null);assert.equal(timers.size,0);
+  const replacement=new CarLink(()=>{});await replacement.open(m.api);replacement.close();
+});
+test('MOCK deadline also bounds hung cleanup and never overlaps it with SDK-off',async()=>{
+  const timers=mockTimers(),m=mockCar({timers}),gate=deferred();await m.link.open(m.api);
+  m.tx.writeValueWithoutResponse=bytes=>{
+    m.writes.push([...bytes]);
+    return m.writes.length===1?Promise.reject(Error('SDK failed')):gate.promise;
+  };
+  const trial=m.link.identifyCandidate();await until(()=>m.writes.length===2);
+  timers.advance(10000);await assert.rejects(trial,/timed out.*cleanup failed: engineOff/);
+  assert.deepEqual(m.writes,['sdkOn','engineOff'].map(action=>[...frame(action)]));
+  assert.equal(m.link.device,null);assert.equal(m.link.pendingWrite,null);assert.equal(timers.size,0);
+  const count=m.log.length;gate.resolve();for(let i=0;i<10;i++)await Promise.resolve();
+  assert.equal(m.writes.length,2);assert.equal(m.log.length,count);
+});
+test('MOCK capture exhaustion on a completed SDK write stops the remaining candidate sequence',async()=>{
+  const timers=mockTimers(),m=mockCar({timers});await m.link.open(m.api);
+  m.link.note=kind=>kind==='LIVE TX'?false:undefined;
+  await assert.rejects(m.link.identifyCandidate(),/Trace capture stopped.*cleanup unavailable/);
+  assert.deepEqual(m.writes,[[...frame('sdkOn')]]);assert.equal(timers.size,0);m.link.close();
 });
