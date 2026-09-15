@@ -9,10 +9,12 @@ def digest_profile(profile):
 
 class Pilot:
     def __init__(self):
-        self.tokens = {"pilot-red": "red", "pilot-blue": "blue"}
+        self.tokens = {f"pilot-{team}": team for team in ("red", "blue", "green", "gold")}
         self.vehicles = {
             "sim-red": {"team": "red", "speed": 0, "distance": 0, "max_speed": 120},
             "sim-blue": {"team": "blue", "speed": 0, "distance": 0, "max_speed": 120},
+            "sim-green": {"team": "green", "speed": 0, "distance": 0, "max_speed": 120},
+            "sim-gold": {"team": "gold", "speed": 0, "distance": 0, "max_speed": 120},
         }
         self.events = []
         self.seen = set()

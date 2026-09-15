@@ -5,7 +5,8 @@ op=status: token
 op=telemetry: token
 op=command: token, team, vehicle, action, value, nonce
 op=install_profile: token, team, vehicle, profile, sha256
-Tokens: pilot-red and pilot-blue. Vehicles: sim-red and sim-blue.
+Teams: red, blue, green and gold. Token: pilot-<team>. Vehicle: sim-<team>.
+Each simulator process has its own disposable state; processes are not linked.
 Actions: drive sets speed, advance increments synthetic distance, stop sets zero.
 drive and profile speeds are abstract integer simulation units. advance accepts
 0 through 10. A hard simulator bound of 500 is always enforced. No physical

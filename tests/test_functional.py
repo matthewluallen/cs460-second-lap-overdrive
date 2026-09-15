@@ -2,6 +2,15 @@ import unittest
 from lapreturn.core import Pilot
 
 class FunctionalTests(unittest.TestCase):
+    def test_four_team_lifecycle(self):
+        p = Pilot()
+        for team in ("red", "blue", "green", "gold"):
+            vehicle, token = f"sim-{team}", f"pilot-{team}"
+            p.command(token, team, vehicle, "drive", 40, "start")
+            self.assertEqual(p.status(token)[vehicle]["speed"], 40)
+            p.command(token, team, vehicle, "stop", 0, "end")
+            self.assertEqual(p.status(token)[vehicle]["speed"], 0)
+
     def test_drive_then_stop(self):
         p = Pilot()
         p.command("pilot-red","red","sim-red","drive",80,"n1")

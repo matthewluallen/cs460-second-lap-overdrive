@@ -1,4 +1,9 @@
-# Second Lap Labs pilot evaluation
+# Second Lap Labs OVERDRIVE capstone
+
+Four teams; four 170-minute classes: introduction, two investigation and build
+sessions, and comprehensive team presentations. Every student investigates and
+presents. See [the student brief](docs/student-brief.txt) for the current scope;
+older assignments in the scenario history are superseded.
 
 Casey and Matt are considering a fictional investment in reviving discontinued
 robot racing kits. Rowan Veyl has offered a controller prototype, a project
@@ -30,4 +35,10 @@ Physical integration must use an independently validated adapter and safety gate
 
 Start with docs/student-brief.txt and docs/protocol.txt. Review the supplied
 business materials and history as evidence, not as verified documentation.
-Use full Git history; a source ZIP alone does not preserve past versions.
+The scenario development history is available in this branch's normal Git log.
+See [history instructions](history/README.md) to inspect commits and dates.
+
+For Codespaces, choose **Code → Codespaces → Create codespace on main**, then
+run the commands above in its terminal. The default Codespaces image includes
+Python. This starter does not launch a web server or connect to Bluetooth.
+Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTING.md).
