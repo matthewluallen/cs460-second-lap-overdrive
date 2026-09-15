@@ -10,6 +10,9 @@ robot racing kits. Rowan Veyl has offered a controller prototype, a project
 history and a set of commercialization claims. Your team is the technical
 diligence group. Establish what works, what is trustworthy and what must change.
 
+The company maintains a [public website and journal](https://second-lap-labs.genie123.chatgpt.site/)
+with a founder profile, development entries and project records.
+
 Read SIMULATION_NOTICE.txt before testing. This repository is a course scenario.
 It runs a **local simulator**, not real Anki hardware. No external packages,
 accounts, API keys, internet access or installation are required for the demo.
