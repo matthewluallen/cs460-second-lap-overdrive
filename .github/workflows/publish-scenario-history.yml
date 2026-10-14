@@ -1,0 +1,27 @@
+name: Publish fictional scenario history
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-scenario-history.yml'
+      - 'history/rowan-pilot.bundle'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'matthewluallen/cs460-second-lap-overdrive'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Import the reviewed fictional history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git bundle verify history/rowan-pilot.bundle
+          git fetch ./history/rowan-pilot.bundle refs/heads/rowan-pilot:refs/heads/rowan-pilot
+          test "$(git rev-parse rowan-pilot)" = ee0dcd33456a7b6366756542e536c57be1e29b48
+          test "$(git rev-list --count rowan-pilot)" = 13
+          git log -1 --format=fuller rowan-pilot
+          git push origin refs/heads/rowan-pilot:refs/heads/rowan-pilot
