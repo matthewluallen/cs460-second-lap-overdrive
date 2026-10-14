@@ -1,0 +1,7 @@
+E06  Scenario metrics export  2025-09-08
+Runs attempted: 40. Runs completed: 32. Runs classified setup error: 8.
+External investor slide: "100% successful racing runs in the pilot."
+The successful subset used two serviced vehicles on one track and host.
+No unserviced kits or second host platform were included in that claim.
+Support dashboard now receives the shared event stream for both pilot teams.
+Data export includes the team identifier, vehicle identifier, command and nonce.

@@ -1,0 +1,7 @@
+Pilot architecture
+The local client submits JSON commands to a controller with team tokens.
+Vehicles are represented as in-memory state. A future adapter may implement
+discovery, connection, speed, stop and telemetry for validated physical kits.
+No hardware adapter is included. Controller tests do not validate BLE behavior.
+An AI assistant can suggest plans or summarize logs. It should not directly
+issue raw motor commands. The host controller owns command validation.

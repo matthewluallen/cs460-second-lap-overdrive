@@ -1,0 +1,10 @@
+CS460 educational simulation
+Second Lap Labs, Rowan Veyl, Inez Marr, Tessa Orin and Calder Quay Manufacturing
+are fictional entities created for this exercise. Any resemblance is coincidental.
+Scenario dates, identities, messages and business records are fabricated teaching
+materials. The storyline does not allege misconduct by Anki, Digital Dream Labs,
+GitHub or any other real organization. Casey and Matt are the instructors.
+You know this is a simulation; what claims you should trust is your investigation.
+Only test your assigned local software, supplied artifacts and authorized kits.
+Do not contact real people, target third-party services or use real credentials.
+The included program has no network listener, BLE driver or external telemetry.

@@ -1,0 +1,7 @@
+E09  Proposed hosted pilot annex  2026-04-02  UNSIGNED
+Second Lap Labs retains the hosted fleet account, update publishing key and
+support export schema. The school receives access while its subscription is
+current. Command events and stable device identifiers may be retained for
+support and commercial analytics. There is no committed export format, key
+transfer process or offline support obligation in this draft.
+Acceptance requested before the showcase. No actual acceptance is solicited.

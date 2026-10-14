@@ -1,0 +1,5 @@
+E03  Pilot 0.2 release notes  2025-06-06
+Operator team switching is now supported for demonstration sessions.
+Repeated transport deliveries no longer interrupt long demos.
+Release checklist: nominal drive test PASS; stop test PASS; build PASS.
+Isolation review and retry semantics review: deferred until field pilot.

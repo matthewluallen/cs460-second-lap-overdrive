@@ -1,0 +1,7 @@
+This package contains newly authored educational scenario material and teaching
+code. No Anki source code, firmware, artwork or hardware design is bundled.
+No rights in Anki or any third-party IP are represented as transferred by this
+file. Course use and adaptation of this newly authored material are intended.
+No general open-source license is granted by this notice. Instructors will
+confirm distribution and reuse terms before reuse outside the course.
+Fictional business documents are evidence props, not actual license grants.

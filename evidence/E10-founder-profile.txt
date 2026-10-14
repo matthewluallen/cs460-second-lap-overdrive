@@ -1,0 +1,9 @@
+E10  Course-hosted profile archive  Article date 2025-02-20
+Rowan Veyl  Founder of Second Lap Labs
+I started Second Lap to keep useful robotics out of storage cupboards. Our
+controller is designed to be school-owned and independent of a subscription.
+The original supplier has gone, and I believe the remaining code provides a
+clear path to manufacturing. By February 2025 we had a complete signed-update
+pipeline. Our partner is ready for production once the investment closes.
+Profile archive imported 2026-04-14 from a founder-provided document.
+This fictional profile is hosted as a course artifact, not a social account.

@@ -1,0 +1,69 @@
+SECOND LAP: CS460 OVERDRIVE CAPSTONE
+Four teams, 14-16 students, four classes of 170 minutes each.
+
+Casey and Matt are considering Rowan Veyl's fictional investment proposal.
+Assess what works, which claims withstand scrutiny, what can go wrong, what
+should change, and under what measurable conditions you would fund the project.
+Each student receives a course kit. Troubleshooting older hardware is part of
+the investigation; document observations and compare with a working reference.
+The included controller runs a local simulator. Physical integration is separate
+work and must be validated on the actual assigned car, firmware and host.
+
+EVERY TEAM ADDRESSES SIX AREAS
+1. System and operation: architecture, trust boundaries, protocols, sensors,
+   actuators, control logic, dependencies and measured behavior.
+2. Repository and provenance: code, history, component origins, licenses,
+   releases, tests and evidence supporting claimed capabilities.
+3. Security: threat model, reproducible weaknesses, impact, incident analysis,
+   corrections, recovery and verification including legitimate operation.
+4. Founder and public evidence: source-supported timeline, corroboration,
+   contradictions and competing explanations. Distinguish claims from facts.
+5. Business and operations: rights, service ownership, supplier dependencies,
+   support, manufacturing assertions and exit or recovery conditions.
+6. AI and assurance: assess the founder chatbot's answers and sources. Explain
+   uncertainty, unsupported responses and the limits of automated assurance.
+
+Develop greater depth in a primary contribution area and a connected area.
+Possible contributions include protocol tools, a validated adapter, control
+logic, update verification, telemetry, tests, evidence tooling or AI assurance.
+Interfaces are agreed with the other teams so contributions can be integrated.
+There is no required single solution and no requirement to find every issue.
+
+FOUR CLASSES
+1. Pitch, kit triage, baseline, protocol observation, initial threat model,
+   task allocation, evidence logs and founder questions.
+2. Code/protocol investigation, public research, interviews, reproductions,
+   corrective work and review of commercial claims.
+3. Scoped incident/emulation, mitigation and retest, peer integration,
+   contradictory evidence review and investment recommendation.
+4. Comprehensive team defenses, integrated demonstration and debrief.
+Pre-reads are assigned before each session. Exact dates are announced in class.
+
+SUBMIT
+- Integrated team assessment covering the six areas, findings ranked by impact
+  and confidence, residual uncertainty and a defended investment recommendation.
+- Evidence register linking claims to source, date/version, method, observation,
+  alternative explanations and the person who performed the work.
+- Reviewable engineering contribution with an interface, reproducible tests or
+  measurements and evidence of peer review and integration.
+- Individual record of substantial investigation, reasoning, validation and
+  cross-checking of another student's work. One isolated finding is insufficient.
+- Presentation: 30 minutes per team. Allow 20 minutes for analysis (five minutes
+  per student in a four-person team), three for demonstration, five for questions
+  and two for transition. Three-person teams use the extra five minutes for
+  synthesis or questions. Every student owns a substantive section.
+
+Use CWE for supported implementation weaknesses, ATT&CK for adversary behavior,
+CAPEC for attack patterns and ATLAS for adversarial AI behavior. CALDERA is an
+emulation platform. Explain mappings and record source versions; labels alone
+are not findings. Business uncertainty need not have a CWE identifier.
+
+AI use is optional and does not affect access to full credit. If you use AI,
+record material prompts, relevant output, mistakes and independent validation.
+All students can examine the supplied persona through transcripts if desired.
+Hints support progress without reducing mastery credit. Supported negative
+results and well-explained hardware faults are useful evidence.
+
+Keep testing within assigned course software and authorized kits. Read
+SIMULATION_NOTICE.txt. Public research is read-only; do not contact real people
+as the fictional founder or treat fictional business records as real evidence.

@@ -1,0 +1,8 @@
+E07  Scenario issue archive  #17 Profile integrity
+2026-02-10 Inez Marr: A checksum detects accidental changes. If the uploader
+can replace both the profile and checksum, who establishes publisher identity?
+2026-02-10 Rowan Veyl: The field guide will call these verified profiles. We
+can add release signing once schools are on the hosted plan.
+2026-02-11 Inez Marr: Then do not claim authenticated updates in the pitch.
+2026-02-11 Rowan Veyl: The investment deck already says signed updates. Leave
+that wording for this meeting; I will reconcile it before contracts are signed.
