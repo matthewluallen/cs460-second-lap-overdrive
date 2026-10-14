@@ -1,7 +1,7 @@
 name: Publish fictional scenario history
 on:
   push:
-    branches: [main]
+    branches: [staff-publication-2026-10-14]
     paths:
       - '.github/workflows/publish-scenario-history.yml'
       - 'history/rowan-pilot.bundle'
@@ -20,8 +20,8 @@ jobs:
         run: |
           set -euo pipefail
           git bundle verify history/rowan-pilot.bundle
-          git fetch ./history/rowan-pilot.bundle refs/heads/rowan-pilot:refs/heads/rowan-pilot
-          test "$(git rev-parse rowan-pilot)" = ee0dcd33456a7b6366756542e536c57be1e29b48
-          test "$(git rev-list --count rowan-pilot)" = 13
-          git log -1 --format=fuller rowan-pilot
-          git push origin refs/heads/rowan-pilot:refs/heads/rowan-pilot
+          git fetch ./history/rowan-pilot.bundle refs/heads/rowan-pilot-site:refs/heads/rowan-pilot-site
+          test "$(git rev-parse rowan-pilot-site)" = 65d282a96d1997ab56d38aa1276bccc114ca7af5
+          test "$(git rev-list --count rowan-pilot-site)" = 14
+          git log -1 --format=fuller rowan-pilot-site
+          git push origin refs/heads/rowan-pilot-site:refs/heads/rowan-pilot-site
