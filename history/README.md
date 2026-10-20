@@ -21,3 +21,9 @@ Five fictional engineering commits on `rowan-bench-2026` span March–August 202
 normal `git log --graph --all` exposes its relationship to the pilot. The course
 integration and guide were published in November, after the September pilot
 snapshot. This explains why earlier pilot records omit the separate bench.
+
+The classroom charge/connect/light continuation adds constructed checkpoints on
+31 August, 24 September and 15 October 2026, extending the bench notebook rather
+than rewriting published history. A current-dated integration imports the code,
+guides and actual source/validation records. See `bench/CHRONOLOGY.txt` and
+`bench/VALIDATION.md`; the constructed dates are not hardware-test evidence.

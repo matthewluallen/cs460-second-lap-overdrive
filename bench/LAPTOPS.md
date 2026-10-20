@@ -1,4 +1,8 @@
-# First lab: a Chrome battery check on one car
+# First lab: Chrome setup and a battery check on one car
+
+Follow [tonight’s charge, connect and light checklist](TONIGHT.md) for the full
+activity; this page covers laptop setup and the battery evidence checkpoint.
+
 Use **desktop Google Chrome on the student's physical laptop** for all four platforms.
 A Codespace can serve the page; it cannot use its remote host as your laptop's radio.
 Use the private forwarded HTTPS port in a separate tab (or local http://localhost:8000).
@@ -25,11 +29,18 @@ Do not guess a PIN. Absence of a PIN dialog does not establish how the link is s
    peripheral just to see whether it is your car.
 2. Start replay → Battery. Expect a **REPLAY** reply of 3700 mV. Save a trace,
    disconnect and start a fresh trace before live work. The fixture never touches the radio.
-3. Click **Choose assigned car**. Select the assigned car and grant site access.
-   Wait for the **LIVE** notification-ready line. Select **Battery** once; wait
-   up to five seconds for a live RX battery response. If the kit needs SDK mode,
-   record that change, retry once, then leave SDK mode. Disconnect when finished.
-4. Save the timestamped trace. Record kit label, off-charger state, OS, Chrome
+3. Enter the assigned kit label and context notes, then click **Choose assigned car**.
+   The default chooser filters for the Anki service. Names may be absent or
+   duplicated; cancel if the entry remains ambiguous. Use the explicit all-devices fallback only
+   after isolating the assigned car if it does not appear in the filtered chooser.
+   Wait for the **LIVE** notification-ready line. Check the selected name and
+   browser-scoped ID; neither is proof of physical identity. Select **Confirm
+   assigned car** after matching the physical kit. This unlocks LED/SDK changes.
+4. Select **Battery** once; wait up to five seconds for a live RX battery response.
+   If the kit needs SDK mode, record that change, retry once, then leave SDK mode.
+   Follow the checklist for a separate observed headlight on/off trial. Disconnect
+   when finished.
+5. Save the timestamped trace. Record kit label, off-charger state, OS, Chrome
    version, Git revision, connection stage, outgoing bytes, returned bytes and
    decoded millivolts. A failed stage and exact error are valid results.
 
@@ -45,7 +56,10 @@ instructor-approved runtime test before making a battery-life claim.
 - No chooser/API: check the bench's browser-path line, direct HTTPS/localhost tab,
   host Chrome and OS permission. Managed policy or Linux support may be the cause.
 - Chooser empty: verify only the assigned powered car is nearby; release the old
-  laptop/app's connection. Failure to advertise is different from an empty battery.
+  laptop/app's connection. The service filter may hide a car whose firmware does
+  not advertise the service; the isolated-car fallback is an explicit second
+  attempt, never an automatic broad scan. Failure to advertise is different from
+  an empty battery. Cancel on duplicate or unrecognizable names.
 - Connected but no RX: record notification setup, request bytes and timeout;
   check the exact model/firmware and optional SDK step before assigning cause.
 - Change **one variable**: test the suspect car on the known-working Chrome laptop,

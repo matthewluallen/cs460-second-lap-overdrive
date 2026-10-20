@@ -20,7 +20,8 @@ for ping, firmware version and battery telemetry, and switch its headlight.
 The live path is implemented but has not been tested on a physical course kit.
 All motion commands remain simulation-only.
 
-**Class starts here:** [capstone assignment](docs/CS_460_FA_26_Semester_Project.docx) ·
+**Class starts here:** [tonight: charge, connect, light](bench/TONIGHT.md) ·
+[capstone assignment](docs/CS_460_FA_26_Semester_Project.docx) ·
 [founder video](media/second-lap-pitch.mp4) ·
 [Chrome laptop setup and first battery check](bench/LAPTOPS.md) ·
 [bench launch and protocol references](bench/BENCH.md).
@@ -33,8 +34,10 @@ python -m http.server 8000 --bind 127.0.0.1 --directory bench
 ```
 
 The remote Codespace serves the page; the laptop owns the Bluetooth radio.
-Start in replay, then compare a live off-charger reading. Trace entries identify
-their source. The Python simulator requires Python 3.10+ and no extra packages:
+Start in replay, then compare a live off-charger reading. Confirm the assigned
+physical car before enabling its headlight controls, and record the visible
+result separately from the write. Trace entries identify their source. The Python
+simulator requires Python 3.10+ and no extra packages:
 
 ```sh
 python -m lapreturn demo
