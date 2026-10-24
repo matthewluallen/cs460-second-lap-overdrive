@@ -109,3 +109,67 @@ test('MOCK malformed RX stays raw evidence and cannot become a battery result',a
   assert.ok(m.log.some(([source])=>source==='LIVE parse error'));
   assert.ok(!m.log.some(([source])=>source==='LIVE decoded'));m.link.close();
 });
+for(const wrapper of ['same object','different object, same browser ID'])test('MOCK active device ownership rejects a second session: '+wrapper,async()=>{
+  const m=mockCar(),second=new CarLink(()=>{});await m.link.open(m.api);
+  const candidate=wrapper==='same object'?m.device:Object.assign(new EventTarget(),{id:m.device.id,name:m.device.name,gatt:m.device.gatt});
+  await assert.rejects(second.open({requestDevice:async()=>candidate}),/already has an active bench session/);
+  assert.equal(m.device.gatt.connected,true);assert.ok(m.link.tx);assert.ok(!second.tx);
+  await m.link.send('battery');assert.deepEqual(m.writes,[[1,0x1a]]);
+  second.close();assert.equal(m.device.gatt.connected,true);m.link.close();
+  await second.open({requestDevice:async()=>candidate});assert.ok(second.tx);second.close();
+});
+for(const wrapper of ['same object','different object, same browser ID'])test('MOCK cancelled old setup cannot disconnect a newer owner: '+wrapper,async()=>{
+  const m=mockCar(),second=new CarLink(()=>{}),gate=deferred(),started=deferred();
+  m.rx.startNotifications=()=>{started.resolve();return gate.promise;};
+  const opening=m.link.open(m.api);await started.promise;m.link.close();
+  const candidate=wrapper==='same object'?m.device:Object.assign(new EventTarget(),{id:m.device.id,name:m.device.name,gatt:m.device.gatt});
+  m.rx.startNotifications=async()=>m.rx;await second.open({requestDevice:async()=>candidate});
+  gate.resolve(m.rx);await assert.rejects(opening,/Disconnected during setup/);
+  assert.equal(candidate.gatt.connected,true);await second.send('battery');assert.deepEqual(m.writes,[[1,0x1a]]);second.close();
+});
+test('MOCK a cancelled chooser never disconnects a device subsequently claimed elsewhere',async()=>{
+  const m=mockCar(),second=new CarLink(()=>{}),gate=deferred();
+  const opening=m.link.open({requestDevice:()=>gate.promise});m.link.close();
+  await second.open(m.api);gate.resolve(m.device);await assert.rejects(opening,/Selection cancelled/);
+  assert.equal(m.device.gatt.connected,true);await second.send('ping');assert.deepEqual(m.writes,[[1,0x16]]);second.close();
+});
+test('MOCK setup failures release device-ID claims for another instance',async()=>{
+  for(const failStage of ['service','notify']){
+    const failed=mockCar({failStage});await assert.rejects(failed.link.open(failed.api));
+    const replacement=mockCar();assert.equal(replacement.device.id,failed.device.id);
+    await replacement.link.open(replacement.api);await replacement.link.send('ping');replacement.link.close();
+  }
+});
+test('MOCK missing browser IDs use object ownership without conflating independent devices',async()=>{
+  const first=mockCar(),second=mockCar(),duplicate=new CarLink(()=>{});delete first.device.id;delete second.device.id;
+  await first.link.open(first.api);await second.link.open(second.api);
+  await assert.rejects(duplicate.open(first.api),/already has an active bench session/);
+  assert.equal(first.device.gatt.connected,true);assert.equal(second.device.gatt.connected,true);
+  first.link.close();second.link.close();
+  await duplicate.open(first.api);duplicate.close();
+});
+test('MOCK trace refusal blocks the wire write without blocking legacy undefined callbacks',async()=>{
+  const m=mockCar();await m.link.open(m.api);
+  m.link.note=source=>source==='LIVE TX attempt'?false:undefined;
+  await assert.rejects(m.link.send('battery'),/Trace capture refused.*no write attempted/);
+  assert.equal(m.writes.length,0);assert.equal(m.link.pendingWrite,null);
+  m.link.note=()=>undefined;await m.link.send('battery');assert.deepEqual(m.writes,[[1,0x1a]]);m.link.close();
+});
+test('MOCK setup trace refusal prevents opening the browser chooser',async()=>{
+  const m=mockCar();m.link.note=source=>source==='LIVE chooser'?false:undefined;
+  await assert.rejects(m.link.open(m.api),/Trace capture refused connection setup/);
+  assert.equal(m.choices.length,0);assert.equal(m.device.gatt.connected,false);assert.equal(m.writes.length,0);
+  m.link.note=()=>undefined;await m.link.open(m.api);assert.equal(m.choices.length,1);m.link.close();
+});
+for(const refusedStage of ['selection','connecting'])test('MOCK '+refusedStage+' trace refusal avoids GATT connection and releases its claim',async()=>{
+  const m=mockCar();let connects=0,disconnects=0;
+  m.device.gatt.connected=true; // A connection this attempt did not create.
+  m.device.gatt.connect=async()=>{connects++;m.device.gatt.connected=true;return m.device.gatt;};
+  m.device.gatt.disconnect=()=>{disconnects++;m.device.gatt.connected=false;};
+  m.link.note=(source,message)=>((refusedStage==='selection'&&source==='LIVE selection') || (refusedStage==='connecting'&&source==='LIVE GATT'&&message==='connecting'))?false:undefined;
+  await assert.rejects(m.link.open(m.api),/Trace capture refused connection setup/);
+  assert.equal(m.choices.length,1);assert.equal(connects,0);assert.equal(disconnects,0);
+  assert.equal(m.device.gatt.connected,true);assert.equal(m.writes.length,0);
+  const replacement=new CarLink(()=>undefined);await replacement.open(m.api);
+  assert.equal(connects,1);replacement.close();assert.equal(disconnects,1);
+});

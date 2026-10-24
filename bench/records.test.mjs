@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {Records} from './records.mjs';
+import {Records,MAX_RECORDS} from './records.mjs';
 
 // These are characterization tests for an intentionally flawed teaching fixture.
 // Passing CWE tests preserves a reproduction; it does not mean access is secure.
@@ -75,4 +75,17 @@ test('MOCK worksheet import and exercised operations need no browser, Bluetooth 
       else delete globalThis[key];
     }
   }
+});
+
+
+test('MOCK worksheet rejects additions at a bounded session size without losing existing evidence',()=>{
+  const book=new Records();
+  for(let i=2;i<MAX_RECORDS;i++)book.add('pilot-red','red','Synthetic row '+i);
+  const next=book.next;
+  const snapshot=book.list('pilot-red');
+  assert.throws(()=>book.add('pilot-red','blue','Cannot exceed budget'),/Worksheet session full/);
+  assert.equal(book.next,next);assert.equal(book.rows.size,MAX_RECORDS);
+  assert.deepEqual(book.list('pilot-red'),snapshot);
+  assert.equal(book.read('pilot-red',102).team,'blue','intentional read flaw remains reproducible');
+  assert.equal(new Records().rows.size,2);
 });

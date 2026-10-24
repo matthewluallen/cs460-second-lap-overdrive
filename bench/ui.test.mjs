@@ -1,16 +1,17 @@
-import test from 'node:test';
+import test,{afterEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {CarLink,Replay} from './link.mjs';
 import {Records} from './records.mjs';
+import {TraceLog} from './trace.mjs';
 import {uuids} from './protocol.mjs';
 
 // A minimal DOM runs the actual UI and transport without a browser, radio, or
 // dependencies. It rejects HTML sinks so hostile names/notes stay literal text.
 const html=await readFile(new URL('./index.html',import.meta.url),'utf8');
 const ui=(await readFile(new URL('./ui.mjs',import.meta.url),'utf8'))
-  .replace(/^import .* from '\.\/(?:link|records)\.mjs';\n/gm,'');
+  .replace(/^import .* from '\.\/(?:link|records|trace)\.mjs';\n/gm,'');
 class Element {
   value='';textContent='';disabled=false;checked=false;dataset={};children=[];
   append(option){this.children.push(option);if(this.children.length===1)this.value=option.value;}
@@ -29,7 +30,9 @@ function mockCar(){
     notify(bytes){rx.value=new DataView(Uint8Array.from(bytes).buffer);rx.dispatchEvent(new Event('characteristicvaluechanged'));},
     lose(){device.gatt.connected=false;device.dispatchEvent(new Event('gattserverdisconnected'));}};
 }
-function harness(bluetooth){
+const harnesses=new Set();
+afterEach(()=>{for(const h of harnesses)h.event('pagehide');harnesses.clear();});
+function harness(bluetooth,traceOptions){
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(([,id])=>[id,new Element()]));
   const operations=new Map([...html.matchAll(/data-op="([^"]+)"/g)].map(([,op])=>{const b=new Element();b.dataset.op=op;return [op,b];}));
   elements.get('rid').value='101';elements.get('trace').textContent='No traffic yet.';
@@ -39,17 +42,18 @@ function harness(bluetooth){
   const document={getElementById:id=>{assert.ok(elements.has(id),'Unknown DOM id '+id);return elements.get(id);},
     querySelectorAll:selector=>{assert.equal(selector,'[data-op]');return [...operations.values()];},
     createElement:tag=>{assert.equal(tag,'a');const a={click:()=>downloads.push({name:a.download,blob:blobs.get(a.href)})};return a;}};
-  const context={CarLink,Replay,Records,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
+  const context={CarLink,Replay,Records,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
     Option:class {constructor(text,value){this.text=text;this.value=value;}},
     URL:{createObjectURL:blob=>{const key='blob:mock-'+blobs.size;blobs.set(key,blob);return key;},revokeObjectURL:key=>blobs.delete(key)},
     setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id)};
   vm.runInNewContext(ui,context,{filename:'bench/ui.mjs'});
-  return {elements,operations,timers,downloads,
+  const instance={elements,operations,timers,downloads,
     el:id=>elements.get(id),op:id=>operations.get(id),
     click:async id=>{const element=elements.get(id)??operations.get(id);if(!element.disabled)await element.onclick();},
-    set:(id,value)=>{const element=elements.get(id);element.value=value;element.oninput?.();},
+    set:(id,value)=>{const element=elements.get(id);element.value=value;element.oninput?.();element.onchange?.();},
     expire:ms=>{const ready=[...timers].filter(([,t])=>t.ms===ms);assert.ok(ready.length,'Expected timer '+ms);for(const [id,t] of ready){timers.delete(id);t.fn();}},
     event:name=>events.get(name)?.()};
+  harnesses.add(instance);return instance;
 }
 function deferred(){let resolve;const promise=new Promise(r=>{resolve=r;});return {promise,resolve};}
 async function connect(h){h.set('assignedCar','kit-red-1');await h.click('live');}
@@ -89,11 +93,12 @@ test('MOCK UI clears replay results for live work and accepts only a pending mat
   assert.equal(h.timers.size,0);assert.equal(h.op('ping').disabled,false);
   assert.match(h.el('trace').textContent,/REPLAY RX/);assert.match(h.el('trace').textContent,/LIVE RX/);
 });
-test('MOCK UI timeout and disconnect preserve distinct battery outcomes and unblock controls',async()=>{
+test('MOCK UI timeout is inconclusive and requires a new connection before another battery request',async()=>{
   const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('battery');h.expire(5000);
-  assert.match(h.el('batteryResult').textContent,/LIVE: no battery reply within five seconds/);
-  m.notify([3,0x1b,0x74,0x0e]);assert.match(h.el('batteryResult').textContent,/no battery reply/);
-  assert.equal(h.op('battery').disabled,false);await h.click('battery');m.lose();
+  assert.match(h.el('batteryResult').textContent,/LIVE: no battery RX within five seconds; result inconclusive/);
+  m.notify([3,0x1b,0x74,0x0e]);assert.match(h.el('batteryResult').textContent,/no battery RX/);
+  assert.equal(h.op('battery').disabled,true);const writes=m.writes.length;await h.click('battery');assert.equal(m.writes.length,writes);
+  await h.click('close');await h.click('live');assert.equal(h.op('battery').disabled,false);await h.click('battery');m.lose();
   assert.match(h.el('batteryResult').textContent,/LIVE: disconnected before a battery reply/);
   assert.equal(h.timers.size,0);assert.equal(h.el('status').textContent,'Disconnected');assert.equal(h.el('clear').disabled,false);
   assert.equal(h.op('battery').disabled,true);assert.match(h.el('trace').textContent,/LIVE GATT.*disconnected/);
@@ -104,7 +109,7 @@ test('MOCK UI failed write keeps requested bytes and error without fabricating a
   assert.match(h.el('batteryResult').textContent,/LIVE: battery write failed: mock write denied/);
   assert.match(h.el('trace').textContent,/LIVE TX attempt \| 01 1a/);assert.match(h.el('trace').textContent,/LIVE error \| mock write denied/);
   assert.doesNotMatch(h.el('trace').textContent,/\| LIVE TX \|/);assert.doesNotMatch(h.el('trace').textContent,/LIVE decoded/);
-  assert.equal(h.timers.size,0);assert.equal(h.op('battery').disabled,false);
+  assert.equal(h.timers.size,0);assert.equal(h.op('battery').disabled,true);
 });
 test('MOCK UI records LED observations as operator reports and renders hostile text literally',async()=>{
   const m=mockCar(),h=harness(m.bluetooth),hostile='<img src=x onerror=alert(1)>';
@@ -180,4 +185,68 @@ test('MOCK UI blocks same-device reconnect until cancelled setup settles, while 
   await h.click('battery');m.notify([3,0x1b,0x10,0x0e]);
   assert.match(h.el('batteryResult').textContent,/LIVE decoded: battery 3600 mV/);
   assert.equal(m.device.gatt.connected,true);await h.click('close');
+});
+
+test('MOCK UI requires a fresh LED observation for each attempt and clears it after recording',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('confirm');
+  await h.click('lampOn');h.set('observation','Light visibly on');h.set('observationNote','Old on detail');
+  await h.click('lampOff');
+  assert.equal(h.el('observation').value,'');assert.equal(h.el('observationNote').value,'');
+  assert.equal(h.el('recordObservation').disabled,true);
+  const before=h.el('trace').textContent;await h.el('recordObservation').onclick();assert.equal(h.el('trace').textContent,before);
+  h.set('observation','Light visibly off');h.set('observationNote','Ari observed the off attempt');await h.click('recordObservation');
+  assert.match(h.el('trace').textContent,/LIVE observation.*"number":1.*"label":"kit-red-1".*"browserId":"browser-scoped-mock-id"/);
+  assert.match(h.el('trace').textContent,/LIVE observation.*"id":"1\/lamp-2","command":"lampOff".*write completed/);
+  assert.equal(h.el('observation').value,'');assert.equal(h.el('observationNote').value,'');assert.equal(h.el('recordObservation').disabled,true);
+});
+test('MOCK UI preserves confirmed identity for post-disconnect observation, then clears it for replay',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('confirm');await h.click('lampOn');m.lose();
+  h.set('assignedCar','next-kit');h.set('sessionNotes','Context for the NEXT connection');
+  h.set('observation','Light visibly on');h.set('observationNote','Ari saw it remain on; cleanup unavailable');
+  assert.equal(h.el('recordObservation').disabled,false);const writes=m.writes.length;await h.click('recordObservation');
+  assert.equal(m.writes.length,writes);assert.match(h.el('lampResult').textContent,/after disconnect/);
+  await h.click('save');const saved=await h.downloads[0].blob.text();
+  assert.match(saved,/LIVE observation.*"label":"kit-red-1".*"browserId":"browser-scoped-mock-id".*"afterDisconnect":true.*cleanup unavailable/);
+  assert.doesNotMatch(saved,/next-kit|Context for the NEXT/);
+  await h.click('replay');h.set('observation','Light visibly on');assert.equal(h.el('recordObservation').disabled,true);
+  await h.click('close');assert.equal(h.el('recordObservation').disabled,true);await h.click('clear');
+  assert.match(h.el('observationContext').textContent,/Run a headlight attempt/);
+});
+test('MOCK UI associates observations with failed and interrupted lamp writes without fabricating success',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('confirm');
+  m.tx.writeValueWithoutResponse=async()=>{throw Error('mock rejection');};await h.click('lampOn');
+  h.set('observation','No visible change');await h.click('recordObservation');
+  assert.match(h.el('trace').textContent,/LIVE observation.*"command":"lampOn".*write failed or completion unknown: mock rejection/);
+  const gate=deferred();m.tx.writeValueWithoutResponse=()=>gate.promise;const sending=h.click('lampOff');m.lose();
+  h.set('observation','Unable to tell');h.set('observationNote','Connection lost before observation');await h.click('recordObservation');
+  assert.match(h.el('trace').textContent,/LIVE observation.*"command":"lampOff".*disconnected during write; outcome unknown.*"afterDisconnect":true/);
+  gate.resolve();await sending;assert.doesNotMatch(h.el('trace').textContent,/\| LIVE TX \|/);
+});
+test('MOCK UI caps evidence before crediting an unretained battery result and requires export before clear',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,{maxLines:13,maxChars:2000000,visibleLines:3});await connect(h);await h.click('confirm');
+  await h.click('battery');m.notify([3,0x1b,0x74,0x0e]);
+  assert.match(h.el('traceNotice').textContent,/Trace incomplete/);assert.match(h.el('trace').textContent,/TRACE INCOMPLETE/);
+  assert.doesNotMatch(h.el('batteryResult').textContent,/battery 3700 mV/);assert.equal(h.timers.size,0);
+  assert.equal(m.device.gatt.connected,true,'overflow must not automatically disconnect');
+  for(const op of ['battery','lampOn','lampOff','sdkOff'])assert.equal(h.op(op).disabled,true);
+  assert.equal(h.el('recordObservation').disabled,true);assert.equal(h.el('confirm').disabled,true);
+  const writes=m.writes.length;await h.op('lampOn').onclick();assert.equal(m.writes.length,writes);
+  await h.click('close');assert.equal(h.el('clear').disabled,true);await h.el('clear').onclick();assert.match(h.el('trace').textContent,/TRACE INCOMPLETE/);
+  assert.equal(h.el('live').disabled,true);assert.equal(h.el('replay').disabled,true);
+  await h.click('save');const saved=await h.downloads[0].blob.text();
+  assert.match(saved,/local session 1/);assert.match(saved,/TRACE INCOMPLETE/);assert.ok(saved.split('\n').length>h.el('trace').textContent.split('\n').length);
+  assert.equal(h.el('clear').disabled,false);await h.click('clear');assert.equal(h.el('replay').disabled,false);
+  await h.click('replay');await h.click('battery');assert.match(h.el('batteryResult').textContent,/REPLAY RX: battery 3700 mV/);
+});
+test('MOCK UI rejects an unrecordable TX attempt before it can send bytes',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,{maxLines:10,maxChars:2000000,visibleLines:200});await connect(h);await h.click('confirm');
+  // The check declaration occupies the last line; the attempted packet cannot be retained.
+  await h.click('battery');assert.match(h.el('traceNotice').textContent,/Trace incomplete/);assert.equal(m.writes.length,0);
+});
+test('MOCK UI pending write timeout remains inconclusive with Disconnect available and no concurrent retry',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth),gate=deferred();await connect(h);m.tx.writeValueWithoutResponse=()=>gate.promise;
+  const sending=h.click('battery');h.expire(5000);
+  assert.match(h.el('batteryResult').textContent,/result inconclusive.*write remains pending, Disconnect to recover/);
+  assert.equal(h.el('close').disabled,false);assert.equal(h.op('battery').disabled,true);assert.equal(h.op('ping').disabled,true);
+  await h.click('close');gate.resolve();await sending;assert.equal(h.el('status').textContent,'Disconnected');
 });

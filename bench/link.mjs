@@ -1,5 +1,23 @@
 import {uuids,frame,hex,decode} from './protocol.mjs';
 
+// Instances in one page share the same browser device. Keep ownership outside
+// the instance so a cancelled setup cannot disconnect a replacement session.
+const deviceOwners=new Map(),anonymousOwners=new WeakMap();
+function ownership(device) {
+  return typeof device.id==='string' && device.id
+    ? {store:deviceOwners,key:device.id}
+    : {store:anonymousOwners,key:device};
+}
+function ownerOf(device) { const {store,key}=ownership(device);return store.get(key); }
+function claimDevice(device) {
+  const {store,key}=ownership(device);
+  if(store.has(key))throw new Error('This browser device already has an active bench session');
+  const claim={store,key};store.set(key,claim);return claim;
+}
+function releaseDevice(claim) {
+  if(claim && claim.store.get(claim.key)===claim)claim.store.delete(claim.key);
+}
+
 // The server serves static files. Only the local browser owns a GATT connection.
 export class CarLink {
   constructor(note,closed=()=>{}) { this.note=note;this.closed=closed; }
@@ -8,8 +26,11 @@ export class CarLink {
     if(!bluetooth)throw new Error('Web Bluetooth unavailable. Open the forwarded port in a separate desktop Chrome tab or use replay.');
     this.opening=true;
     const session={};this.session=session;
-    this.selection=null;this.assignedLabel=null;
-    let device,stage='chooser';
+    this.selection=null;this.assignedLabel=null;this.connectStarted=false;
+    let device,claim,connectStarted=false,stage='chooser';
+    const recordSetup=(source,message)=>{
+      if(this.note(source,message)===false)throw new Error('Trace capture refused connection setup; no further connection operation attempted');
+    };
     const current=()=>{
       if(this.session!==session || !device.gatt.connected)throw new Error('Disconnected during setup');
     };
@@ -17,15 +38,17 @@ export class CarLink {
       const options=showAllDevices
         ? {acceptAllDevices:true,optionalServices:[uuids.service]}
         : {filters:[{services:[uuids.service]}]};
-      this.note('LIVE chooser',showAllDevices?'all-device fallback; operator must isolate and identify assigned car':'Anki service filter; select only the assigned car');
+      recordSetup('LIVE chooser',showAllDevices?'all-device fallback; operator must isolate and identify assigned car':'Anki service filter; select only the assigned car');
       device=await bluetooth.requestDevice(options);
       if(this.session!==session)throw new Error('Selection cancelled before connection');
+      stage='device ownership';claim=claimDevice(device);this.claim=claim;
       this.device=device;
       this.selection=Object.freeze({name:device.name||'',browserId:device.id||''});
-      this.note('LIVE selection',JSON.stringify(this.selection)+' · browser name/ID only; not verified vehicle identity');
+      recordSetup('LIVE selection',JSON.stringify(this.selection)+' · browser name/ID only; not verified vehicle identity');
       this.gone=()=>this.close();
       device.addEventListener('gattserverdisconnected',this.gone);
-      stage='GATT connection';this.note('LIVE GATT','connecting');
+      stage='GATT connection';recordSetup('LIVE GATT','connecting');
+      connectStarted=this.connectStarted=true;
       const gatt=await device.gatt.connect();current();
       stage='Anki service';this.note('LIVE GATT','connected; finding Anki service');
       const service=await gatt.getPrimaryService(uuids.service);current();
@@ -49,8 +72,10 @@ export class CarLink {
     } catch(err) {
       this.note('LIVE setup error',stage+': '+err.name+': '+err.message);
       if(this.session===session)this.close();
-      // A connect promise can resolve after close(); release that late connection too.
-      else if(device?.gatt?.connected)device.gatt.disconnect();
+      // Release our late connection only when a newer instance has not adopted
+      // this device. A cancelled chooser never acquired a connection to release.
+      else if(connectStarted && device?.gatt?.connected && !ownerOf(device))device.gatt.disconnect();
+      releaseDevice(claim);
       throw err;
     } finally { this.opening=false; }
   }
@@ -68,7 +93,9 @@ export class CarLink {
     const tx=this.tx,device=this.device,session=this.session,pending={};
     this.pendingWrite=pending;
     try {
-      this.note('LIVE TX attempt',hex(bytes)+' · '+name+' (requested; completion and car response not yet known)');
+      if(this.note('LIVE TX attempt',hex(bytes)+' · '+name+' (requested; completion and car response not yet known)')===false) {
+        throw new Error('Trace capture refused the command; no write attempted');
+      }
       if(tx.properties.writeWithoutResponse) await tx.writeValueWithoutResponse(bytes);
       else await tx.writeValueWithResponse(bytes);
       if(this.session!==session || !device.gatt.connected)throw new Error('Disconnected during write; outcome unknown');
@@ -78,10 +105,13 @@ export class CarLink {
   close() {
     this.session=null;this.selection=null;this.assignedLabel=null;
     const d=this.device;if(!d)return;
-    d.removeEventListener('gattserverdisconnected',this.gone);
+    const ownsDevice=ownerOf(d)===this.claim;
+    const started=this.connectStarted;this.connectStarted=false;
+    releaseDevice(this.claim);this.claim=null;
+    if(this.gone)d.removeEventListener('gattserverdisconnected',this.gone);
     if(this.rx && this.receive)this.rx.removeEventListener('characteristicvaluechanged',this.receive);
     this.tx=this.rx=this.receive=this.device=null;
-    if(d.gatt?.connected)d.gatt.disconnect();
+    if(ownsDevice && started && d.gatt?.connected)d.gatt.disconnect();
     this.note('LIVE GATT','disconnected');this.closed();
   }
 }
