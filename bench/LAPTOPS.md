@@ -37,17 +37,22 @@ Do not guess a PIN. Absence of a PIN dialog does not establish how the link is s
    browser-scoped ID; neither is proof of physical identity. Select **Confirm
    assigned car** after matching the physical kit. This unlocks LED/SDK changes.
 4. Select **Battery** once; wait up to five seconds for a live RX battery response.
-   If the kit needs SDK mode, record that change, retry once, then leave SDK mode.
+   A timeout or write error is inconclusive: disconnect and reconnect before
+   another Battery request. For an optional SDK retry, confirm the assigned car
+   again, enable SDK mode and retry Battery once, then leave SDK mode. If the
+   write is still pending after five seconds, Disconnect remains available.
    Follow the checklist for a separate observed headlight on/off trial. Disconnect
    when finished.
 5. Save the timestamped trace. Record kit label, off-charger state, OS, Chrome
    version, Git revision, connection stage, outgoing bytes, returned bytes and
    decoded millivolts. A failed stage and exact error are valid results.
 
-**Pass:** a matching live RX frame after the request, from your identified,
+**Observed:** a well-formed live RX battery frame during the request window, from your identified,
 off-charger car. This shows the car had enough power to communicate at that
 instant and that Chrome could exchange GATT traffic. A chooser entry or successful
-write alone is insufficient. A reading does not measure usable capacity, verify
+write alone is insufficient. There is no wire request sequence number, so the
+observation does not prove which request caused the reply. A reading does not
+measure usable capacity, verify
 the charging circuit, or demonstrate safe driving. No universal millivolt pass
 threshold is assumed. Record a later timed off-charger observation or separate
 instructor-approved runtime test before making a battery-life claim.

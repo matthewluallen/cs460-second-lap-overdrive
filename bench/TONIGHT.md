@@ -30,7 +30,9 @@ and evidence record.
 
 ## 3. Choose and confirm the right car
 
-1. Enter the assigned car label and charging/context notes on the bench.
+1. Enter the assigned car label and charging/context notes on the bench. These
+   notes are captured when connecting. Later edits prepare the next session;
+   use the LED observation’s final-detail field for the current attempt’s outcome.
 2. Click **Choose assigned car**. The default chooser filters for the Anki
    service. Select only an entry you can identify as your assigned car. A model
    name can be shared by several cars; an absent or duplicate name is not enough.
@@ -51,19 +53,33 @@ and evidence record.
 
 - Select **Battery** once and wait up to **five seconds**. Save the outgoing bytes
   and matching **LIVE RX** battery reply in millivolts, or the exact failed stage
-  and timeout. Ping and Version are optional diagnostics, sent one at a time.
+  and timeout. The reply has no request sequence number: it was observed during
+  this request window, not proven to be caused by this particular request. A
+  timeout or write error is inconclusive and locks Battery until you disconnect
+  and reconnect. If a write remains pending after five seconds, use Disconnect
+  to recover; do not start concurrent requests. Ping and Version are optional
+  diagnostics, sent one at a time.
 - Select **Headlight on**, watch the assigned car, and record whether its light
   visibly changed. Then select **Headlight off** and record that observation too.
-  Choose the matching **Visible LED observation**, add **Observer / detail**,
+  Choose the matching **Visible LED observation**, add **Observer / final detail**,
   and click **Record LED observation** for each attempt. These are operator
-  reports, not telemetry. A completed write is not proof that a light changed.
+  reports, not telemetry. Each report includes the confirmed session identity,
+  lamp attempt and write outcome. The form clears for each lamp attempt and
+  after recording so an old choice cannot be submitted accidentally. A completed
+  write is not proof that a light changed.
   A replay light command cannot supply physical evidence.
-- If the assigned firmware needs SDK mode, record the original result, enable
-  SDK mode, retry once and record the second result. Leave SDK mode before
-  disconnecting if you enabled it. SDK compatibility is hardware-unverified.
-- Disconnect, then save the live trace before another person takes over. Keep the car
-  stationary throughout. If a connection fails before cleanup, record which
-  commands could not be completed; do not claim that the lamp or SDK state reset.
+- If the assigned firmware needs SDK mode, record the original result and try
+  SDK mode once. After a battery timeout/error, disconnect and reconnect to the
+  assigned car, confirm it again, enable SDK mode, then make one new Battery
+  request. Record both attempts. Leave SDK mode before disconnecting if you
+  enabled it; a disconnect does not prove SDK mode reset. SDK compatibility is
+  hardware-unverified.
+- Disconnect, then save the live trace before another person takes over. Keep
+  the car stationary throughout. After a failed or completed lamp attempt, you
+  can still record a visible result and **Observer / final detail** after
+  disconnect. It remains attached to that confirmed car and attempt until a new
+  session starts or the trace is cleared. Record failed cleanup here (choose
+  **Unable to tell** when appropriate); do not claim the lamp or SDK state reset.
 
 A valid off-charger battery reply shows power and data exchange at that instant.
 It does not establish usable capacity, charging-circuit health, runtime or safe
@@ -79,6 +95,14 @@ bytes, response bytes and millivolts or timeout, SDK attempts, visible LED on/of
 observations, observer and unresolved questions. Record only your assigned
 course device's identity information. Exported traces should accompany your
 team evidence register; an operator note is not sensor telemetry.
+
+The page shows the latest 200 trace lines; export retains the full accepted log.
+At 10,000 lines or 2,000,000 characters, capture stops with a **TRACE INCOMPLETE**
+notice instead of silently dropping old evidence. New operations and observations
+are blocked. Disconnect, save the incomplete trace, then clear before continuing.
+If lamp-off or SDK-off cleanup is still needed, reconnect to the same assigned
+car, confirm it again and perform those steps; no cleanup command is automatic.
+Treat the unrecorded interval and any uncompleted cleanup as unknown.
 
 If a stage fails, change one variable: try this car on the reference laptop,
 then the reference car on this laptop, disconnecting before each handoff.

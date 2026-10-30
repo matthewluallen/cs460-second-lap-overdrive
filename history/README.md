@@ -23,7 +23,8 @@ integration and guide were published in November, after the September pilot
 snapshot. This explains why earlier pilot records omit the separate bench.
 
 The classroom charge/connect/light continuation adds constructed checkpoints on
-31 August, 24 September and 15 October 2026, extending the bench notebook rather
-than rewriting published history. A current-dated integration imports the code,
-guides and actual source/validation records. See `bench/CHRONOLOGY.txt` and
+31 August, 24 September and 15 October 2026, extending the bench notebook without
+rewriting main history. The PR integration and advisory corrections also use
+constructed October timestamps. GitHub publication events and runtime evidence
+retain actual times. See `bench/CHRONOLOGY.txt` and
 `bench/VALIDATION.md`; the constructed dates are not hardware-test evidence.

@@ -1,10 +1,11 @@
 CS460 teaching simulation. Second Lap Labs and its contributors are fictional.
-The bench notebook uses constructed development dates. See the integration
-commit on the course main branch for actual publication history.
+The bench notebook uses constructed development dates. Existing main-branch
+publication history remains untouched.
 
-The classroom continuation extends the August notebook with constructed
-August, September and October 2026 code/test checkpoints. Those dates and
-fictional contributor identities are teaching material, not claims of when
-this work was actually performed. A current-dated course integration imports
-the continuation without rewriting the published main branch. Research,
-validation records and CI runs retain their actual dates.
+The classroom continuation extends the August notebook with constructed August,
+September and October 2026 code/test checkpoints. Follow-up advisory corrections
+and the PR's integration/checkpoint timestamps also use the fictional October
+timeline. These dates and contributor identities are teaching material, not
+claims of when implementation, review or hardware testing actually happened.
+GitHub PR publication/update events retain the service's actual timestamps.
+Runtime traces always timestamp events when they occur; never backdate evidence.

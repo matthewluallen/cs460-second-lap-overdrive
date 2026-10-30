@@ -2,7 +2,9 @@
 
 Complete the charging, connection and light activity first. Save its traces and
 disconnect the car before this exercise. Use only the **Support worksheet** and
-disposable scenario notes in your own tab. Reloading resets its records. The
+disposable scenario notes in your own tab. Reloading resets its records. A session holds at most 1,000 records including
+the two seeds; further additions fail before mutation, while existing records
+remain readable. Save investigation notes before resetting. The
 public `pilot-*` operator tokens model roles; they are not real authentication.
 
 The worksheet deliberately preserves two authorization defects for students to

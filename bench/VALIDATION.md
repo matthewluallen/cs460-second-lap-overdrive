@@ -1,7 +1,7 @@
 # Classroom bench validation record
 
-Actual review and software test date: **4 November 2026**. Constructed scenario
-commit dates are described separately in [CHRONOLOGY.txt](CHRONOLOGY.txt).
+Software execution evidence is distinct from the constructed scenario commit
+dates described in [CHRONOLOGY.txt](CHRONOLOGY.txt).
 Baseline: `56aec5088a39b2f8543a0f5ff3299467cd0d0643`. The uploaded semester brief
 is byte-identical to `docs/CS_460_FA_26_Semester_Project.docx` (SHA-256
 `5d79a187e6f6832d82bcd8e8e359f4a86c52a13281e76924bd30c6e21d439826`).
@@ -30,19 +30,26 @@ editing. The expanded bench checks cover:
 - Disconnection during lamp writes reports unknown outcome. Cancelling setup
   blocks another live attempt until the old promise settles, preventing its late
   cleanup from disconnecting a new session; replay remains available meanwhile.
+- Bounded capture with a visible incomplete marker, full retained export and a
+  200-line display; no command or connection begins when its trace cannot be
+  recorded. Cross-instance ownership protects replacement connections.
+- Immutable physical-observation context after disconnect, fresh LED fields per
+  attempt and explicit inconclusive battery retry recovery.
 - The disposable worksheet's ordinary behavior and intentional CWE-639/CWE-862
   defects. These are characterization tests, not security certification. A live
   mock session receives no writes from worksheet actions.
 
-Local runtime: Node 25.6.1 and Python 3.14.7. All 36 bench tests and all four
-simulator tests pass. The bench suite also passes on Node 18 and Node 22,
+Local runtime: Node 25.6.1 and Python 3.14.7. All 59 bench tests and all 20
+simulator tests pass. Python checks also pass on bundled Python 3.12.14.
+The bench suite also passes on Node 18 and Node 22,
 invoked locally through the official Node packages. No car is used by these
 tests. This PR does not install a GitHub Actions workflow: the available push
 credential lacks workflow-file permission; no hosted CI result is claimed.
 
 ## Chrome replay rehearsal
 
-The page was served on localhost and exercised in desktop Chrome 155 on macOS:
+The revised page was served on localhost and exercised again in desktop
+Chrome 155 on macOS after the advisory fixes:
 
 1. Browser path reported secure, direct tab, Web Bluetooth API present.
 2. Start replay → Battery displayed `REPLAY RX: battery 3700 mV` and raw frame
@@ -72,10 +79,11 @@ by this software review.
 | LED | On/off command bytes and separate visible observations of the assigned car. Try optional SDK once if needed and record both results. |
 | Cleanup | Lamp off and SDK off if used, followed by disconnect; record failed/unknown cleanup without claiming reset. |
 
-The wire battery reply has no request sequence number. “Matching” here means a
-well-formed battery reply on the selected connection during the single pending
-five-second request window, not cryptographic proof of causation or identity.
-A late reply stays in the raw trace but does not retroactively pass the timeout.
+The wire battery reply has no request sequence number. A reading means a
+well-formed battery notification was observed on the selected connection during
+the single pending five-second window, not proof of causation or identity. A
+live timeout or write failure is inconclusive and blocks further Battery requests
+until reconnect. A late reply stays in the raw trace but does not pass the timeout.
 No tests establish charge capacity, firmware compatibility, Bluetooth encryption,
 authenticated vehicle identity, or safe motion. The bench has no motor commands.
 
@@ -84,3 +92,8 @@ identified the stale-setup reconnect race and branch documentation links; both
 were corrected and the race has a regression check. The software checks and
 Chrome rehearsal are the independent execution evidence available here;
 physical observations and human peer review remain explicit next steps.
+
+The [O*NET-aligned advisory review](ADVISORY-REVIEW.md) records the adversarial
+findings and dispositions. Python coverage now includes schema/nesting recovery,
+state preservation, envelope/isolation checks and explicitly named intentional
+flaw characterizations. Role-based AI advice is not human peer certification.

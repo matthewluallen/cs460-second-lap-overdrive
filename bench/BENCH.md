@@ -29,13 +29,25 @@ Choose assigned car; wait for "notify ready". Check the selected name and
 browser-scoped ID, then Confirm assigned car against the physical kit to unlock
 headlight/SDK controls. A browser ID is not a serial number or proof of identity.
 Connecting sends no command automatically. Send Ping, Version and Battery
-one at a time. Record each outgoing frame and its matching response or mark
+one at a time. Record each outgoing frame and any corresponding response type
+observed during the request window, or mark
 "no reply after 5 seconds". A successful GATT write is not a reply.
-If needed on the assigned firmware, try Enable SDK mode (no localization
-override), retry once, and record both attempts. Try Headlight on then off;
-record a physical observation independent of the TX log. Leave SDK mode if
+After a battery timeout or write error, Battery stays locked until reconnect
+to avoid treating a delayed reply as a new successful request. Disconnect also
+recovers a pending write. If the assigned firmware needs SDK mode, reconnect,
+confirm the car, try Enable SDK mode (no localization override), retry Battery
+once, and record both attempts. Try Headlight on then off;
+record a fresh physical observation independent of the TX log for each attempt.
+Final LED observations and cleanup notes can still be recorded after disconnect
+against the last confirmed session, until another session starts or you clear. Leave SDK mode if
 you enabled it, disconnect, and export the trace. This build does not request
 motor motion, update firmware, scan unattended or address multiple cars.
+
+The trace display shows the latest 200 lines; export contains the full retained
+log. At its 10,000-line/2,000,000-character limit, capture and new operations
+stop with an explicit incomplete-evidence notice. Disconnect, save, then clear.
+Reconnect and confirm the same car for any outstanding lamp-off/SDK-off cleanup;
+no automatic writes occur and an uncompleted cleanup remains unknown.
 
 If Bluetooth is unavailable, open the HTTPS forwarded port directly, check OS
 Bluetooth support/permissions and release any competing connection. If service
@@ -70,3 +82,6 @@ to a release. Historical scenario dates and contributors are fictional.
 For the pinned source audit and its effect on this design, read [RESEARCH.md](RESEARCH.md).
 For software regression evidence and remaining physical acceptance, read
 [VALIDATION.md](VALIDATION.md).
+
+The [adversarial advisory review](ADVISORY-REVIEW.md) records O*NET role lenses,
+reproduced defects, corrections, deliberate teaching cases and residual limits.

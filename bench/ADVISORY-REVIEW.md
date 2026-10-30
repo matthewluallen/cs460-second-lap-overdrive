@@ -1,0 +1,90 @@
+# Adversarial advisory review
+
+Review baseline: `9e9fdc0c2242c9e27f290b9f760409cb33c6dfd5` (PR #1).
+This record describes actual source inspection and software reproductions.
+Commit calendar dates in this teaching repository are constructed scenario
+metadata; they are not dates of hardware qualification.
+
+## Advisory perspectives
+
+Three separate AI review passes used these occupational responsibilities as
+lenses. They are simulated advisory perspectives, not actual practitioners,
+O*NET endorsements, professional certifications or human peer review.
+
+| Perspective | O*NET basis | Assigned questions |
+| --- | --- | --- |
+| Software quality assurance | [Software Quality Assurance Analysts and Testers, 15-1253.00](https://www.onetonline.org/link/summary/15-1253.00): test execution, defect analysis and operational design review. | Can cancelled or overlapping asynchronous work change a newer session? Can evidence appear successful without its prerequisite? Do regressions distinguish the original failure? |
+| Information security | [Information Security Analysts, 15-1212.00](https://www.onetonline.org/link/details/15-1212.00): vulnerability assessment, mitigation and protection against unauthorized changes/disclosure. | Which flaws are deliberate lessons, which threaten availability or evidence, and what prevents a simulator/worksheet action from reaching a car? |
+| Human factors | [Human Factors Engineers and Ergonomists, 17-2112.01](https://www.onetonline.org/link/details/17-2112.01): task analysis, interface assessment and operating/training requirements. | Can a student select the wrong car, reuse a stale observation, lose the final result, or misunderstand a failed or pending operation? |
+
+Coverage included every executable Python module in `lapreturn`, every bench
+JavaScript module, their existing tests, the HTML interface, profile data and
+relevant operating/protocol/scenario documents. New modules and regression
+cases were inspected again during integration. The reviews used local mocks and
+subprocesses; no physical car, student trial or Bluetooth-radio experiment was
+performed. Prior primary-repository analysis remains in [RESEARCH.md](RESEARCH.md).
+
+## Findings and disposition
+
+P2 denotes a reproducible operational defect; P3 denotes a bounded local concern
+or contract ambiguity. These priorities are project judgments, not CVSS scores.
+
+| ID | Finding and reproduction at baseline | Disposition and regression |
+| --- | --- | --- |
+| QA-1 / P2 | Cancel one `CarLink` during notification setup, connect a second instance to the same browser device, then settle the first promise: stale cleanup disconnects the replacement. The UI's earlier single-instance guard did not protect the transport API itself. | Fixed in `link.mjs`: shared ownership claims, rejection of duplicate active owners, and cleanup that respects a newer claim. Tests cover same objects, different wrappers with the same browser ID, failures and late chooser results. Claims apply within one module/page, not across apps or tabs. |
+| QA-2 / P2 | Battery request 1 times out; request 2 starts; a delayed response to request 1 is displayed as the new result. The wire packet has no transaction ID. | Live timeout/write failure makes the result inconclusive and requires reconnect before another battery request. Local attempt labels organize evidence; they are not wire correlation IDs. Results say the notification was observed during the window. Reconnect reduces ambiguity; it does not create authenticated or cryptographically correlated telemetry. |
+| QA-3 / P2 | A never-settling GATT write leaves commands busy after the five-second battery RX timer expires. | Controlled recovery: show the inconclusive timeout and explicit Disconnect recovery, keep Disconnect available, reject concurrent writes, and suppress a late completion after disconnect. No unsupported promise-cancellation guarantee is made. A pending chooser/setup must settle before another live attempt; replay remains available. |
+| QA-4 / P2 | Each notification joins/redraws the entire unbounded trace, causing progressively more work and memory growth. | `TraceLog` renders the latest 200 retained lines and exports all accepted lines. Capture stops at 10,000 lines or 2,000,000 characters, whichever comes first, with one explicit incomplete-evidence marker. New commands are blocked, including a TX attempt that cannot be retained. Save/disconnect/clear provides recovery; no silent eviction or automatic car commands. |
+| HF-1 / P2 | After a lamp write and lost connection, the observation button is unavailable; editing the context field changes no saved evidence. | Retain an immutable confirmed session/attempt context for explicit post-disconnect operator reports. A new session or clear removes it. Replay cannot record physical observations. Session notes are labelled as captured at connection. |
+| HF-2 / P2 | Record “Light visibly on,” then send Headlight off and click Record again: the old selection/detail is reused without association to a command. | Clear fields on every lamp attempt and after recording. Require a fresh selection; associate reports with the command, local attempt, write outcome and confirmed session. Physical reports remain distinct from RX telemetry. |
+| SEC-1 / P2 | A 20,001-character line containing 10,000 nested JSON arrays raises uncaught `RecursionError` on Python 3.12, terminating the shell and losing state. | Catch nesting errors with a bounded structured message and continue. Tests exercise actual deeply nested input, a deterministic parser exception, prior state survival and a following valid request. Interpreter-specific thresholds are not assumed. |
+| SEC-2 / P3 | `dict(request)` accepts an array of key/value pairs even though the protocol requires a JSON object. | Require an object and string operation before dispatch. Tests reject non-object roots, malformed operations and unhashable fields without changing state. |
+| SEC-3 / P3 | Unlimited worksheet additions grow tab memory even though each note has a length limit. | Cap at 1,000 records including seeds, reject before consuming IDs or changing state, keep existing records readable, and document reset. This does not change the intentionally missing ownership checks. |
+| INT-1 / P3 | Control characters in diagnostic text can create apparent new lines or misleading direction in a plain-text evidence file. | Trace fields escape line/control/directional characters; tests prove one input remains one evidence row. The log is not a signed or tamper-proof record and operator/device text is still untrusted. |
+
+The trace budget allows one fixed-size limit marker beyond its data budget so
+incompleteness is always visible. The display is a tail, not data loss. If capture
+stops while a command is pending, no later outcome can be inferred from omitted
+traffic. Record any final physical observation separately; reconnect and confirm
+again for needed cleanup after saving and resetting the trace.
+
+## Intentional lessons preserved
+
+The simulator's request-controlled team authorization, repeated-nonce execution,
+cross-team telemetry and caller-supplied profile checksum are documented by its
+scenario history/evidence. They remain deliberate investigation targets. The
+new `DeliberateScenarioCharacterizationTests` explicitly reproduce them across
+teams; passing these tests means the supplied flawed baseline is reproducible,
+not secure. Student fixes should replace those expectations with denial or
+idempotence tests while retaining legitimate operation and the absolute
+simulation envelope.
+
+The worksheet's CWE-639 and CWE-862 cases remain separate disposable exercises
+in [CWE-LAB.md](CWE-LAB.md). No worksheet handler sends Bluetooth commands. The
+Python simulator still has no radio driver, network server, external-command
+execution or firmware path. Motion remains confined to in-memory simulation.
+Browser confirmation is an operator assertion, not a trusted authentication or
+proof-of-ownership mechanism; developer tools can change client-side state.
+
+## Residual limits and release boundary
+
+- Physical charging, model/firmware compatibility, actual chooser identity and
+  LED behavior remain unverified. Follow [TONIGHT.md](TONIGHT.md) and retain the
+  exact kit/host/revision and observed result or failed stage.
+- The simulator retains events/nonces for the lifetime of its local process.
+  An unbounded scripted workload can exhaust memory. A cumulative policy was
+  deferred because it must preserve stop availability and complete evidence;
+  no silent truncation or arbitrary denial of stop was introduced. Use bounded
+  exercises and reset the disposable simulator between runs.
+- A browser/OS operation that never settles is not forcibly cancelled by a
+  JavaScript timer. Disconnect is the recovery action; reload if native setup
+  remains stuck. This does not prove the physical lamp or SDK state reset.
+- No review of all source can establish freedom from defects. The tests target
+  the reproduced failures and preserved legitimate use. Physical and human peer
+  validation remain separate acceptance evidence.
+
+Run `node --test bench/*.test.mjs` and
+`python3 -m unittest discover -s tests -v`. See [VALIDATION.md](VALIDATION.md) for
+the observed runtime matrix and browser rehearsal. GitHub CLI access is selected
+as the Illinois-linked `matthewluallen` account. Its existing token lacks workflow
+permission, so this branch still makes no hosted-CI claim.
