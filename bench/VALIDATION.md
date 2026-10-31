@@ -43,8 +43,17 @@ Local runtime: Node 25.6.1 and Python 3.14.7. All 59 bench tests and all 20
 simulator tests pass. Python checks also pass on bundled Python 3.12.14.
 The bench suite also passes on Node 18 and Node 22,
 invoked locally through the official Node packages. No car is used by these
-tests. This PR does not install a GitHub Actions workflow: the available push
-credential lacks workflow-file permission; no hosted CI result is claimed.
+tests.
+
+The [regression workflow](../.github/workflows/bench-regression.yml) runs these
+same suites for pull requests and pushes to `main`: Node 18/22/24 and Python
+3.10/3.12 on Ubuntu 24.04. Node 18 and Python 3.10 are end-of-life minimum-version
+compatibility checks, not recommended runtimes. Use Node 24 and Python 3.12 or
+newer for new setups. The workflow uses read-only repository permissions,
+commit-pinned GitHub actions, no persisted checkout credentials, ten-minute job
+limits and cancellation of superseded runs. It has no radio or deployment step.
+Check the PR's actual Actions result for the tested revision; adding a workflow
+does not by itself establish a passing run or physical acceptance.
 
 ## Chrome replay rehearsal
 

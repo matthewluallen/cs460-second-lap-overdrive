@@ -86,5 +86,9 @@ proof-of-ownership mechanism; developer tools can change client-side state.
 Run `node --test bench/*.test.mjs` and
 `python3 -m unittest discover -s tests -v`. See [VALIDATION.md](VALIDATION.md) for
 the observed runtime matrix and browser rehearsal. GitHub CLI access is selected
-as the Illinois-linked `matthewluallen` account. Its existing token lacks workflow
-permission, so this branch still makes no hosted-CI claim.
+as the Illinois-linked `matthewluallen` account. After the account owner authorized
+workflow-file access, the branch adds automated regression on pull requests and
+pushes to `main`. The workflow has read-only permissions, pinned actions, no
+persisted checkout credentials and bounded job durations. Actual hosted results
+belong to the revision shown in the PR checks, not to the fictional commit dates.
+These software-only checks do not certify the intentional CWE lessons or hardware.
