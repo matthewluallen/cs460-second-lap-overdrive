@@ -1,8 +1,12 @@
 # Optional worksheet investigation: two authorization weaknesses
 
-Complete the charging, connection and light activity first. Save its traces and
-disconnect the car before this exercise. Use only the **Support worksheet** and
-disposable scenario notes in your own tab. Reloading resets its records. A session holds at most 1,000 records including
+Complete the charging, connection and light activity first. Save the evidence
+page's traces and disconnect the car before this exercise. Open the separate
+[Support worksheet](worksheet.html) (`http://localhost:8000/worksheet.html`
+locally, or `worksheet.html` on the same forwarded origin). It is not a section
+of the Quick activity or evidence page. Use only disposable scenario notes in
+your own tab; no connection or trace transfers to this page. Reloading resets
+its records. A session holds at most 1,000 records including
 the two seeds; further additions fail before mutation, while existing records
 remain readable. Save investigation notes before resetting. The
 public `pilot-*` operator tokens model roles; they are not real authentication.
@@ -11,6 +15,13 @@ The worksheet deliberately preserves two authorization defects for students to
 reproduce and repair on a separate team branch. The tests below characterize
 that flawed baseline. A passing test is **not** a security pass or a claim that
 the defects have been fixed.
+
+For three additional exercises, use the separate
+[simulator CWE investigations](SIMULATOR-CWE-LAB.md): authorization, repeated
+requests and profile integrity. After saving any hardware evidence and
+disconnecting, run `python -m lapreturn.cwe_lab` from the repo root. These
+reproductions use disposable local simulator state, without a car connection;
+keep their results separate from LIVE and REPLAY traces.
 
 ## Intended policy and evidence
 
@@ -32,7 +43,7 @@ themselves establish two unrelated root causes.
 
 ## Reproduce in the page
 
-1. Reload the disconnected bench. Under **Support worksheet**, choose operator
+1. Open or reload **Support worksheet** at `worksheet.html`, then choose operator
    **red**, then **My records**. Record that only seeded record **101** appears.
 2. Keep operator **red**, set **Record ID** to **102**, and click **Open record**.
    Record that the returned record belongs to **blue**. Compare with a normal

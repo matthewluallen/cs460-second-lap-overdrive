@@ -36,12 +36,16 @@ editing. The expanded bench checks cover:
 - Immutable physical-observation context after disconnect, fresh LED fields per
   attempt and explicit inconclusive battery retry recovery.
 - The disposable worksheet's ordinary behavior and intentional CWE-639/CWE-862
-  defects. These are characterization tests, not security certification. A live
-  mock session receives no writes from worksheet actions.
+  defects. These are characterization tests, not security certification. The
+  standalone worksheet UI operates without browser Bluetooth, fetch or CarLink.
+- The compact classroom page has no observation form, trace/export controls,
+  worksheet or pilot footer. It retains assignment gates, battery timeout/retry
+  rules, visible setup errors and explicit session-limit recovery. The evidence
+  page retains full trace export and physical-observation controls.
 
-Local runtime: Node 25.6.1 and Python 3.14.7. All 59 bench tests and all 20
-simulator tests pass. Python checks also pass on bundled Python 3.12.14.
-The bench suite also passes on Node 18 and Node 22,
+Local runtime: Node 25.6.1 and Python 3.14.7. All 65 bench tests and all 28 simulator/lesson tests pass.
+Python checks also pass on bundled Python 3.12.14.
+The earlier 59-test bench suite also passed on Node 18 and Node 22,
 invoked locally through the official Node packages. No car is used by these
 tests.
 
@@ -72,6 +76,20 @@ Chrome 155 on macOS after the advisory fixes:
 
 This exercises a real browser's UI and download path, not its Bluetooth chooser
 or GATT connection. Automated mocks additionally exercise live-path behavior.
+
+## Page split rehearsal
+
+After the compact page change, desktop Chrome 155 on macOS again displayed
+REPLAY battery 3700 mV and the headlight rehearsal's “no physical LED” label.
+The main page ended after the battery/headlight controls; the removed forms,
+trace buttons, worksheet and footer were absent. Disconnect remained usable.
+The separate `evidence.html` started a fresh replay session, displayed the
+battery reply, disconnected, and downloaded a 775-byte trace. Its contents were
+inspected: REPLAY-labelled lines, the raw battery packet and disconnect, with
+no LIVE evidence. Clear reset the result display after disconnect. The separate
+worksheet loaded correctly and reproduced red reading blue record 102.
+Sessions do not transfer between pages. Detailed observation
+and overflow cases are covered by the UI mocks; no physical car was used.
 
 ## Physical acceptance still required
 
@@ -106,3 +124,17 @@ The [O*NET-aligned advisory review](ADVISORY-REVIEW.md) records the adversarial
 findings and dispositions. Python coverage now includes schema/nesting recovery,
 state preservation, envelope/isolation checks and explicitly named intentional
 flaw characterizations. Role-based AI advice is not human peer certification.
+
+
+## Deliberate CWE lesson checks
+
+`python -m lapreturn.cwe_lab` exercises three existing flaws through actual
+`Pilot` calls: request-controlled team authorization (CWE-863), a repeated
+logical action applied twice (CWE-837), and a caller-recomputed profile checksum
+accepted without publisher authentication (CWE-345 educational concept, with its
+mapping caveat). Eight additional tests verify real state changes, fresh state,
+CLI selection, control cases and truthful reports if a policy is later repaired.
+All existing intentional worksheet and simulator weaknesses remain reproducible;
+normal-operation and recovery tests remain in the same regression run. Passing
+these characterization tests is not security certification. The runner changes
+no live car code and leaves the absolute simulation envelope in place.

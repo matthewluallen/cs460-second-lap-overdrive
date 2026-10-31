@@ -34,8 +34,14 @@ python -m http.server 8000 --bind 127.0.0.1 --directory bench
 ```
 
 The remote Codespace serves the page; the laptop owns the Bluetooth radio.
-Start in replay, then compare a live off-charger reading. Confirm the assigned
-physical car before enabling its headlight controls, and record the visible
+The main page is a compact quick activity. For saved classroom evidence, open
+`http://localhost:8000/evidence.html` (or `evidence.html` on the forwarded HTTPS
+origin) **before starting**. That page includes LED observations and trace
+Save/Clear controls. Finish and disconnect before switching pages: sessions and
+traces do not transfer. The optional synthetic worksheet is on `worksheet.html`.
+
+On the evidence page, start in replay, then compare a live off-charger reading.
+Confirm the assigned physical car before enabling its headlight controls, and record the visible
 result separately from the write. Trace entries identify their source. The Python
 simulator requires Python 3.10+ and no extra packages:
 
@@ -56,6 +62,17 @@ The shell accepts one JSON object per line. State lasts until you exit. Example:
 These public pilot tokens only address disposable local simulation state.
 The protocol and units are teaching abstractions, not an Anki wire protocol.
 Real driving requires an independently validated adapter and safety gate.
+
+After the hardware activity, save your evidence and disconnect before the
+optional [worksheet authorization exercise](bench/CWE-LAB.md) or
+[simulator CWE investigations](bench/SIMULATOR-CWE-LAB.md). The simulator
+investigations cover authorization, repeated requests and profile integrity
+using disposable local state; their outputs are not car telemetry. Run the
+reproductions from the repo root:
+
+```sh
+python -m lapreturn.cwe_lab
+```
 
 Start with docs/student-brief.txt and docs/protocol.txt. Review the supplied
 business materials and history as evidence, not as verified documentation.

@@ -5,6 +5,13 @@ charging observations, a Chrome connection, a live battery reply if available,
 and a visible headlight change. No driving is part of this activity. The live
 path is implemented but **hardware-unverified** on the course kits.
 
+For this documented activity, open the [evidence page](evidence.html) **before
+starting replay or connecting a car** (`http://localhost:8000/evidence.html`
+locally). The main [Quick activity](index.html) page has compact car controls;
+LED observation forms and Save/Clear trace controls are on the evidence page.
+Finish and disconnect before switching pages. Session state and traces do not
+transfer; switching requires a fresh attempt.
+
 ## 1. Prepare and charge the assigned kit
 
 - Label the car and record its model, assigned kit label and starting Git revision.
@@ -16,7 +23,7 @@ path is implemented but **hardware-unverified** on the course kits.
 - Take the car **off the charger**, power it on and keep it stationary with wheels
   clear. Release other apps, tabs and laptops that may still control it. Stagger
   team attempts so only the assigned car is powered in the test area.
-- Open the bench in desktop Google Chrome on the physical laptop. Follow
+- Open the evidence page in desktop Google Chrome on the physical laptop. Follow
   [laptop setup](LAPTOPS.md) and [launch instructions](BENCH.md). Start connection
   in Chrome's chooser; OS pre-pairing is not the default step.
 
@@ -25,12 +32,12 @@ path is implemented but **hardware-unverified** on the course kits.
 Choose **Start replay → Battery**. Expect a **REPLAY** result of **3700 mV**.
 Save the trace, disconnect, then clear the trace before live work. Replay is a
 synthetic fixture and does not test the radio, charger or car. The separate
-support worksheet is also synthetic; keep real kit observations in your trace
+[support worksheet](worksheet.html) is also synthetic; keep real kit observations in your trace
 and evidence record.
 
 ## 3. Choose and confirm the right car
 
-1. Enter the assigned car label and charging/context notes on the bench. These
+1. On the evidence page, enter the assigned car label and charging/context notes. These
    notes are captured when connecting. Later edits prepare the next session;
    use the LED observation’s final-detail field for the current attempt’s outcome.
 2. Click **Choose assigned car**. The default chooser filters for the Anki
@@ -96,7 +103,7 @@ observations, observer and unresolved questions. Record only your assigned
 course device's identity information. Exported traces should accompany your
 team evidence register; an operator note is not sensor telemetry.
 
-The page shows the latest 200 trace lines; export retains the full accepted log.
+The evidence page shows the latest 200 trace lines; export retains the full accepted log.
 At 10,000 lines or 2,000,000 characters, capture stops with a **TRACE INCOMPLETE**
 notice instead of silently dropping old evidence. New operations and observations
 are blocked. Disconnect, save the incomplete trace, then clear before continuing.

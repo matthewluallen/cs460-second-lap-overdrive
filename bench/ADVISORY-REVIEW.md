@@ -60,7 +60,7 @@ idempotence tests while retaining legitimate operation and the absolute
 simulation envelope.
 
 The worksheet's CWE-639 and CWE-862 cases remain separate disposable exercises
-in [CWE-LAB.md](CWE-LAB.md). No worksheet handler sends Bluetooth commands. The
+in [CWE-LAB.md](CWE-LAB.md). The worksheet now lives on `worksheet.html` with its own module and no car-control imports. No worksheet handler sends Bluetooth commands. The
 Python simulator still has no radio driver, network server, external-command
 execution or firmware path. Motion remains confined to in-memory simulation.
 Browser confirmation is an operator assertion, not a trusted authentication or
@@ -92,3 +92,25 @@ pushes to `main`. The workflow has read-only permissions, pinned actions, no
 persisted checkout credentials and bounded job durations. Actual hosted results
 belong to the revision shown in the PR checks, not to the fictional commit dates.
 These software-only checks do not certify the intentional CWE lessons or hardware.
+
+
+## Classroom page simplification
+
+The main `index.html` now ends after battery/headlight controls. Detailed trace
+and observation controls remain on `evidence.html`; the optional worksheet is
+separate. The same transport/session controller runs both bench pages with an
+explicit evidence-view boundary, preserving confirmation and stale-session
+protection. Compact-page errors and session-limit recovery remain visible.
+Generic command feedback excludes battery notifications so a late or unretained
+reply cannot look like a newly credited result. Separate mocks cover all three
+pages; a Chrome replay rehearsal checked both bench pages and trace download.
+The intentional worksheet and simulator weaknesses remain available. Operational
+recovery and evidence controls were not replaced with vulnerable hardware paths.
+
+The separate simulator investigation runner now demonstrates three existing
+weaknesses using fixed synthetic inputs and fresh state: CWE-863 incorrect team
+authorization, CWE-837 repeated logical action, and the CWE-345 authenticity
+concept. See [SIMULATOR-CWE-LAB.md](SIMULATOR-CWE-LAB.md) for mapping limits and
+student repair criteria. The vulnerable operations in `core.py` and `records.mjs`
+are unchanged. A result explicitly reports `security_pass: false`; normal use,
+intentional defects and operational recovery have separate test assertions.

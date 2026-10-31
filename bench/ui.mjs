@@ -1,7 +1,7 @@
 import {CarLink,Replay} from './link.mjs';
-import {Records} from './records.mjs';
 import {TraceLog} from './trace.mjs';
 const $=id=>document.getElementById(id);
+const evidence=!!$('trace');
 const trace=new TraceLog(),ops=[...document.querySelectorAll('[data-op]')];
 const stateChanges=new Set(['lampOn','lampOff','sdkOn','sdkOff']);
 let link=null,pendingLink=null,busy=false,mode='Disconnected',confirmed=false,session=0,timer=null,pendingLamp=false,liveOpening=0;
@@ -27,11 +27,13 @@ function note(kind,message,row){
   const batteryMatch=timer!==null && kind===(source()==='LIVE'?'LIVE decoded':'REPLAY RX') && row?.id===0x1b && row.text.startsWith('battery ');
   const attempt=pendingBatteryAttempt;
   const retained=trace.append(kind,batteryMatch?message+' · local attempt '+attempt+'; battery observed during request window; no response sequence number':message);
-  $('trace').textContent=trace.view;$('trace').scrollTop=$('trace').scrollHeight;
+  if(evidence){$('trace').textContent=trace.view;$('trace').scrollTop=$('trace').scrollHeight;}
   if(trace.stopped){
     if(timer!==null)$('batteryResult').textContent=source()+': trace incomplete; battery check stopped without a retained result.';
+    $('commandResult').textContent=evidence?'Trace incomplete: no further result can be credited. Disconnect, save and clear before continuing.':'Session limit reached. Disconnect and reload before continuing. Use the detailed evidence bench for trace collection.';
     cancelCheck();controls();return false;
   }
+  if(retained&&(/error$/.test(kind)||((kind==='LIVE decoded'||kind==='REPLAY RX')&&row?.id!==0x1b)))$('commandResult').textContent=kind+': '+message;
   if(retained&&batteryMatch){
     cancelCheck();
     $('batteryResult').textContent=kind+': '+row.text+' · '+row.raw+' · '+new Date().toISOString()+' · battery observed during request window; local attempt '+attempt;
@@ -47,18 +49,23 @@ function controls(){
   $('live').disabled=!!link||busy||liveOpening>0||stopped||!$('assignedCar').value.trim();
   $('close').disabled=!link&&!pendingLink;
   $('confirm').disabled=!live||busy||confirmed||stopped;
-  $('recordObservation').disabled=!mayObserve()||!$('observation').value;
-  $('clear').disabled=!!link||busy||(stopped&&!savedStoppedTrace);
+  if(evidence){
+    $('recordObservation').disabled=!mayObserve()||!$('observation').value;
+    $('clear').disabled=!!link||busy||(stopped&&!savedStoppedTrace);
+  }
   for(const id of ['assignedCar','sessionNotes','allDevices'])$(id).disabled=!!link||busy||stopped;
-  $('status').textContent=mode==='Disconnected'&&liveOpening>0?'Disconnected; finishing the previous Bluetooth attempt. Replay is available.':mode;
+  $('status').textContent=mode==='Disconnected'&&liveOpening>0?'Disconnected; finishing the previous Bluetooth attempt.'+(stopped?'':' Replay is available.'):mode;
+  if(evidence){
   $('traceNotice').textContent=stopped?'Trace incomplete: recording and new operations stopped at the size limit. Disconnect, save the retained trace, then clear to restart.':'Showing the latest 200 lines. Save trace exports the full retained log.';
   $('observationContext').textContent=confirmedSession&&lastLampAttempt
     ? 'For session '+confirmedSession.number+', '+confirmedSession.label+'; '+lastLampAttempt.id+' '+lastLampAttempt.command+'; '+lastLampAttempt.outcome+(mode==='Disconnected'?'. Record final observations after disconnect; no command will be sent.':'. Choose a fresh observation for this attempt.')
     : 'Run a headlight attempt on a confirmed live car to record a physical observation. Replay cannot record one.';
+  }
 }
-function clearObservation(){ $('observation').value='';$('observationNote').value=''; }
+function clearObservation(){if(evidence){$('observation').value='';$('observationNote').value='';}}
 function resetResults(){
   pendingLamp=false;confirmedSession=lastLampAttempt=null;lampSequence=batterySequence=0;batteryRetryBlocked=false;clearObservation();
+  $('commandResult').textContent='';
   $('batteryResult').textContent='No battery request this session.';
   $('lampResult').textContent='No headlight command this session.';
   $('selection').textContent='No live car selected.';
@@ -99,7 +106,7 @@ async function connect(live){
   }finally{if(live)liveOpening--;if(current===session)busy=false;controls();}
 }
 $('assignedCar').oninput=controls;
-$('observation').onchange=controls;
+if(evidence)$('observation').onchange=controls;
 $('replay').onclick=()=>connect(false);$('live').onclick=()=>connect(true);
 $('close').onclick=()=>{const current=session;(link||pendingLink)?.close();if(current===session)forget();};
 $('confirm').onclick=()=>{
@@ -131,9 +138,10 @@ for(const b of ops)b.onclick=async()=>{
     await active.send(op);
     if(current!==session)return;
     pendingLamp=false;
+    if((op==='sdkOn'||op==='sdkOff')&&!trace.stopped)$('commandResult').textContent=kind==='REPLAY'?'REPLAY: '+op+' rehearsed; no physical car.':'LIVE: '+op+' write completed; car response unverified.';
     if(lamp){
       if(lastLampAttempt)lastLampAttempt=Object.freeze({...lastLampAttempt,outcome:trace.stopped?'trace incomplete; write outcome not fully recorded':'write completed; visible outcome unverified'});
-      $('lampResult').textContent=trace.stopped?'Trace incomplete; headlight outcome is not fully recorded.':kind==='REPLAY'?'REPLAY: command rehearsed; no physical LED.':'LIVE: '+op+' write completed. Observe the assigned car and record what you see.';
+      $('lampResult').textContent=trace.stopped?'Trace incomplete; headlight outcome is not fully recorded.':kind==='REPLAY'?'REPLAY: command rehearsed; no physical LED.':'LIVE: '+op+' write completed. Observe the assigned car'+(evidence?' and record what you see.':'; visible behavior is unverified.');
     }
   }catch(e){
     if(current!==session)return;
@@ -146,7 +154,7 @@ for(const b of ops)b.onclick=async()=>{
     note(kind+' error',e.message);
   }finally{if(current===session){busy=false;controls();}}
 };
-$('recordObservation').onclick=()=>{
+if(evidence)$('recordObservation').onclick=()=>{
   if(!mayObserve())return;
   const observation=$('observation').value;
   if(!observation)return;
@@ -159,18 +167,12 @@ $('recordObservation').onclick=()=>{
   controls();
 };
 window.addEventListener('pagehide',()=>{const current=session;(link||pendingLink)?.close();if(current===session)forget();});
-$('save').onclick=()=>{
+if(evidence)$('save').onclick=()=>{
   const u=URL.createObjectURL(new Blob([trace.text],{type:'text/plain'}));
   const a=document.createElement('a');a.href=u;
   a.download='second-lap-bench-trace-'+new Date().toISOString().replaceAll(':','-')+'.txt';a.click();
   if(trace.stopped)savedStoppedTrace=true;
   setTimeout(()=>URL.revokeObjectURL(u),1000);controls();
 };
-$('clear').onclick=()=>{if(link||busy||(trace.stopped&&!savedStoppedTrace))return;trace.clear();savedStoppedTrace=false;$('trace').textContent='No traffic yet.';resetResults();controls();};
-const book=new Records();
-for(const team of ['red','blue','green','gold'])for(const [id,value] of [['operator','pilot-'+team],['group',team]])$(id).append(new Option(team,value));
-function show(fn){try{$('out').textContent=JSON.stringify(fn(),null,2);}catch(e){$('out').textContent=e.message;}}
-$('list').onclick=()=>show(()=>book.list($('operator').value));
-$('read').onclick=()=>show(()=>book.read($('operator').value,$('rid').value));
-$('add').onclick=()=>show(()=>book.add($('operator').value,$('group').value,$('entry').value));
+if(evidence)$('clear').onclick=()=>{if(link||busy||(trace.stopped&&!savedStoppedTrace))return;trace.clear();savedStoppedTrace=false;$('trace').textContent='No traffic yet.';resetResults();controls();};
 controls();

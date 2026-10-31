@@ -8,6 +8,12 @@ A Codespace can serve the page; it cannot use its remote host as your laptop's r
 Use the private forwarded HTTPS port in a separate tab (or local http://localhost:8000).
 Do not open the HTML as a file, use an editor preview iframe, or use a remote desktop browser.
 
+For the saved battery checkpoint below, choose the [evidence page](evidence.html)
+before starting: `http://localhost:8000/evidence.html` locally, or `evidence.html`
+on the same forwarded HTTPS origin. The main page is a compact quick activity;
+the evidence page contains the observation and trace controls. Finish and
+disconnect before switching pages. Their session state and traces do not transfer.
+
 ## Prepare the laptop
 | Laptop | Before clicking Choose assigned car |
 | --- | --- |
@@ -27,7 +33,7 @@ Do not guess a PIN. Absence of a PIN dialog does not establish how the link is s
    Stagger team attempts and have only the assigned car powered in the test area;
    if you cannot identify the chooser entry, cancel. Never select a nearby
    peripheral just to see whether it is your car.
-2. Start replay → Battery. Expect a **REPLAY** reply of 3700 mV. Save a trace,
+2. On the evidence page, Start replay → Battery. Expect a **REPLAY** reply of 3700 mV. Save a trace,
    disconnect and start a fresh trace before live work. The fixture never touches the radio.
 3. Enter the assigned kit label and context notes, then click **Choose assigned car**.
    The default chooser filters for the Anki service. Names may be absent or

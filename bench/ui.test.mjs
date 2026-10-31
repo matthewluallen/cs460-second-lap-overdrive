@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {CarLink,Replay} from './link.mjs';
-import {Records} from './records.mjs';
 import {TraceLog} from './trace.mjs';
 import {uuids} from './protocol.mjs';
 
 // A minimal DOM runs the actual UI and transport without a browser, radio, or
 // dependencies. It rejects HTML sinks so hostile names/notes stay literal text.
-const html=await readFile(new URL('./index.html',import.meta.url),'utf8');
+const evidenceHtml=await readFile(new URL('./evidence.html',import.meta.url),'utf8');
+const compactHtml=await readFile(new URL('./index.html',import.meta.url),'utf8');
 const ui=(await readFile(new URL('./ui.mjs',import.meta.url),'utf8'))
   .replace(/^import .* from '\.\/(?:link|records|trace)\.mjs';\n/gm,'');
 class Element {
@@ -32,17 +32,18 @@ function mockCar(){
 }
 const harnesses=new Set();
 afterEach(()=>{for(const h of harnesses)h.event('pagehide');harnesses.clear();});
-function harness(bluetooth,traceOptions){
+function harness(bluetooth,traceOptions,page='evidence'){
+  const html=page==='compact'?compactHtml:evidenceHtml;
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(([,id])=>[id,new Element()]));
   const operations=new Map([...html.matchAll(/data-op="([^"]+)"/g)].map(([,op])=>{const b=new Element();b.dataset.op=op;return [op,b];}));
-  elements.get('rid').value='101';elements.get('trace').textContent='No traffic yet.';
+  if(elements.has('trace'))elements.get('trace').textContent='No traffic yet.';
   const timers=new Map(),events=new Map(),downloads=[];let timerId=0;
   const window={isSecureContext:true,addEventListener:(name,fn)=>events.set(name,fn)};window.top=window.self=window;
   const blobs=new Map();
-  const document={getElementById:id=>{assert.ok(elements.has(id),'Unknown DOM id '+id);return elements.get(id);},
+  const document={getElementById:id=>elements.get(id)??null,
     querySelectorAll:selector=>{assert.equal(selector,'[data-op]');return [...operations.values()];},
     createElement:tag=>{assert.equal(tag,'a');const a={click:()=>downloads.push({name:a.download,blob:blobs.get(a.href)})};return a;}};
-  const context={CarLink,Replay,Records,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
+  const context={CarLink,Replay,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
     Option:class {constructor(text,value){this.text=text;this.value=value;}},
     URL:{createObjectURL:blob=>{const key='blob:mock-'+blobs.size;blobs.set(key,blob);return key;},revokeObjectURL:key=>blobs.delete(key)},
     setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id)};
@@ -97,6 +98,7 @@ test('MOCK UI timeout is inconclusive and requires a new connection before anoth
   const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('battery');h.expire(5000);
   assert.match(h.el('batteryResult').textContent,/LIVE: no battery RX within five seconds; result inconclusive/);
   m.notify([3,0x1b,0x74,0x0e]);assert.match(h.el('batteryResult').textContent,/no battery RX/);
+  assert.doesNotMatch(h.el('commandResult').textContent,/battery 3700/);
   assert.equal(h.op('battery').disabled,true);const writes=m.writes.length;await h.click('battery');assert.equal(m.writes.length,writes);
   await h.click('close');await h.click('live');assert.equal(h.op('battery').disabled,false);await h.click('battery');m.lose();
   assert.match(h.el('batteryResult').textContent,/LIVE: disconnected before a battery reply/);
@@ -119,7 +121,6 @@ test('MOCK UI records LED observations as operator reports and renders hostile t
   assert.match(h.el('trace').textContent,/LIVE observation \| operator reports: No visible change/);
   assert.ok(h.el('trace').textContent.includes(hostile));assert.match(h.el('lampResult').textContent,/not telemetry/);
   assert.doesNotMatch(h.el('trace').textContent,/LIVE decoded.*Light/);
-  const before=m.writes.length;h.set('entry',hostile);await h.click('add');assert.equal(m.writes.length,before);
 });
 test('MOCK UI all-device fallback is explicit and resets after disconnect',async()=>{
   const m=mockCar(),h=harness(m.bluetooth);h.el('allDevices').checked=true;await connect(h);
@@ -227,6 +228,7 @@ test('MOCK UI caps evidence before crediting an unretained battery result and re
   await h.click('battery');m.notify([3,0x1b,0x74,0x0e]);
   assert.match(h.el('traceNotice').textContent,/Trace incomplete/);assert.match(h.el('trace').textContent,/TRACE INCOMPLETE/);
   assert.doesNotMatch(h.el('batteryResult').textContent,/battery 3700 mV/);assert.equal(h.timers.size,0);
+  assert.match(h.el('commandResult').textContent,/Trace incomplete/);assert.doesNotMatch(h.el('commandResult').textContent,/battery 3700/);
   assert.equal(m.device.gatt.connected,true,'overflow must not automatically disconnect');
   for(const op of ['battery','lampOn','lampOff','sdkOff'])assert.equal(h.op(op).disabled,true);
   assert.equal(h.el('recordObservation').disabled,true);assert.equal(h.el('confirm').disabled,true);
@@ -249,4 +251,56 @@ test('MOCK UI pending write timeout remains inconclusive with Disconnect availab
   assert.match(h.el('batteryResult').textContent,/result inconclusive.*write remains pending, Disconnect to recover/);
   assert.equal(h.el('close').disabled,false);assert.equal(h.op('battery').disabled,true);assert.equal(h.op('ping').disabled,true);
   await h.click('close');gate.resolve();await sending;assert.equal(h.el('status').textContent,'Disconnected');
+});
+
+
+test('MOCK compact page omits lower forms and rehearses battery and lamp without radio',async()=>{
+  const h=harness({requestDevice(){throw Error('Replay touched Bluetooth');}},undefined,'compact');
+  for(const id of ['observation','recordObservation','trace','traceNotice','save','clear','operator','entry','out'])assert.equal(h.el(id),undefined);
+  assert.doesNotMatch(compactHtml,/Support worksheet|Visible LED observation|Fictional CS460 pilot|No traffic yet/);
+  assert.match(compactHtml,/href="evidence.html"/);
+  await h.click('replay');await h.click('battery');
+  assert.match(h.el('batteryResult').textContent,/REPLAY RX: battery 3700 mV/);
+  await h.click('lampOn');assert.match(h.el('lampResult').textContent,/no physical LED/);
+  await h.click('close');assert.equal(h.el('status').textContent,'Disconnected');assert.equal(h.downloads.length,0);
+});
+test('MOCK compact live page retains assignment gates and distinct battery and LED outcomes',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,undefined,'compact');await connect(h);
+  assert.equal(m.writes.length,0);assert.equal(h.op('lampOn').disabled,true);
+  await h.click('lampOn');assert.equal(m.writes.length,0);
+  await h.click('battery');m.notify([3,0x1b,0x10,0x0e]);
+  assert.match(h.el('batteryResult').textContent,/LIVE decoded: battery 3600 mV/);
+  await h.click('confirm');await h.click('lampOn');await h.click('lampOff');
+  assert.deepEqual(m.writes,[[1,0x1a],[2,0x1d,0x11],[2,0x1d,0x01]]);
+  assert.match(h.el('lampResult').textContent,/write completed.*visible behavior is unverified/);
+  await h.click('sdkOn');assert.match(h.el('commandResult').textContent,/LIVE: sdkOn write completed; car response unverified/);
+  await h.click('sdkOff');assert.match(h.el('commandResult').textContent,/LIVE: sdkOff write completed; car response unverified/);
+  h.event('pagehide');assert.equal(m.device.gatt.connected,false);
+});
+test('MOCK compact page exposes setup errors without a trace and keeps replay available',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,undefined,'compact');
+  m.rx.startNotifications=async()=>{throw Error('<mock setup failure>');};await connect(h);
+  assert.equal(h.el('status').textContent,'Disconnected');assert.equal(h.el('replay').disabled,false);
+  assert.match(h.el('commandResult').textContent,/notification setup.*<mock setup failure>/);
+  assert.equal(m.writes.length,0);await h.click('replay');await h.click('battery');
+  assert.match(h.el('batteryResult').textContent,/REPLAY RX: battery 3700/);
+});
+test('MOCK compact page keeps a late battery notification inconclusive until reconnect',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,undefined,'compact');await connect(h);
+  await h.click('battery');h.expire(5000);m.notify([3,0x1b,0x74,0x0e]);
+  assert.match(h.el('batteryResult').textContent,/no battery RX/);
+  assert.doesNotMatch(h.el('commandResult').textContent,/battery 3700/);
+  assert.equal(h.op('battery').disabled,true);await h.click('close');await h.click('live');
+  assert.equal(h.op('battery').disabled,false);await h.click('battery');m.notify([3,0x1b,0x10,0x0e]);
+  assert.match(h.el('batteryResult').textContent,/battery 3600/);
+});
+test('MOCK compact session cap provides recovery without missing export controls or false results',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth,{maxLines:13,maxChars:2000000,visibleLines:3},'compact');
+  await connect(h);await h.click('confirm');await h.click('battery');m.notify([3,0x1b,0x74,0x0e]);
+  assert.match(h.el('commandResult').textContent,/Session limit reached.*Disconnect and reload/);
+  assert.doesNotMatch(h.el('batteryResult').textContent,/battery 3700/);
+  assert.equal(h.op('lampOn').disabled,true);assert.equal(h.el('close').disabled,false);
+  await h.click('close');assert.equal(m.device.gatt.connected,false);assert.equal(h.el('replay').disabled,true);
+  const reloaded=harness(undefined,undefined,'compact');await reloaded.click('replay');await reloaded.click('battery');
+  assert.match(reloaded.el('batteryResult').textContent,/battery 3700/);
 });

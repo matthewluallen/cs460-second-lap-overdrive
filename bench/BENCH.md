@@ -12,11 +12,26 @@ install or backend device proxy is needed by the prototype.
 Start with [tonight’s charge, connect and light checklist](TONIGHT.md), then the
 [four-platform Chrome setup and battery checkpoint](LAPTOPS.md).
 
-**Rehearse first.** Choose Start replay, then Ping, Version and Battery. The
+Choose the page **before starting a session**:
+
+| Page on the served bench | Purpose |
+| --- | --- |
+| [Quick activity](index.html) | Compact charging, connection, battery and headlight controls. |
+| [Evidence page](evidence.html) | The same activity plus LED observation forms, trace display, Save and Clear. Use this page for the classroom evidence workflow below. |
+| [Support worksheet](worksheet.html) | Separate, optional synthetic-record investigation; no car controls. |
+
+For a local server, open `http://localhost:8000/evidence.html` to capture
+classroom evidence. On a forwarded Codespaces URL, use `evidence.html` on that
+same origin. Finish and disconnect any existing hardware session before
+switching pages. Each page has separate in-memory state: a connection, trace or
+observation **does not transfer**. If you started on Quick activity, begin a
+fresh evidence-page attempt; do not treat it as a continuation or recovered trace.
+
+**Rehearse on the evidence page first.** Choose Start replay, then Ping, Version and Battery. The
 battery fixture decodes to 3700 mV. Save the labelled trace, disconnect and clear
 the trace before starting live work.
-The fixture is synthetic. The support worksheet uses disposable records within
-one tab; it never receives real telemetry or writes to a car. After the hardware
+The fixture is synthetic. The separate `worksheet.html` page uses disposable
+records within one tab; it never receives real telemetry or writes to a car. After the hardware
 activity, the optional [worksheet CWE investigation](CWE-LAB.md) reproduces two
 intentional authorization defects using only those synthetic records.
 
@@ -43,7 +58,7 @@ against the last confirmed session, until another session starts or you clear. L
 you enabled it, disconnect, and export the trace. This build does not request
 motor motion, update firmware, scan unattended or address multiple cars.
 
-The trace display shows the latest 200 lines; export contains the full retained
+On the evidence page, the trace display shows the latest 200 lines; export contains the full retained
 log. At its 10,000-line/2,000,000-character limit, capture and new operations
 stop with an explicit incomplete-evidence notice. Disconnect, save, then clear.
 Reconnect and confirm the same car for any outstanding lamp-off/SDK-off cleanup;
