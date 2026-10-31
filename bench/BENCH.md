@@ -1,13 +1,27 @@
 # OVERDRIVE bench bring-up
-From the repository root, run:
+For the Node platform, use Node 22 or 24. From the repository root, run:
+
+```sh
+npm ci --ignore-scripts
+npm start
+```
+
+This installs the deliberately old Express and Lodash runtime dependencies
+described in the [dependency investigation](DEPENDENCY-LAB.md). Express serves
+the bench and shared MOCK support API; Lodash sorts and groups its records.
+The server binds `127.0.0.1:8000` and serves static files only from `bench/`.
+
+For the car activity without Node dependencies, use this static fallback instead
+(stop any other server using port 8000 first):
+
 ```sh
 python -m http.server 8000 --bind 127.0.0.1 --directory bench
 ```
+
 On your laptop open http://localhost:8000 in desktop Chrome. In a Codespace,
 keep port 8000 private and open the forwarded HTTPS URL in a separate Chrome
-tab on the laptop with the Bluetooth radio. The remote server just serves
-files; the browser owns the BLE connection. No account, API key, package
-install or backend device proxy is needed by the prototype.
+tab on the laptop with the Bluetooth radio. The browser owns the BLE connection;
+neither server acts as a backend device proxy. No account or API key is needed.
 
 Start with [tonight’s charge, connect and light checklist](TONIGHT.md), then the
 [four-platform Chrome setup and battery checkpoint](LAPTOPS.md).
@@ -30,10 +44,16 @@ fresh evidence-page attempt; do not treat it as a continuation or recovered trac
 **Rehearse on the evidence page first.** Choose Start replay, then Ping, Version and Battery. The
 battery fixture decodes to 3700 mV. Save the labelled trace, disconnect and clear
 the trace before starting live work.
-The fixture is synthetic. The separate `worksheet.html` page uses disposable
-records within one tab; it never receives real telemetry or writes to a car. After the hardware
-activity, the optional [worksheet CWE investigation](CWE-LAB.md) reproduces two
-intentional authorization defects using only those synthetic records.
+The fixture is synthetic. The separate `worksheet.html` page defaults to
+disposable records within one tab; reload resets that local store. With the Node
+server, `worksheet.html?store=server` explicitly selects shared MOCK records in
+the server process; restart the server to reset them. Records do not transfer
+between modes, and reloading a server-mode tab does not reset shared records.
+The worksheet does not control a car; enter only synthetic notes in either mode.
+After the hardware activity, the optional [worksheet CWE investigation](CWE-LAB.md)
+reproduces two intentional authorization defects in either store. The separate
+[dependency investigation](DEPENDENCY-LAB.md) examines real installed packages
+with `npm run dependency-lab`; save hardware evidence and disconnect first.
 
 **One assigned stationary car.** Record kit/model, host, browser and revision.
 Use a charged car and release any other controller. Isolate your assigned car

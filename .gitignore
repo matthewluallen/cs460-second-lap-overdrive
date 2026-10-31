@@ -221,3 +221,5 @@ __marimo__/
 
 # Course-local artifacts
 .env.*
+# Local installation of the pinned classroom server dependencies.
+node_modules/

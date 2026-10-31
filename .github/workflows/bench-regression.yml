@@ -33,6 +33,27 @@ jobs:
       - name: Run bench codec, transport, UI and evidence tests (no radio)
         run: node --test bench/*.test.mjs
 
+  platform:
+    name: Pinned platform / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Install exact classroom dependency pins without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify platform operation and intended dependency reproductions
+        run: npm run test:platform
+
   simulator:
     name: Simulator / Python ${{ matrix.python }}
     runs-on: ubuntu-24.04

@@ -13,6 +13,9 @@ From the repository root:
 ```sh
 node --test bench/*.test.mjs
 python3 -m unittest discover -s tests -v
+# For the pinned Node platform as well:
+npm ci --ignore-scripts
+npm test
 ```
 
 The original baseline passed four bench tests and four simulator tests before
@@ -43,15 +46,15 @@ editing. The expanded bench checks cover:
   rules, visible setup errors and explicit session-limit recovery. The evidence
   page retains full trace export and physical-observation controls.
 
-Local runtime: Node 25.6.1 and Python 3.14.7. All 65 bench tests and all 28 simulator/lesson tests pass.
+Local runtime: Node 25.6.1 and Python 3.14.7. All 71 bench tests, 18 platform/dependency tests and 28 simulator/lesson tests pass.
 Python checks also pass on bundled Python 3.12.14.
 The earlier 59-test bench suite also passed on Node 18 and Node 22,
 invoked locally through the official Node packages. No car is used by these
 tests.
 
 The [regression workflow](../.github/workflows/bench-regression.yml) runs these
-same suites for pull requests and pushes to `main`: Node 18/22/24 and Python
-3.10/3.12 on Ubuntu 24.04. Node 18 and Python 3.10 are end-of-life minimum-version
+same suites for pull requests and pushes to `main`: bench on Node 18/22/24,
+platform/dependency tests on Node 22/24, and Python 3.10/3.12 on Ubuntu 24.04. Node 18 and Python 3.10 are end-of-life minimum-version
 compatibility checks, not recommended runtimes. Use Node 24 and Python 3.12 or
 newer for new setups. The workflow uses read-only repository permissions,
 commit-pinned GitHub actions, no persisted checkout credentials, ten-minute job
@@ -138,3 +141,31 @@ All existing intentional worksheet and simulator weaknesses remain reproducible;
 normal-operation and recovery tests remain in the same regression run. Passing
 these characterization tests is not security certification. The runner changes
 no live car code and leaves the absolute simulation envelope in place.
+
+
+## Pinned direct runtime dependencies
+
+The Node launcher installs actual Express 4.17.1 and Lodash 4.17.15 from
+commit-pinned upstream archives. A clean `npm ci --ignore-scripts` installation
+was verified separately; the lock records both archive and transitive integrity.
+The audit reports eight affected packages (five high and three low) for this
+lockfile; these are package counts, not eight distinct defects or proof of
+application reachability. Audit failure is expected for this teaching baseline.
+See [DEPENDENCY-LAB.md](DEPENDENCY-LAB.md) for exact pins and primary advisories.
+
+All 18 platform tests pass locally: actual loopback HTTP static delivery and
+module MIME, shared records/summary, preserved CWE-639/CWE-862 behavior,
+malformed/oversized input recovery, capacity/reset semantics, independent stores,
+browser-adapter integration, archive pins and bounded dependency demonstrations.
+The demonstrations reproduce Lodash prototype inheritance and the Express
+Location/parsed-host discrepancy inside a fresh process. Parent state remains
+clean; no external request or car command is part of either demonstration.
+
+Chrome 155 on macOS loaded the bench through the Express server, reported a
+secure direct-tab path with Web Bluetooth available, and rehearsed battery
+3700 mV, headlight on/off and disconnect. The shared worksheet listed the red
+seed, created a synthetic red record, returned a Lodash summary count of two,
+and reproduced red reading blue record 102. An initial browser-only fetch
+receiver error was fixed and given a regression test before the successful
+rehearsal. Response-read timeouts and unknown addition outcomes are also covered;
+no addition is automatically retried. These are software observations only.

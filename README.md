@@ -26,8 +26,19 @@ All motion commands remain simulation-only.
 [Chrome laptop setup and first battery check](bench/LAPTOPS.md) ·
 [bench launch and protocol references](bench/BENCH.md).
 
-Run this from the repo root, then open the private forwarded port in a
-separate tab in desktop Google Chrome, or open http://localhost:8000 locally:
+For the Node platform, use Node 22 or 24. Run this from the repo root,
+then open the private forwarded port in a separate tab in desktop Google Chrome,
+or open http://localhost:8000 locally:
+
+```sh
+npm ci --ignore-scripts
+npm start
+```
+
+This installs deliberately old Express and Lodash runtime dependencies for the
+[dependency investigation](bench/DEPENDENCY-LAB.md). Express serves the bench and
+shared MOCK support API on `127.0.0.1:8000`; Lodash sorts and groups records.
+For the car activity without Node dependencies, use this static fallback instead:
 
 ```sh
 python -m http.server 8000 --bind 127.0.0.1 --directory bench
@@ -39,6 +50,10 @@ The main page is a compact quick activity. For saved classroom evidence, open
 origin) **before starting**. That page includes LED observations and trace
 Save/Clear controls. Finish and disconnect before switching pages: sessions and
 traces do not transfer. The optional synthetic worksheet is on `worksheet.html`.
+It defaults to disposable tab-local records. With the Node server, explicitly
+open `worksheet.html?store=server` for shared process-local MOCK records; restart
+the server to reset those records. A page reload only resets the default local
+store. Keep real kit evidence out of either worksheet store.
 
 On the evidence page, start in replay, then compare a live off-charger reading.
 Confirm the assigned physical car before enabling its headlight controls, and record the visible
@@ -74,6 +89,12 @@ reproductions from the repo root:
 python -m lapreturn.cwe_lab
 ```
 
+The separate [dependency investigation](bench/DEPENDENCY-LAB.md) provides
+`npm run dependency-lab` and source-pinned advisory review. Its fixed-input
+demonstrations use installed libraries without external requests or car control.
+`npm audit` failures are expected for this baseline; preserve them as evidence
+and make repairs on a separate student branch rather than using `npm audit fix`.
+
 Start with docs/student-brief.txt and docs/protocol.txt. Review the supplied
 business materials and history as evidence, not as verified documentation.
 The scenario development history is available in this branch's normal Git log.
@@ -81,5 +102,6 @@ See [history instructions](history/README.md) to inspect commits and dates.
 
 For Codespaces, choose **Code → Codespaces → Create codespace on main**, then
 run the commands above in its terminal. The default Codespaces image includes
-Python. No server starts automatically. The bench uses a separate static server.
+Python. No server starts automatically. Choose the Node platform or the static
+fallback above; run only one on port 8000.
 Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTING.md).

@@ -11,6 +11,14 @@ the two seeds; further additions fail before mutation, while existing records
 remain readable. Save investigation notes before resetting. The
 public `pilot-*` operator tokens model roles; they are not real authentication.
 
+The steps below use that default tab-local store. With the optional Node server,
+`worksheet.html?store=server` selects shared MOCK records for the current server
+process. The same deliberate authorization defects remain, but reloading the
+page does **not** reset the shared records: coordinate with other users and
+restart the server for a fresh baseline. Neither store transfers data to the
+other. See [the dependency lab](DEPENDENCY-LAB.md) for launch and reset details;
+keep real kit records and LIVE traces out of the shared API.
+
 The worksheet deliberately preserves two authorization defects for students to
 reproduce and repair on a separate team branch. The tests below characterize
 that flawed baseline. A passing test is **not** a security pass or a claim that
@@ -43,7 +51,7 @@ themselves establish two unrelated root causes.
 
 ## Reproduce in the page
 
-1. Open or reload **Support worksheet** at `worksheet.html`, then choose operator
+1. Open or reload the default local **Support worksheet** at `worksheet.html`, then choose operator
    **red**, then **My records**. Record that only seeded record **101** appears.
 2. Keep operator **red**, set **Record ID** to **102**, and click **Open record**.
    Record that the returned record belongs to **blue**. Compare with a normal

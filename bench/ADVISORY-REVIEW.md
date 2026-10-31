@@ -114,3 +114,27 @@ concept. See [SIMULATOR-CWE-LAB.md](SIMULATOR-CWE-LAB.md) for mapping limits and
 student repair criteria. The vulnerable operations in `core.py` and `records.mjs`
 are unchanged. A result explicitly reports `security_pass: false`; normal use,
 intentional defects and operational recovery have separate test assertions.
+
+
+## Direct dependency baseline
+
+Express 4.17.1 and Lodash 4.17.15 are now actual runtime dependencies, pinned to
+upstream commit archives plus lockfile integrity. Express serves the unchanged
+bench and a loopback-only MOCK support API; Lodash sorts/groups its records.
+The explicit shared worksheet mode preserves the two deliberate authorization
+cases and uses process-restart reset semantics. Tab-local mode remains available.
+The full car transport, codec, Records operations and Python simulator core are
+unchanged. The shared API has no radio, motor, proxy or template-execution route.
+
+[DEPENDENCY-LAB.md](DEPENDENCY-LAB.md) separates advisory exposure, direct-library
+reproduction and application reachability. Tests keep the two fixed dependency
+reproductions intact, but do not assert every advisory is reachable. The server
+selects simple query parsing, so the installed historical qs nested-query vector
+is not the normal request path. Fixed prototype-marker and Location-header
+experiments run in a bounded child process and do not mutate the active server.
+
+Integration review corrected a shared-store capacity error that incorrectly said
+reload to reset, preserved unknown outcomes if an addition loses its response,
+and corrected the browser fetch receiver after Chrome rehearsal exposed it.
+Tests cover normal platform use and intentional flaws separately. This is still
+an intentionally vulnerable local course baseline, not a production service.
