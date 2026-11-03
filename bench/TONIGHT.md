@@ -2,8 +2,15 @@
 
 The goal is one documented attempt with **your assigned stationary car**:
 charging observations, a Chrome connection, a live battery reply if available,
-and a visible headlight change. No driving is part of this activity. The live
-path is implemented but **hardware-unverified** on the course kits.
+and a visible engine LED change. No driving is part of this activity. A supplied
+5 November 2026 trace contains live battery replies, but successful LED behavior
+and the remembered-car workflow remain **hardware-unverified** on the course kits.
+
+The fleet/engine LED update is on PR branch `codex/classroom-charge-connect-led`;
+use that reviewed revision until it is merged into `main`. For 15 students with
+two cars each, start with [fleet enrollment](FLEET.md). Ice Charger and
+International MXT names repeat; physical labels `S01-A`/`S01-B` through
+`S15-A`/`S15-B` identify assignments, not the model names.
 
 For this documented activity, open the [evidence page](evidence.html) **before
 starting replay or connecting a car** (`http://localhost:8000/evidence.html`
@@ -15,6 +22,7 @@ transfer; switching requires a fresh attempt.
 ## 1. Prepare and charge the assigned kit
 
 - Label the car and record its model, assigned kit label and starting Git revision.
+  Do not infer the model or student assignment from a browser ID.
 - Use the instructor-provided charging equipment and the instructions for that
   kit. Record when charging started and ended, the charger used, and what its
   indicators actually did. Do not assume one light color or charging time applies
@@ -22,7 +30,7 @@ transfer; switching requires a fresh attempt.
   stop and tell the instructor; do not open or repair it during this activity.
 - Take the car **off the charger**, power it on and keep it stationary with wheels
   clear. Release other apps, tabs and laptops that may still control it. Stagger
-  team attempts so only the assigned car is powered in the test area.
+  enrollment: power on one assigned car, with all other classroom cars off.
 - Open the evidence page in desktop Google Chrome on the physical laptop. Follow
   [laptop setup](LAPTOPS.md) and [launch instructions](BENCH.md). Start connection
   in Chrome's chooser; OS pre-pairing is not the default step.
@@ -53,8 +61,16 @@ and evidence record.
    it is **not a hardware serial number, MAC address or proof of ownership**.
 5. Use **Confirm assigned car** only after matching the physical kit to the
    selection. This records your assertion, not an automatic identity check.
-   Headlight and SDK controls remain locked until confirmation. If the choice is
+   LED and SDK controls remain locked until confirmation. If the choice is
    wrong, disconnect and select again; no command is sent just by connecting.
+6. During enrollment, click **Remember confirmed car** to save that label against
+   the browser-scoped device ID. On later visits, **Refresh remembered cars**,
+   select the saved label and click **Reconnect remembered car**. Confirm the
+   physical assignment again on every connection. Refresh checks permission
+   grants for saved labels, including cars that may be off or absent; it is not
+   a nearby-car scan. A saved label alone does not enable reconnection.
+   If remembered access is unsupported or missing, repeat the isolated chooser
+   procedure. Keep the same browser profile and page origin; see [FLEET.md](FLEET.md).
 
 ## 4. Collect battery and LED observations
 
@@ -66,21 +82,29 @@ and evidence record.
   and reconnect. If a write remains pending after five seconds, use Disconnect
   to recover; do not start concurrent requests. Ping and Version are optional
   diagnostics, sent one at a time.
-- Select **Headlight on**, watch the assigned car, and record whether its light
-  visibly changed. Then select **Headlight off** and record that observation too.
+- Select **Engine LED green / identify**, watch the assigned car, then select **Engine LED
+  off** and observe again. Each engine command first requests SDK mode with flags
+  zero if it has not already been requested in this session. The visible SDK
+  message remains until you leave SDK mode. This records completed writes, not
+  a verified device mode or visible result. Leave SDK mode **after** the LED-off
+  attempt, then disconnect. Do not turn SDK mode off between enabling it and
+  trying the LED. Legacy **Headlight on/off** controls remain available as a
+  separate comparison; the engine LED uses a different command.
   Choose the matching **Visible LED observation**, add **Observer / final detail**,
   and click **Record LED observation** for each attempt. These are operator
   reports, not telemetry. Each report includes the confirmed session identity,
   lamp attempt and write outcome. The form clears for each lamp attempt and
   after recording so an old choice cannot be submitted accidentally. A completed
-  write is not proof that a light changed.
-  A replay light command cannot supply physical evidence.
-- If the assigned firmware needs SDK mode, record the original result and try
-  SDK mode once. After a battery timeout/error, disconnect and reconnect to the
+  write is not proof that a light changed. Use the steady green/off observation
+  only after physical assignment; do not blink or command a fleet to discover
+  which car belongs to whom. A replay light command cannot supply physical evidence.
+- Battery behavior is unchanged. For an optional SDK retry after a battery
+  timeout/error, disconnect and reconnect to the
   assigned car, confirm it again, enable SDK mode, then make one new Battery
   request. Record both attempts. Leave SDK mode before disconnecting if you
   enabled it; a disconnect does not prove SDK mode reset. SDK compatibility is
-  hardware-unverified.
+  hardware-unverified. If testing legacy headlights with SDK mode, keep SDK mode
+  enabled through the on/off attempts as well.
 - Disconnect, then save the live trace before another person takes over. Keep
   the car stationary throughout. After a failed or completed lamp attempt, you
   can still record a visible result and **Observer / final detail** after
@@ -108,7 +132,7 @@ At 10,000 lines or 2,000,000 characters, capture stops with a **TRACE INCOMPLETE
 notice instead of silently dropping old evidence. New operations and observations
 are blocked. Disconnect, save the incomplete trace, then clear before continuing.
 If lamp-off or SDK-off cleanup is still needed, reconnect to the same assigned
-car, confirm it again and perform those steps; no cleanup command is automatic.
+car, confirm it again and perform those steps; disconnect sends no cleanup command.
 Treat the unrecorded interval and any uncompleted cleanup as unknown.
 
 If a stage fails, change one variable: try this car on the reference laptop,
@@ -117,6 +141,6 @@ Keep the failure as evidence and continue in replay if necessary.
 
 Before claiming success on hardware, an instructor or student must record a real
 chooser/connection attempt, notification delivery, battery reply, SDK behavior
-(if used), and visible headlight on/off on the exact kit/model/firmware and host.
+(if used), and visible engine LED on/off on the exact kit/model/firmware and host.
 The automated checks use fixtures and mock GATT objects; they do not qualify any
 physical car, charger, firmware or Bluetooth adapter.

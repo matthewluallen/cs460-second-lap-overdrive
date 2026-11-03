@@ -46,7 +46,8 @@ editing. The expanded bench checks cover:
   rules, visible setup errors and explicit session-limit recovery. The evidence
   page retains full trace export and physical-observation controls.
 
-Local runtime: Node 25.6.1 and Python 3.14.7. All 71 bench tests, 18 platform/dependency tests and 28 simulator/lesson tests pass.
+Pre-fleet revision `bfe6e66` was checked with Node 25.6.1 and Python 3.14.7:
+71 bench tests, 18 platform/dependency tests and 28 simulator/lesson tests passed.
 Python checks also pass on bundled Python 3.12.14.
 The earlier 59-test bench suite also passed on Node 18 and Node 22,
 invoked locally through the official Node packages. No car is used by these
@@ -103,10 +104,11 @@ by this software review.
 | Check | Evidence required |
 | --- | --- |
 | Charging | Assigned kit, charger, observed indicators, start/end times and safe physical condition; no inferred capacity from an indicator. |
-| Discovery and assignment | Chooser mode, displayed name/browser ID and physical assignment confirmation; cancel on ambiguity. |
+| Discovery and assignment | Unique physical label, isolated chooser enrollment, displayed name/browser ID and physical assignment confirmation; cancel on ambiguity. |
+| Remembered pair | Explicit label save, refresh of retained grants, one selected reconnect and physical confirmation again; absent/off cars must not be described as online. |
 | GATT setup | Expected service/characteristics, notification-ready trace, exact failed stage if unavailable. |
 | Battery | Off-charger state, `01 1a` TX attempt/completion, `0x1b` RX mV within five seconds, or timeout/error. |
-| LED | On/off command bytes and separate visible observations of the assigned car. Try optional SDK once if needed and record both results. |
+| LED | Engine green/off bytes and separate visible observations of the assigned car; SDK-on must precede the pattern and remain requested through off. Legacy headlights are a separate comparison. |
 | Cleanup | Lamp off and SDK off if used, followed by disconnect; record failed/unknown cleanup without claiming reset. |
 
 The wire battery reply has no request sequence number. A reading means a
@@ -141,6 +143,48 @@ All existing intentional worksheet and simulator weaknesses remain reproducible;
 normal-operation and recovery tests remain in the same regression run. Passing
 these characterization tests is not security certification. The runner changes
 no live car code and leaves the absolute simulation envelope in place.
+
+## November 5 live trace and follow-up boundary
+
+A user supplied a trace on **5 November 2026** containing live ping, battery and
+version replies. The version frame `05 19 27 25 00 00` is the community decoder's
+32-bit little-endian **9511 / 0x2527** form. Legacy headlight writes completed,
+but the user reported no visible LED change. SDK mode was disabled before the
+next light attempt. Thus this trace supplies communication evidence; it does
+not demonstrate a light attempt while SDK mode stayed enabled, successful LED
+operation, charging performance or fleet assignment. The full user trace and
+identifying timestamps are not included in public documentation.
+
+The follow-up adds fixed engine green/off patterns, SDK-on sequencing for those
+actions, both version widths and explicitly remembered physical labels. These
+changes are under review on PR branch `codex/classroom-charge-connect-led`, not
+assumed present on `main`. The `fleet-led-v1` follow-up passed **118 JavaScript tests** (100 bench and
+18 platform) and **28 Python tests** locally on November 5, 2026. The checks
+exercise:
+
+- SDK-on before the engine pattern, no repeated SDK-on while already requested,
+  failure/disconnect during the sequence, reset on a new session and no automatic
+  cleanup on disconnect; a completed write must never become a physical result.
+- Exact `0x33` green/off bytes and both version forms, including malformed-frame
+  rejection; LIVE/REPLAY battery timing, attribution and trace bounds unchanged.
+- Saved labels for duplicate model names; explicit remembering only after
+  physical confirmation; `getDevices()` restricted to saved IDs; deliberate
+  reconnect followed by confirmation again, unavailable API/grant/storage
+  recovery and no unprompted scan or batch connection.
+
+A Chrome 156 macOS browser rehearsal of the evidence page returned REPLAY
+3700 mV, then recorded SDK-on, engine-green, engine-off and explicit SDK-off
+in that order. The interface kept the no-physical-LED label throughout. No
+Bluetooth chooser or car connection was used for this rehearsal.
+
+The label registry detects a changed backing value before saving, protecting
+against ordinary stale-tab overwrites; it is not an atomic transaction across
+simultaneous tabs. Use one bench tab per student while enrolling labels.
+
+Use [FLEET.md](FLEET.md) for the 15-student, two-car enrollment and physical
+acceptance run. Browser ID persistence, actual reconnect and engine illumination
+still require observation on the assigned Ice Charger and International MXT
+kits. No radio or physical LED trial was performed by the software reviewers.
 
 
 ## Pinned direct runtime dependencies

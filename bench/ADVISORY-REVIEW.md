@@ -138,3 +138,27 @@ reload to reset, preserved unknown outcomes if an addition loses its response,
 and corrected the browser fetch receiver after Chrome rehearsal exposed it.
 Tests cover normal platform use and intentional flaws separately. This is still
 an intentionally vulnerable local course baseline, not a production service.
+
+## November 5 engine LED and fleet follow-up
+
+Read-only AI advisory passes checked protocol evidence, assignment boundaries,
+concurrent writes and browser-local label persistence. The live user trace
+confirmed communication, not a visible LED result: SDK was left before the next
+headlight attempt. Fixed engine RGB commands now prepare SDK within one serialized
+sequence; failure, disconnect or trace refusal stops the remaining writes.
+Version decoding accepts the exact observed 32-bit form without relaxing battery
+framing. Real hardware acceptance is still outstanding.
+
+Fleet review found two additional operational defects before publication:
+
+- A new browser device could initially reuse another saved car's physical label.
+  Confirmation now rejects both ID-to-label and label-to-ID mismatches, including
+  case-insensitive duplicate labels. An explicit forget and isolated reenrollment
+  is required after permission identity changes.
+- A stale tab could overwrite a newer saved registry. Saving/removing now checks
+  the backing value and rejects a detected change with disconnect/reload guidance.
+  This protects ordinary stale-tab edits, not an atomic simultaneous transaction;
+  the classroom guide uses one enrollment tab per student.
+
+The new safeguards affect real-car selection and operational evidence only;
+intentional simulator, worksheet and dependency lesson behaviors remain intact.

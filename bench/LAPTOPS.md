@@ -2,6 +2,10 @@
 
 Follow [tonight’s charge, connect and light checklist](TONIGHT.md) for the full
 activity; this page covers laptop setup and the battery evidence checkpoint.
+For the 30-car classroom, enroll each uniquely labelled car using [FLEET.md](FLEET.md).
+Repeated Ice Charger or International MXT names do not identify a student's car.
+Fleet/engine controls are on PR branch `codex/classroom-charge-connect-led` until
+merged; verify the served Git revision rather than assuming `main` includes them.
 
 Use **desktop Google Chrome on the student's physical laptop** for all four platforms.
 A Codespace can serve the page; it cannot use its remote host as your laptop's radio.
@@ -27,10 +31,29 @@ It is distinct from OS pairing/bonding. Start in Chrome, with the OS radio on.
 An OS prompt may appear; follow it only for the positively identified course car.
 Do not guess a PIN. Absence of a PIN dialog does not establish how the link is secured.
 
+## Remembering the assigned pair
+
+After an isolated chooser connection and **Confirm assigned car**, use **Remember
+confirmed car**. Later choose **Refresh remembered cars**, select the saved label
+and **Reconnect remembered car**; confirm the physical car again before LED/SDK
+changes. The list matches saved labels to `getDevices()` permission grants, not
+nearby advertisements or online status. There is no automatic fleet scan, model
+inference or MAC-address lookup. If this browser cannot refresh remembered grants,
+the manual chooser remains the fallback.
+
+Use the same Chrome profile and exact origin (scheme, host and port) each time.
+For example, `localhost:8000` and `127.0.0.1:8000` are different origins, as is a
+new port or forwarded HTTPS address. IDs are useful only within the retained
+browser/site permission; they are not hardware serials. Clearing permissions or
+site data, changing profile/origin or losing the saved label requires isolated
+enrollment again. Moving between the quick and evidence paths on the same origin
+can retain the registry, but never transfers an active session or trace.
+
 ## Positive control, then live observation
 1. Label the kit; charge it, take the car **off the charger**, power it on and
    keep it stationary with wheels clear. Release other controller apps/tabs.
-   Stagger team attempts and have only the assigned car powered in the test area;
+   During enrollment, have only the assigned car powered and all other classroom
+   cars off;
    if you cannot identify the chooser entry, cancel. Never select a nearby
    peripheral just to see whether it is your car.
 2. On the evidence page, Start replay → Battery. Expect a **REPLAY** reply of 3700 mV. Save a trace,
@@ -47,8 +70,11 @@ Do not guess a PIN. Absence of a PIN dialog does not establish how the link is s
    another Battery request. For an optional SDK retry, confirm the assigned car
    again, enable SDK mode and retry Battery once, then leave SDK mode. If the
    write is still pending after five seconds, Disconnect remains available.
-   Follow the checklist for a separate observed headlight on/off trial. Disconnect
-   when finished.
+   Follow the checklist for a separate **Engine LED green / identify → Engine LED off**
+   trial. Engine commands request SDK mode first when needed; keep it requested
+   through the LED-off attempt, then leave SDK mode and disconnect. Completed
+   writes do not establish SDK state or illumination. Legacy headlights remain
+   a separate comparison.
 5. Save the timestamped trace. Record kit label, off-charger state, OS, Chrome
    version, Git revision, connection stage, outgoing bytes, returned bytes and
    decoded millivolts. A failed stage and exact error are valid results.
@@ -73,6 +99,13 @@ instructor-approved runtime test before making a battery-life claim.
   an empty battery. Cancel on duplicate or unrecognizable names.
 - Connected but no RX: record notification setup, request bytes and timeout;
   check the exact model/firmware and optional SDK step before assigning cause.
+- Battery replies but no light: use the engine LED control while SDK mode remains
+  requested. The supplied 5 November trace disabled SDK mode before further
+  legacy headlight attempts; it did not demonstrate an LED attempt in SDK mode.
+  Keep the result as unknown until a person observes the assigned car change.
+- Remembered car absent/unreachable: a grant is not proof that the car is powered
+  or in range. Release competing controllers and check the label and origin;
+  re-enroll in isolation if the grant or local label was lost.
 - Change **one variable**: test the suspect car on the known-working Chrome laptop,
   then the reference car on the suspect laptop. Disconnect the previous host before
   every handoff. Tag results observed/unknown. Replay is the independent path
@@ -85,3 +118,6 @@ Platform references (consulted 4 November 2026; platform support is not proof of
 [Windows radio](https://support.microsoft.com/en-us/windows/hardware/bluetooth/turn-bluetooth-on-or-off-in-windows) ·
 [macOS privacy settings](https://support.apple.com/guide/mac-help/mchl211c911f/mac) ·
 [Ubuntu Bluetooth](https://help.ubuntu.com/stable/ubuntu-help/bluetooth-turn-on-off.html).
+
+Remembered-device semantics rechecked 5 November 2026:
+[Web Bluetooth permission and device model](https://bluetooth.spec.whatwg.org/#dom-bluetooth-getdevices).

@@ -25,3 +25,18 @@ test('malformed or wrong-size battery frames cannot become battery evidence',()=
   for(const bytes of [[1,0x1b],[2,0x1b,0x74],[4,0x1b,0x74,0x0e,0]])assert.ok(decode(Uint8Array.from(bytes)).every(row=>!row.text.startsWith('battery ')));
   assert.deepEqual(decode(Uint8Array.of(3,0x1b,0,0)).map(row=>row.text),['battery 0 mV']);
 });
+test('observed OVERDRIVE 32-bit version is decoded without weakening battery framing',()=>{
+  const rows=decode(Uint8Array.of(5,0x19,0x27,0x25,0,0,3,0x1b,0x62,0x0e));
+  assert.equal(rows[0].text,'firmware version 9511 (32-bit reply; 0x2527)');
+  assert.equal(rows[0].raw,'05 19 27 25 00 00');
+  assert.equal(rows[1].text,'battery 3682 mV');
+  assert.equal(decode(Uint8Array.of(3,0x19,0x34,0x12))[0].text,'firmware version 4660');
+  assert.equal(decode(Uint8Array.of(5,0x19,255,255,255,255))[0].text,'firmware version 4294967295 (32-bit reply; 0xffffffff)');
+  assert.throws(()=>decode(Uint8Array.of(5,0x19,0x27,0x25,0)));
+  assert.equal(decode(Uint8Array.of(5,0x1b,0x27,0x25,0,0))[0].text,'other notification');
+});
+test('OVERDRIVE engine patterns use three steady RGB channels with no motion command',()=>{
+  assert.deepEqual([...frame('engineGreen')],[17,0x33,3,0,0,0,0,0,3,0,14,14,0,2,0,0,0,0]);
+  assert.deepEqual([...frame('engineOff')],[17,0x33,3,0,0,0,0,0,3,0,0,0,0,2,0,0,0,0]);
+  for(const action of ['engineGreen','engineOff'])assert.equal(frame(action)[0],frame(action).length-1);
+});

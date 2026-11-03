@@ -9,3 +9,7 @@ timeline. These dates and contributor identities are teaching material, not
 claims of when implementation, review or hardware testing actually happened.
 GitHub PR publication/update events retain the service's actual timestamps.
 Runtime traces always timestamp events when they occur; never backdate evidence.
+
+The engine-LED/fleet-label follow-up uses a constructed November 3 checkpoint.
+It was implemented and checked after a user supplied a live trace on November 5,
+2026. The commit date is scenario chronology, not an earlier hardware test.

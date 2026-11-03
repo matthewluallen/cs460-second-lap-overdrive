@@ -62,16 +62,19 @@ The default chooser filters for the Anki service; the explicit all-devices
 fallback is only for an isolated assigned car missing from the filtered chooser.
 Choose assigned car; wait for "notify ready". Check the selected name and
 browser-scoped ID, then Confirm assigned car against the physical kit to unlock
-headlight/SDK controls. A browser ID is not a serial number or proof of identity.
+light/SDK controls. A browser ID is not a serial number or proof of identity.
 Connecting sends no command automatically. Send Ping, Version and Battery
-one at a time. Record each outgoing frame and any corresponding response type
-observed during the request window, or mark
-"no reply after 5 seconds". A successful GATT write is not a reply.
+one at a time. Record each outgoing frame and observed response type. Only
+Battery has a five-second request window; ping/version observations have no
+request correlation or timeout tracking. A successful GATT write is not a reply.
 After a battery timeout or write error, Battery stays locked until reconnect
 to avoid treating a delayed reply as a new successful request. Disconnect also
 recovers a pending write. If the assigned firmware needs SDK mode, reconnect,
 confirm the car, try Enable SDK mode (no localization override), retry Battery
-once, and record both attempts. Try Headlight on then off;
+once, and record both attempts. For OVERDRIVE, use Engine LED green / identify
+then Engine LED off; these explicit actions prepare SDK mode first when needed.
+Keep SDK enabled through both light attempts, then use Leave SDK mode. For a
+legacy headlight retry, enable SDK before Headlight on/off;
 record a fresh physical observation independent of the TX log for each attempt.
 Final LED observations and cleanup notes can still be recorded after disconnect
 against the last confirmed session, until another session starts or you clear. Leave SDK mode if
@@ -82,7 +85,9 @@ On the evidence page, the trace display shows the latest 200 lines; export conta
 log. At its 10,000-line/2,000,000-character limit, capture and new operations
 stop with an explicit incomplete-evidence notice. Disconnect, save, then clear.
 Reconnect and confirm the same car for any outstanding lamp-off/SDK-off cleanup;
-no automatic writes occur and an uncompleted cleanup remains unknown.
+disconnect sends no automatic cleanup command and uncompleted cleanup remains
+unknown. For repeated models, follow [the 30-car enrollment guide](FLEET.md):
+remember each isolated physical car once, then reconnect by its saved browser ID.
 
 If Bluetooth is unavailable, open the HTTPS forwarded port directly, check OS
 Bluetooth support/permissions and release any competing connection. If service

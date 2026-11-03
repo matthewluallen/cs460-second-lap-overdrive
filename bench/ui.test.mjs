@@ -4,6 +4,7 @@ import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 import {CarLink,Replay} from './link.mjs';
 import {TraceLog} from './trace.mjs';
+import {CarLabels} from './car-labels.mjs';
 import {uuids} from './protocol.mjs';
 
 // A minimal DOM runs the actual UI and transport without a browser, radio, or
@@ -11,10 +12,11 @@ import {uuids} from './protocol.mjs';
 const evidenceHtml=await readFile(new URL('./evidence.html',import.meta.url),'utf8');
 const compactHtml=await readFile(new URL('./index.html',import.meta.url),'utf8');
 const ui=(await readFile(new URL('./ui.mjs',import.meta.url),'utf8'))
-  .replace(/^import .* from '\.\/(?:link|records|trace)\.mjs';\n/gm,'');
+  .replace(/^import .* from '\.\/(?:link|records|trace|car-labels)\.mjs';\n/gm,'');
 class Element {
   value='';textContent='';disabled=false;checked=false;dataset={};children=[];
   append(option){this.children.push(option);if(this.children.length===1)this.value=option.value;}
+  replaceChildren(...options){this.children=[];this.value='';for(const option of options)this.append(option);}
   set innerHTML(_){throw new Error('HTML rendering is forbidden in this fixture');}
 }
 function mockCar(){
@@ -32,18 +34,19 @@ function mockCar(){
 }
 const harnesses=new Set();
 afterEach(()=>{for(const h of harnesses)h.event('pagehide');harnesses.clear();});
-function harness(bluetooth,traceOptions,page='evidence'){
+function memoryStore(){const data=new Map();return {getItem:key=>data.get(key)??null,setItem:(key,value)=>data.set(key,value)};}
+function harness(bluetooth,traceOptions,page='evidence',storage=memoryStore()){
   const html=page==='compact'?compactHtml:evidenceHtml;
   const elements=new Map([...html.matchAll(/\bid="([^"]+)"/g)].map(([,id])=>[id,new Element()]));
   const operations=new Map([...html.matchAll(/data-op="([^"]+)"/g)].map(([,op])=>{const b=new Element();b.dataset.op=op;return [op,b];}));
   if(elements.has('trace'))elements.get('trace').textContent='No traffic yet.';
   const timers=new Map(),events=new Map(),downloads=[];let timerId=0;
-  const window={isSecureContext:true,addEventListener:(name,fn)=>events.set(name,fn)};window.top=window.self=window;
+  const window={isSecureContext:true,localStorage:storage,location:{origin:'http://localhost:8000',pathname:'/evidence.html',search:'?token=not-for-traces',hash:'#private'},addEventListener:(name,fn)=>events.set(name,fn)};window.top=window.self=window;
   const blobs=new Map();
   const document={getElementById:id=>elements.get(id)??null,
     querySelectorAll:selector=>{assert.equal(selector,'[data-op]');return [...operations.values()];},
     createElement:tag=>{assert.equal(tag,'a');const a={click:()=>downloads.push({name:a.download,blob:blobs.get(a.href)})};return a;}};
-  const context={CarLink,Replay,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
+  const context={CarLink,Replay,CarLabels,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
     Option:class {constructor(text,value){this.text=text;this.value=value;}},
     URL:{createObjectURL:blob=>{const key='blob:mock-'+blobs.size;blobs.set(key,blob);return key;},revokeObjectURL:key=>blobs.delete(key)},
     setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id)};
@@ -76,6 +79,8 @@ test('MOCK UI live commands stay gated until assigned-car confirmation, then res
   assert.equal(h.el('status').textContent,'Live car connected');assert.equal(m.writes.length,0);
   assert.deepEqual(m.choices,[{filters:[{services:[uuids.service]}]}]);
   assert.match(h.el('selection').textContent,/browser device ID: browser-scoped-mock-id/);
+  assert.match(h.el('trace').textContent,/bench fleet-led-v1; page http:\/\/localhost:8000\/evidence.html/);
+  assert.doesNotMatch(h.el('trace').textContent,/not-for-traces|#private/);
   for(const op of ['lampOn','lampOff','sdkOn','sdkOff']){assert.equal(h.op(op).disabled,true);await h.op(op).onclick();}
   assert.equal(m.writes.length,0);assert.equal(h.op('battery').disabled,false);
   await h.click('confirm');await h.click('lampOn');assert.deepEqual(m.writes,[[2,0x1d,0x11]]);
@@ -211,7 +216,7 @@ test('MOCK UI preserves confirmed identity for post-disconnect observation, then
   assert.doesNotMatch(saved,/next-kit|Context for the NEXT/);
   await h.click('replay');h.set('observation','Light visibly on');assert.equal(h.el('recordObservation').disabled,true);
   await h.click('close');assert.equal(h.el('recordObservation').disabled,true);await h.click('clear');
-  assert.match(h.el('observationContext').textContent,/Run a headlight attempt/);
+  assert.match(h.el('observationContext').textContent,/Run a light attempt/);
 });
 test('MOCK UI associates observations with failed and interrupted lamp writes without fabricating success',async()=>{
   const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('confirm');
@@ -303,4 +308,69 @@ test('MOCK compact session cap provides recovery without missing export controls
   await h.click('close');assert.equal(m.device.gatt.connected,false);assert.equal(h.el('replay').disabled,true);
   const reloaded=harness(undefined,undefined,'compact');await reloaded.click('replay');await reloaded.click('battery');
   assert.match(reloaded.el('batteryResult').textContent,/battery 3700/);
+});
+
+test('MOCK UI engine identification keeps SDK evidence separate from unrelated RX and records its context',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await connect(h);
+  assert.equal(h.op('engineGreen').disabled,true);await h.click('confirm');await h.click('engineGreen');
+  assert.equal(m.writes[0][1],0x90);assert.equal(m.writes[1][1],0x33);
+  assert.match(h.el('sdkResult').textContent,/LIVE SDK: Enable write completed; actual mode unverified/);
+  const sdk=h.el('sdkResult').textContent;m.notify([1,0x86]);assert.equal(h.el('sdkResult').textContent,sdk);
+  h.set('observation','Light visibly on');await h.click('recordObservation');
+  assert.match(h.el('trace').textContent,/LIVE observation.*engineGreen.*sdkContext.*Enable write completed/);
+  await h.click('engineOff');assert.equal(m.writes.length,3);await h.click('sdkOff');assert.equal(m.writes.length,4);
+  await h.click('close');assert.match(h.el('sdkResult').textContent,/not verified or reset/);
+  await h.click('replay');assert.match(h.el('sdkResult').textContent,/No SDK request/);
+  await h.click('engineGreen');assert.match(h.el('sdkResult').textContent,/REPLAY SDK.*no physical car/);
+  assert.equal(m.writes.length,4);assert.match(h.el('lampResult').textContent,/no physical LED/);
+});
+test('MOCK UI failed SDK preparation does not send an LED command or claim a visible outcome',async()=>{
+  const m=mockCar(),h=harness(m.bluetooth);await connect(h);await h.click('confirm');
+  m.tx.writeValueWithoutResponse=async bytes=>{m.writes.push([...bytes]);throw Error('SDK rejected');};
+  await h.click('engineGreen');assert.equal(m.writes.length,1);assert.equal(m.writes[0][1],0x90);
+  assert.match(h.el('sdkResult').textContent,/failed or completion unknown/);assert.match(h.el('lampResult').textContent,/light write failed/);
+});
+test('MOCK UI remembers two identical names and reconnects only the selected saved ID after reload',async()=>{
+  const first=mockCar(),second=mockCar(),unknown=mockCar(),storage=memoryStore();
+  first.device.name=second.device.name='Ice Charger';second.device.id='same-model-second-id';unknown.device.id='unassigned-id';
+  let selected=first.device,choices=0,lists=0;
+  const bluetooth={requestDevice:async()=>{choices++;return selected;},getDevices:async()=>{lists++;return [unknown.device,second.device,first.device];}};
+  const h=harness(bluetooth,undefined,'evidence',storage);
+  h.set('assignedCar','S01-A');await h.click('live');assert.equal(h.el('rememberCar').disabled,true);
+  await h.click('confirm');await h.click('rememberCar');await h.click('close');
+  selected=second.device;h.set('assignedCar','S01-B');await h.click('live');await h.click('confirm');await h.click('rememberCar');await h.click('close');
+  const reloaded=harness(bluetooth,undefined,'compact',storage);
+  assert.equal(lists,0);await reloaded.click('refreshCars');assert.equal(lists,1);
+  assert.equal(reloaded.el('rememberedCar').children.length,3);
+  assert.match(reloaded.el('fleetStatus').textContent,/not a scan/);
+  reloaded.set('rememberedCar',second.device.id);await reloaded.click('connectRemembered');
+  assert.equal(choices,2);assert.equal(second.device.gatt.connected,true);assert.equal(first.device.gatt.connected,false);
+  assert.equal(reloaded.el('assignedCar').value,'S01-B');assert.match(reloaded.el('recognition').textContent,/Remembered label: S01-B/);
+  assert.equal(reloaded.op('engineGreen').disabled,true);assert.equal(first.writes.length+second.writes.length,0);
+  await reloaded.click('confirm');await reloaded.click('battery');second.notify([3,0x1b,0x62,0x0e]);
+  assert.match(reloaded.el('batteryResult').textContent,/3682/);assert.equal(first.writes.length,0);
+});
+test('MOCK UI rejects a known-car label mismatch and missing or unsupported permissions stay explicit',async()=>{
+  const m=mockCar(),storage=memoryStore();new CarLabels(storage).remember({browserId:m.device.id,name:m.device.name},'S02-B');
+  const h=harness(m.bluetooth,undefined,'evidence',storage);h.set('assignedCar','S01-A');await h.click('live');
+  assert.match(h.el('recognition').textContent,/label differs/);assert.equal(h.el('confirm').disabled,true);
+  await h.el('confirm').onclick();assert.equal(h.op('engineGreen').disabled,true);assert.equal(m.writes.length,0);
+  await h.click('close');await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/cannot list prior permissions/);
+  h.set('rememberedCar',m.device.id);assert.equal(h.el('connectRemembered').disabled,true);
+  m.bluetooth.getDevices=async()=>[];await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/0 remembered/);
+  assert.equal(h.el('connectRemembered').disabled,true);await h.click('forgetRemembered');assert.equal(new CarLabels(storage).entries().length,0);
+});
+test('MOCK UI storage denial does not break the live battery workflow or claim a saved car',async()=>{
+  const m=mockCar(),storage={getItem:()=>null,setItem:()=>{throw Error('storage denied');}},h=harness(m.bluetooth,undefined,'compact',storage);
+  await connect(h);await h.click('confirm');await h.click('rememberCar');assert.match(h.el('fleetStatus').textContent,/save|storage/i);
+  await h.click('battery');m.notify([3,0x1b,0x62,0x0e]);assert.match(h.el('batteryResult').textContent,/3682/);
+  assert.equal(new CarLabels(storage).entries().length,0);
+});
+test('MOCK UI cannot confirm a new device using a physical label already bound to another ID',async()=>{
+  const m=mockCar(),storage=memoryStore();new CarLabels(storage).remember({browserId:'original-device-id',name:'Ice Charger'},'S01-A');
+  const h=harness(m.bluetooth,undefined,'evidence',storage);h.set('assignedCar','s01-a');await h.click('live');
+  assert.match(h.el('recognition').textContent,/different browser device/);assert.equal(h.el('confirm').disabled,true);
+  await h.el('confirm').onclick();assert.equal(h.op('engineGreen').disabled,true);assert.equal(m.writes.length,0);
+  await h.click('close');h.set('rememberedCar','original-device-id');await h.click('forgetRemembered');
+  await h.click('live');assert.equal(h.el('confirm').disabled,false);
 });

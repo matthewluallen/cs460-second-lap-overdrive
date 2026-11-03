@@ -21,12 +21,12 @@ function releaseDevice(claim) {
 // The server serves static files. Only the local browser owns a GATT connection.
 export class CarLink {
   constructor(note,closed=()=>{}) { this.note=note;this.closed=closed; }
-  async open(bluetooth,{showAllDevices=false}={}) {
+  async open(bluetooth,{showAllDevices=false,rememberedDevice=null}={}) {
     if(this.opening || this.device) throw new Error('Already connecting or connected');
     if(!bluetooth)throw new Error('Web Bluetooth unavailable. Open the forwarded port in a separate desktop Chrome tab or use replay.');
     this.opening=true;
     const session={};this.session=session;
-    this.selection=null;this.assignedLabel=null;this.connectStarted=false;
+    this.selection=null;this.assignedLabel=null;this.connectStarted=false;this.sdkRequestedOn=false;
     let device,claim,connectStarted=false,stage='chooser';
     const recordSetup=(source,message)=>{
       if(this.note(source,message)===false)throw new Error('Trace capture refused connection setup; no further connection operation attempted');
@@ -38,8 +38,13 @@ export class CarLink {
       const options=showAllDevices
         ? {acceptAllDevices:true,optionalServices:[uuids.service]}
         : {filters:[{services:[uuids.service]}]};
-      recordSetup('LIVE chooser',showAllDevices?'all-device fallback; operator must isolate and identify assigned car':'Anki service filter; select only the assigned car');
-      device=await bluetooth.requestDevice(options);
+      if(rememberedDevice){
+        recordSetup('LIVE remembered selection','operator selected an already authorized browser device; saved label is not a new physical identity check');
+        device=rememberedDevice;
+      }else{
+        recordSetup('LIVE chooser',showAllDevices?'all-device fallback; operator must isolate and identify assigned car':'Anki service filter; select only the assigned car');
+        device=await bluetooth.requestDevice(options);
+      }
       if(this.session!==session)throw new Error('Selection cancelled before connection');
       stage='device ownership';claim=claimDevice(device);this.claim=claim;
       this.device=device;
@@ -87,23 +92,44 @@ export class CarLink {
   }
   async send(name) {
     if(!this.tx || !this.device?.gatt.connected)throw new Error('Car is disconnected');
-    const bytes=frame(name);
-    if(['lampOn','lampOff','sdkOn','sdkOff'].includes(name) && !this.assignedLabel)throw new Error('Confirm the assigned car before changing its headlight or SDK mode');
+    frame(name); // Reject unknown operations before any SDK preparation.
+    if(['lampOn','lampOff','engineGreen','engineOff','sdkOn','sdkOff'].includes(name) && !this.assignedLabel)throw new Error('Confirm the assigned car before changing its lights or SDK mode');
     if(this.pendingWrite)throw new Error('A command write is already in progress');
     const tx=this.tx,device=this.device,session=this.session,pending={};
     this.pendingWrite=pending;
-    try {
-      if(this.note('LIVE TX attempt',hex(bytes)+' · '+name+' (requested; completion and car response not yet known)')===false) {
+    const write=async action=>{
+      if(this.session!==session || !device.gatt.connected)throw new Error('Disconnected before write; no further command sent');
+      const bytes=frame(action),sdk=action==='sdkOn'||action==='sdkOff';
+      if(this.note('LIVE TX attempt',hex(bytes)+' · '+action+' (requested; completion and car response not yet known)')===false) {
         throw new Error('Trace capture refused the command; no write attempted');
       }
+      if(sdk){
+        this.sdkRequestedOn=false;
+        if(this.note('LIVE SDK',(action==='sdkOn'?'Enable':'Leave')+' write pending; actual mode unverified')===false)throw new Error('Trace capture refused SDK preparation; no write attempted');
+      }
+      try{
       if(tx.properties.writeWithoutResponse) await tx.writeValueWithoutResponse(bytes);
       else await tx.writeValueWithResponse(bytes);
       if(this.session!==session || !device.gatt.connected)throw new Error('Disconnected during write; outcome unknown');
-      this.note('LIVE TX',hex(bytes)+' · '+name+' (write completed; observe car or RX)');
+      this.note('LIVE TX',hex(bytes)+' · '+action+' (write completed; observe car or RX)');
+      if(sdk){
+        this.sdkRequestedOn=action==='sdkOn';
+        this.note('LIVE SDK',(this.sdkRequestedOn?'Enable':'Leave')+' write completed; actual mode unverified');
+      }
+      }catch(error){
+        if(sdk&&this.session===session){this.sdkRequestedOn=false;this.note('LIVE SDK','Write failed or completion unknown; actual mode unverified');}
+        throw error;
+      }
+    };
+    try {
+      // Explicit engine-light actions prepare SDK mode, then keep it on for
+      // the visual trial. The whole sequence owns the pending-write lock.
+      if((name==='engineGreen'||name==='engineOff')&&!this.sdkRequestedOn)await write('sdkOn');
+      await write(name);
     } finally { if(this.pendingWrite===pending)this.pendingWrite=null; }
   }
   close() {
-    this.session=null;this.selection=null;this.assignedLabel=null;
+    this.session=null;this.selection=null;this.assignedLabel=null;this.sdkRequestedOn=false;
     const d=this.device;if(!d)return;
     const ownsDevice=ownerOf(d)===this.claim;
     const started=this.connectStarted;this.connectStarted=false;
@@ -117,10 +143,12 @@ export class CarLink {
 }
 export class Replay {
   constructor(note){this.note=note;this.ready=false;}
-  async open(){this.ready=true;this.note('REPLAY','fixture connected; no radio');}
+  async open(){this.ready=true;this.sdkRequestedOn=false;this.note('REPLAY','fixture connected; no radio');}
   async send(name){
     if(!this.ready)throw new Error('Replay closed');
+    if((name==='engineGreen'||name==='engineOff')&&!this.sdkRequestedOn)await this.send('sdkOn');
     const bytes=frame(name);this.note('REPLAY TX',hex(bytes)+' · '+name);
+    if(name==='sdkOn'||name==='sdkOff'){this.sdkRequestedOn=name==='sdkOn';this.note('REPLAY SDK',(this.sdkRequestedOn?'Enable':'Leave')+' rehearsed; no physical car');}
     const replies={ping:[1,0x17],version:[3,0x19,0x34,0x12],battery:[3,0x1b,0x74,0x0e]};
     if(replies[name])for(const row of decode(Uint8Array.from(replies[name])))this.note('REPLAY RX',row.raw+' · '+row.text,row);
   }

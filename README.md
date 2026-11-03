@@ -16,11 +16,14 @@ with a founder profile, development entries and project records.
 Read SIMULATION_NOTICE.txt before testing. This repository is a course scenario.
 There are two runnable paths. The Python simulator models drive/stop in memory.
 The **Chrome bench** can replay fixtures or ask one selected OVERDRIVE car
-for ping, firmware version and battery telemetry, and switch its headlight.
-The live path is implemented but has not been tested on a physical course kit.
+for ping, firmware version and battery telemetry, and request engine LED or
+legacy headlight changes. A November 5 user trace confirms live communication
+on one car; the new engine LED sequence and classroom fleet reconnection still
+require physical validation.
 All motion commands remain simulation-only.
 
 **Class starts here:** [tonight: charge, connect, light](bench/TONIGHT.md) ·
+[30-car enrollment and reconnection](bench/FLEET.md) ·
 [capstone assignment](docs/CS_460_FA_26_Semester_Project.docx) ·
 [founder video](media/second-lap-pitch.mp4) ·
 [Chrome laptop setup and first battery check](bench/LAPTOPS.md) ·
@@ -56,7 +59,7 @@ the server to reset those records. A page reload only resets the default local
 store. Keep real kit evidence out of either worksheet store.
 
 On the evidence page, start in replay, then compare a live off-charger reading.
-Confirm the assigned physical car before enabling its headlight controls, and record the visible
+Confirm the assigned physical car before enabling its light controls, and record the visible
 result separately from the write. Trace entries identify their source. The Python
 simulator requires Python 3.10+ and no extra packages:
 

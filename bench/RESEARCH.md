@@ -1,6 +1,6 @@
 # Public implementation review for the classroom bench
 
-Research date: **2026-11-04**. This is the actual review date; dates in the
+Initial research: **2026-11-04**; LED/fleet follow-up: **2026-11-05**. These are actual review dates; dates in the
 repository's fictional company history are separate. The review inspected source
 at the revisions below, not just project descriptions. No physical car, firmware,
 charger or browser Bluetooth combination was qualified during this review.
@@ -47,8 +47,10 @@ publishes the usable client and sends SDK mode `03 90 01 01`, followed by offset
 zero `05 2c 00 00 00 00`. Writes to `…bee1` are serialized and explicitly use
 write-without-response. Notification readiness is a sound prerequisite for
 requests. The offset command addresses later lane changes; this source does not
-show that battery or LED operation requires it. The bench keeps SDK enabling
-explicit and uses flags zero, without localization override. Sources:
+show that battery or LED operation requires it. The bench uses flags zero,
+without localization override. SDK mode is requested by its explicit control or
+as the first step of a user-selected engine LED command; connecting alone sends
+no command. Sources:
 [initialization](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/anki/vehicle.py#L102-L110),
 [writes](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/anki/vehicle.py#L163-L167).
 
@@ -58,8 +60,9 @@ to change and their new values. Headlight on is `02 1d 11`; off is `02 1d 01`.
 and front lights (`02 1d 55` / `02 1d 05`). Its `0x33` builder supports up to three
 channel/effect/intensity tuples, used for RGB player colors and game effects.
 The light experiment explicitly anticipates possible reboots, and its “OK” checks
-link survival, not visible illumination. Prefer steady headlight on/off tonight
-and record the physical observation separately from TX completion. Sources:
+link survival, not visible illumination. The bench retains legacy headlights
+and now offers a fixed steady green/off engine pattern; record the physical
+observation separately from TX completion. Sources:
 [encoders](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/anki/protocol.py#L88-L121),
 [identify](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/game/game.py#L453-L454),
 [light experiment](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/tools/lights_test.py#L1-L44).
@@ -153,6 +156,54 @@ reinforce keeping raw mV. Sources: [controller](https://github.com/gravesjohnr/A
 [alternate battery denominator](https://github.com/gravesjohnr/AnkiNodeDrive/blob/91ef23d3ede63197e2a8da38bb91eb3511dafd01/messageParse.js#L19-L25),
 [dependencies and GPL-3.0 declaration](https://github.com/gravesjohnr/AnkiNodeDrive/blob/91ef23d3ede63197e2a8da38bb91eb3511dafd01/package.json).
 
+## November 5 LED and fleet follow-up
+
+A user-provided live trace contains ping and battery replies, plus version frame
+`05 19 27 25 00 00`. It records legacy `0x1d` headlight writes without a visible
+change reported by the operator. SDK mode was enabled and then disabled before
+the next light attempt: the trace does not test a light while SDK mode remains
+enabled. It does not establish charging success, capacity or LED compatibility.
+The full trace and identifying timestamps are not published here.
+
+Partydrive decodes the version as a 32-bit little-endian value: **9511 / 0x2527**.
+The original SDK defines a 16-bit value. The bench therefore accepts the exact
+legacy four-byte and observed six-byte version frames, retaining raw bytes.
+[Partydrive decoder](https://github.com/MasterAirscrachDev/Anki-Partydrive/blob/c2d161bfd47ee453aa343658e86fa2762e259354/OverdriveServer/Protocol.cs#L331) ·
+[legacy version definition](https://github.com/anki/drive-sdk/blob/410352617b8660338746a6bb2b2dd173afb1b91a/src/protocol.h#L92).
+
+For engine RGB, the full `0x33` frame carries three five-byte entries:
+`channel, effect, start, end, cycles`. Red/green/blue are channels `00/03/02`;
+steady is `00`, intensity is bounded at `0e`, and these commands use zero cycles.
+Both engine actions request `03 90 01 00` first if SDK mode has not already been
+requested this session. Keep that request active through the off attempt, then
+leave SDK mode with `03 90 00 00`. The displayed state means a write completed,
+not that firmware acknowledged a mode or a person saw the LED.
+
+```text
+engineGreen: 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00
+engineOff:   11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00
+```
+
+These fixed packets agree with the [official definitions](https://github.com/anki/drive-sdk/blob/410352617b8660338746a6bb2b2dd173afb1b91a/src/protocol.h#L272),
+[steady RGB example](https://github.com/anki/drive-sdk/blob/410352617b8660338746a6bb2b2dd173afb1b91a/examples/vehicle-tool/vehicle_cmd.c#L719),
+[Partydrive builder](https://github.com/MasterAirscrachDev/Anki-Partydrive/blob/c2d161bfd47ee453aa343658e86fa2762e259354/OverdriveServer/CarSystem.cs#L478)
+and [OVERDRIVE-specific Node implementation](https://github.com/gravesjohnr/AnkiNodeDrive/blob/91ef23d3ede63197e2a8da38bb91eb3511dafd01/ankiNodeUtils.js#L383).
+The Node source distinguishes the newer pattern API from limited legacy light
+behavior. This is source agreement, not a successful LED test on firmware 9511.
+
+For 15 assigned pairs, [FLEET.md](FLEET.md) uses unique physical labels and a local
+label registry keyed by browser device ID. **Remember confirmed car** is explicit;
+**Refresh remembered cars** intersects those saved IDs with `getDevices()` grants.
+This is permission lookup, not a scan or presence test. Reconnect targets one
+saved device and requires fresh physical confirmation. No model inference, MAC
+lookup, fleet blinking or automatic multi-car connection is involved. IDs and
+saved labels belong to the retained browser profile/origin; lost grants or a
+changed origin require isolated enrollment again.
+[Web Bluetooth device/permission model](https://bluetooth.spec.whatwg.org/#dom-bluetooth-getdevices).
+
+These updates are on PR branch `codex/classroom-charge-connect-led` until merged.
+Actual testing/review dates above remain distinct from fictional Git chronology.
+
 ## Future native adapter and validation boundary
 
 Current [Bleak scanner documentation](https://bleak.readthedocs.io/en/latest/api/scanner.html)
@@ -172,9 +223,11 @@ software examples, not radio connectivity, charging or illumination. Arena's
 [MIT license](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/LICENSE)
 requires notice preservation when copying substantial code; its
 [credits](https://github.com/Leicas/overdrive-arena/blob/ff03e265e77be237c329a512b92b6fb579abbeb9/README.md#L317-L327)
-identify SDK and Partydrive inputs. This bench imports no third-party implementation.
+identify SDK and Partydrive inputs. The bench's BLE protocol code does not import
+these implementations; its optional Node platform dependencies are documented
+separately in [DEPENDENCY-LAB.md](DEPENDENCY-LAB.md).
 
-Track fusion, native gateways, RGB patterns and multi-car control remain separate
+Track fusion, native gateways, arbitrary RGB patterns and multi-car control remain separate
 future acceptance work. Tonight, save synthetic REPLAY 3700 mV first, disconnect
 and clear, then collect a matching LIVE reply or exact five-second failure stage.
 Record charging and LED appearance independently. No successful write, inferred

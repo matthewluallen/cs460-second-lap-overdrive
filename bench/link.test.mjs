@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CarLink,Replay} from './link.mjs';
-import {uuids} from './protocol.mjs';
+import {uuids,frame} from './protocol.mjs';
 
 function mockCar({withResponse=false,failStage=null}={}) {
   const log=[],writes=[],choices=[],device=new EventTarget(),rx=new EventTarget();
@@ -172,4 +172,43 @@ for(const refusedStage of ['selection','connecting'])test('MOCK '+refusedStage+'
   assert.equal(m.device.gatt.connected,true);assert.equal(m.writes.length,0);
   const replacement=new CarLink(()=>undefined);await replacement.open(m.api);
   assert.equal(connects,1);replacement.close();assert.equal(disconnects,1);
+});
+
+test('MOCK engine trial prepares SDK once and leaves it enabled through off, with no connection-time writes',async()=>{
+  const m=mockCar();await m.link.open(m.api);assert.equal(m.writes.length,0);
+  await assert.rejects(m.link.send('engineGreen'),/Confirm the assigned car/);
+  await assert.rejects(m.link.send('engineOff'),/Confirm the assigned car/);assert.equal(m.writes.length,0);
+  m.link.confirmAssignedCar('S01-A');
+  await m.link.send('engineGreen');await m.link.send('engineOff');await m.link.send('sdkOff');
+  assert.deepEqual(m.writes,['sdkOn','engineGreen','engineOff','sdkOff'].map(a=>[...frame(a)]));
+  await m.link.send('engineGreen');assert.deepEqual(m.writes.slice(-2),['sdkOn','engineGreen'].map(a=>[...frame(a)]));
+  m.link.close();
+});
+test('MOCK failed SDK preparation stops the engine command and permits an explicit retry',async()=>{
+  const m=mockCar();await m.link.open(m.api);m.link.confirmAssignedCar('S01-A');
+  const original=m.tx.writeValueWithoutResponse;
+  m.tx.writeValueWithoutResponse=async bytes=>{m.writes.push([...bytes]);throw Error('SDK write denied');};
+  await assert.rejects(m.link.send('engineGreen'),/SDK write denied/);
+  assert.deepEqual(m.writes,[[...frame('sdkOn')]]);assert.equal(m.link.sdkRequestedOn,false);
+  m.tx.writeValueWithoutResponse=original;await m.link.send('engineGreen');
+  assert.deepEqual(m.writes.slice(-2),['sdkOn','engineGreen'].map(a=>[...frame(a)]));m.link.close();
+});
+test('MOCK engine sequence owns the write lock across SDK preparation and stops on disconnect',async()=>{
+  const m=mockCar(),gate=deferred();await m.link.open(m.api);m.link.confirmAssignedCar('S01-A');
+  m.tx.writeValueWithoutResponse=async bytes=>{m.writes.push([...bytes]);await gate.promise;};
+  const sending=m.link.send('engineGreen');await assert.rejects(m.link.send('sdkOff'),/already in progress/);
+  m.link.close();gate.resolve();await assert.rejects(sending,/Disconnected during write/);
+  assert.deepEqual(m.writes,[[...frame('sdkOn')]]);
+});
+test('MOCK trace refusal between SDK and engine stops the second write',async()=>{
+  const m=mockCar(),log=m.link.note;m.link.note=(kind,message)=>kind==='LIVE TX attempt'&&message.includes('engineGreen')?false:log(kind,message);
+  await m.link.open(m.api);m.link.confirmAssignedCar('S01-A');
+  await assert.rejects(m.link.send('engineGreen'),/Trace capture refused/);
+  assert.deepEqual(m.writes,[[...frame('sdkOn')]]);m.link.close();
+});
+test('MOCK remembered device uses its exact permission object without a new chooser or implicit writes',async()=>{
+  const m=mockCar();let chooser=0;
+  await m.link.open({requestDevice:async()=>{chooser++;throw Error('must not choose another car');}},{rememberedDevice:m.device});
+  assert.equal(chooser,0);assert.equal(m.link.selection.browserId,m.device.id);assert.equal(m.writes.length,0);
+  await assert.rejects(m.link.send('engineGreen'),/Confirm the assigned car/);m.link.close();
 });
