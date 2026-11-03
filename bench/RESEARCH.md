@@ -232,3 +232,12 @@ future acceptance work. Tonight, save synthetic REPLAY 3700 mV first, disconnect
 and clear, then collect a matching LIVE reply or exact five-second failure stage.
 Record charging and LED appearance independently. No successful write, inferred
 percentage or replay result proves a physical car responded.
+
+**Saved-device support caveat (November 5 browser check).** The Chrome 156-based
+preview exposed basic Web Bluetooth but not `getDevices()`. The
+[implementation status](https://github.com/whatwg/bluetooth/blob/main/implementation-status.md)
+and [Chrome sample](https://googlechrome.github.io/samples/web-bluetooth/get-devices.html)
+still describe experimental flag dependencies. The bench therefore retains
+explicitly selected device objects for saved-ID reconnect in the same open page.
+It feature-detects saved-permission lookup after reload and otherwise requires
+isolated selection again. Neither route discovers physical identity automatically.

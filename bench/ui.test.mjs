@@ -356,7 +356,7 @@ test('MOCK UI rejects a known-car label mismatch and missing or unsupported perm
   assert.match(h.el('recognition').textContent,/label differs/);assert.equal(h.el('confirm').disabled,true);
   await h.el('confirm').onclick();assert.equal(h.op('engineGreen').disabled,true);assert.equal(m.writes.length,0);
   await h.click('close');await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/cannot list prior permissions/);
-  h.set('rememberedCar',m.device.id);assert.equal(h.el('connectRemembered').disabled,true);
+  h.set('rememberedCar',m.device.id);assert.equal(h.el('connectRemembered').disabled,false); // Granted handle retained in this page.
   m.bluetooth.getDevices=async()=>[];await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/0 remembered/);
   assert.equal(h.el('connectRemembered').disabled,true);await h.click('forgetRemembered');assert.equal(new CarLabels(storage).entries().length,0);
 });
@@ -373,4 +373,19 @@ test('MOCK UI cannot confirm a new device using a physical label already bound t
   await h.el('confirm').onclick();assert.equal(h.op('engineGreen').disabled,true);assert.equal(m.writes.length,0);
   await h.click('close');h.set('rememberedCar','original-device-id');await h.click('forgetRemembered');
   await h.click('live');assert.equal(h.el('confirm').disabled,false);
+});
+test('MOCK UI reconnects either enrolled car in the same open page without getDevices support',async()=>{
+  const a=mockCar(),b=mockCar(),storage=memoryStore();b.device.id='second-open-page-id';a.device.name=b.device.name='International MXT';
+  let selected=a.device,choosers=0;
+  const bluetooth={requestDevice:async()=>{choosers++;return selected;}};
+  const h=harness(bluetooth,undefined,'compact',storage);
+  h.set('assignedCar','S01-A');await h.click('live');await h.click('confirm');await h.click('rememberCar');await h.click('close');
+  selected=b.device;h.set('assignedCar','S01-B');await h.click('live');await h.click('confirm');await h.click('rememberCar');await h.click('close');
+  await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/2 remembered car\(s\) can reconnect in this open page/);
+  h.set('rememberedCar',a.device.id);await h.click('connectRemembered');assert.equal(choosers,2);
+  assert.equal(a.device.gatt.connected,true);assert.equal(b.device.gatt.connected,false);assert.equal(h.op('engineGreen').disabled,true);
+  await h.click('close');h.set('rememberedCar',b.device.id);await h.click('connectRemembered');assert.equal(choosers,2);
+  assert.equal(b.device.gatt.connected,true);assert.equal(a.device.gatt.connected,false);await h.click('close');
+  const reload=harness(bluetooth,undefined,'compact',storage);reload.set('rememberedCar',b.device.id);assert.equal(reload.el('connectRemembered').disabled,true);
+  assert.equal(a.writes.length+b.writes.length,0);
 });

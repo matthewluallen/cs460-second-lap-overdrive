@@ -158,7 +158,7 @@ identifying timestamps are not included in public documentation.
 The follow-up adds fixed engine green/off patterns, SDK-on sequencing for those
 actions, both version widths and explicitly remembered physical labels. These
 changes are under review on PR branch `codex/classroom-charge-connect-led`, not
-assumed present on `main`. The `fleet-led-v1` follow-up passed **118 JavaScript tests** (100 bench and
+assumed present on `main`. The `fleet-led-v1` follow-up passed **119 JavaScript tests** (101 bench and
 18 platform) and **28 Python tests** locally on November 5, 2026. The checks
 exercise:
 
@@ -175,7 +175,11 @@ exercise:
 A Chrome 156 macOS browser rehearsal of the evidence page returned REPLAY
 3700 mV, then recorded SDK-on, engine-green, engine-off and explicit SDK-off
 in that order. The interface kept the no-physical-LED label throughout. No
-Bluetooth chooser or car connection was used for this rehearsal.
+Bluetooth chooser or car connection was used for this rehearsal. The preview
+reported `getDevices()` unavailable; its explicit fallback message was verified.
+An additional two-car mock verifies reconnecting either enrolled device within
+the same page without this API, no repeated chooser, renewed confirmation, and
+loss of retained objects after reload.
 
 The label registry detects a changed backing value before saving, protecting
 against ordinary stale-tab overwrites; it is not an atomic transaction across

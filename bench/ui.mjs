@@ -121,6 +121,7 @@ async function connect(live,rememberedDevice=null){
     if(live){
       $('selection').textContent='Selected Chrome name: '+(next.selection.name||'(not supplied)')+' · browser device ID: '+(next.selection.browserId||'(not supplied)')+' · not yet confirmed';
       const known=carLabels.find(next.selection.browserId);
+      if(known){rememberedDevices.set(next.selection.browserId,next.device);renderRemembered();}
       $('recognition').textContent=known?'Remembered label: '+known.label+'. Verify that physical label before confirming.':'New to this browser. Enroll with only one car powered on nearby; then confirm its physical label.';
       if(known&&known.label!==label)$('recognition').textContent+=' Your entered label differs; light controls stay locked. Disconnect and use the remembered car. To correct an old mapping, forget its label while disconnected and enroll again.';
       if(labelConflict())$('recognition').textContent='That physical label is already saved for a different browser device. Light controls stay locked. Disconnect and choose the remembered car; if permissions changed, forget the old label and enroll the isolated car again.';
@@ -146,10 +147,10 @@ $('refreshCars').onclick=async()=>{
   const request=++refreshNumber,current=session;
   refreshingCars=true;controls();
   try{
-    rememberedDevices.clear();
-    if(typeof navigator.bluetooth?.getDevices!=='function')throw Error('This browser cannot list prior permissions. Use Choose assigned car; saved labels are recognized after selection.');
+    if(typeof navigator.bluetooth?.getDevices!=='function')throw Error('This browser cannot list prior permissions. '+rememberedDevices.size+' remembered car(s) can reconnect in this open page. Keep the page open; after reload, use Choose assigned car with isolated enrollment again.');
     const devices=await navigator.bluetooth.getDevices();
     if(current!==session||request!==refreshNumber)return;
+    rememberedDevices.clear();
     for(const device of devices)if(carLabels.find(device.id))rememberedDevices.set(device.id,device);
     $('fleetStatus').textContent=rememberedDevices.size+' remembered car permission(s) available. This is not a scan or proof that a car is nearby. Missing permission? Enroll again with only that car powered on.';
   }catch(error){if(current===session)$('fleetStatus').textContent=error.message;}
@@ -159,7 +160,8 @@ $('rememberCar').onclick=()=>{
   if($('rememberCar').disabled)return;
   try{
     const saved=carLabels.remember(link.selection,confirmedSession.label);
-    $('fleetStatus').textContent='Remembered '+saved.label+' in this browser for this site. Recheck the physical label on every connection.';
+    rememberedDevices.set(saved.browserId,link.device);
+    $('fleetStatus').textContent='Remembered '+saved.label+' in this browser for this site. Reconnect is ready while this page stays open. After a reload, Refresh needs browser support or isolated selection again. Recheck the physical label on every connection.';
     note('LIVE operator','saved browser-device label '+JSON.stringify(saved)+'; operator mapping, not authenticated identity');
     renderRemembered();
   }catch(error){$('fleetStatus').textContent=error.message;}

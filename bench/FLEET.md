@@ -37,17 +37,28 @@ before switching pages; active sessions do not transfer.
 
 **Later sessions**
 
-Power on the assigned car and click **Refresh remembered cars**. Select its
-physical label, click **Reconnect remembered car**, then match the physical car
-again and click **Confirm assigned car**. Reconnection does not carry forward
-the previous session's confirmation.
+Keep the enrollment page open. Select a saved physical label, click **Reconnect
+remembered car**, then match the physical car again and click **Confirm assigned
+car**. Disconnect before selecting the other car. The page retains each enrolled
+Bluetooth device object, so this path does not require `getDevices()` or another
+chooser. Only one car is connected at a time.
 
-Refresh uses `getDevices()` to check permission for IDs this bench previously
-saved; only a saved ID with a returned grant can reconnect. Saved labels may
-still appear without a usable grant. It does not scan the room, connect automatically or discover
-MAC addresses. A remembered entry is a permission record, not evidence that a
-car is powered on, nearby or available. The Web Bluetooth specification
-explicitly allows returned devices to be out of range.
+After a page reload, click **Refresh remembered cars**. Where supported,
+`getDevices()` restores previously granted objects for saved IDs. Saved labels
+may appear without usable grants. If this API is unavailable, keep the page open
+and select each isolated car again to restore its device object; remembered
+labels remain hints and never unlock light controls automatically.
+
+Chrome's published implementation status still lists saved-device lookup and
+persistent permissions behind experimental flags. Our Chrome 156-based preview
+did not expose `getDevices()`. Do not assume that ordinary Web Bluetooth support
+also includes saved-device lookup. No browser flags are changed by this bench.
+[Implementation status](https://github.com/whatwg/bluetooth/blob/main/implementation-status.md) ·
+[Chrome saved-device sample](https://googlechrome.github.io/samples/web-bluetooth/get-devices.html)
+
+Refresh does not scan the room, connect automatically or discover MAC addresses.
+A remembered object or permission record does not establish that a car is
+powered on, nearby or available.
 [Web Bluetooth: getDevices](https://bluetooth.spec.whatwg.org/#dom-bluetooth-getdevices)
 
 Keep the same Chrome profile, site origin and permissions. Bookmark the exact

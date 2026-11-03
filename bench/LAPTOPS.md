@@ -121,3 +121,11 @@ Platform references (consulted 4 November 2026; platform support is not proof of
 
 Remembered-device semantics rechecked 5 November 2026:
 [Web Bluetooth permission and device model](https://bluetooth.spec.whatwg.org/#dom-bluetooth-getdevices).
+
+### Browser without saved-device lookup
+
+Ordinary Bluetooth support does not guarantee `getDevices()`. Enroll both cars
+and keep one bench page open: retained device objects allow deliberate saved-ID
+reconnection without this optional API. After a reload, unsupported browsers
+need isolated selection again. See [FLEET.md](FLEET.md) for the complete fallback
+and the primary-source browser-support references. No flags are changed by the app.

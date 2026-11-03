@@ -144,3 +144,8 @@ chooser/connection attempt, notification delivery, battery reply, SDK behavior
 (if used), and visible engine LED on/off on the exact kit/model/firmware and host.
 The automated checks use fixtures and mock GATT objects; they do not qualify any
 physical car, charger, firmware or Bluetooth adapter.
+
+Keep the fleet enrollment page open when switching between your two cars. If
+Chrome cannot list saved permissions, the current page retains selected device
+objects for reconnecting; reloading requires isolated selection again. See
+[FLEET.md](FLEET.md) before simultaneous classroom use.
