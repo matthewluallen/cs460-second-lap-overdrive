@@ -21,8 +21,9 @@ function releaseDevice(claim) {
 // The server serves static files. Only the local browser owns a GATT connection.
 export class CarLink {
   constructor(note,closed=()=>{}) { this.note=note;this.closed=closed; }
-  async open(bluetooth,{showAllDevices=false,rememberedDevice=null}={}) {
+  async open(bluetooth,{showAllDevices=false,rememberedDevice=null,expectedBrowserId=null}={}) {
     if(this.opening || this.device) throw new Error('Already connecting or connected');
+    if(expectedBrowserId!==null && (typeof expectedBrowserId!=='string' || !expectedBrowserId))throw new Error('A saved car check requires its nonempty browser device ID');
     if(!bluetooth)throw new Error('Web Bluetooth unavailable. Open the forwarded port in a separate desktop Chrome tab or use replay.');
     this.opening=true;
     const session={};this.session=session;
@@ -46,6 +47,15 @@ export class CarLink {
         device=await bluetooth.requestDevice(options);
       }
       if(this.session!==session)throw new Error('Selection cancelled before connection');
+      // A model name is shared by many students' cars. Check a saved assignment
+      // before claiming or touching GATT, including when the chooser is needed.
+      if(expectedBrowserId!==null){
+        stage='saved car check';
+        if(device.id!==expectedBrowserId){
+          recordSetup('LIVE identity check','selected browser device does not match the saved car; no GATT connection attempted');
+          throw new Error('Selected device does not match your saved car. Cancel if the picker is ambiguous. If permissions changed, enroll your physically isolated car again.');
+        }
+      }
       stage='device ownership';claim=claimDevice(device);this.claim=claim;
       this.device=device;
       this.selection=Object.freeze({name:device.name||'',browserId:device.id||''});

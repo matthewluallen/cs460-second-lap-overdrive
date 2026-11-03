@@ -6,31 +6,48 @@ and a visible engine LED change. No driving is part of this activity. A supplied
 5 November 2026 trace contains live battery replies, but successful LED behavior
 and the remembered-car workflow remain **hardware-unverified** on the course kits.
 
-The fleet/engine LED update is on PR branch `codex/classroom-charge-connect-led`;
-use that reviewed revision until it is merged into `main`. For 15 students with
-two cars each, start with [fleet enrollment](FLEET.md). Ice Charger and
+**Preparation:** the fleet/engine LED update is on PR branch
+`codex/classroom-charge-connect-led`, not yet `main`. Merge the reviewed PR before
+assigning this workflow. Each of the 15 students then creates or updates their
+own GitHub Codespace from **main** for their own two Fast & Furious cars. Start
+with [pair enrollment and the before-class browser trial](FLEET.md). Ice Charger and
 International MXT names repeat; physical labels `S01-A`/`S01-B` through
-`S15-A`/`S15-B` identify assignments, not the model names.
+`S15-A`/`S15-B` identify your own pair. Save your mappings locally; no central
+instructor enrollment database is required.
 
 For this documented activity, open the [evidence page](evidence.html) **before
 starting replay or connecting a car** (`http://localhost:8000/evidence.html`
 locally). The main [Quick activity](index.html) page has compact car controls;
 LED observation forms and Save/Clear trace controls are on the evidence page.
 Finish and disconnect before switching pages. Session state and traces do not
-transfer; switching requires a fresh attempt.
+transfer; switching requires a fresh attempt. Use your normal Chrome profile on
+your physical laptop and bookmark the exact private forwarded HTTPS address for
+your Codespace's port 8000. Use the same profile and origin at home and in class.
+The cloud serves the page; the laptop owns the radio. Private Codespace access
+does not establish car ownership or hide other students' nearby cars.
 
 ## 1. Prepare and charge the assigned kit
 
 - Label the car and record its model, assigned kit label and starting Git revision.
   Do not infer the model or student assignment from a browser ID.
-- Use the instructor-provided charging equipment and the instructions for that
+- Optionally record a Bluetooth address from a separate trusted source in your
+  private inventory or connection context. An address suffix can be included in
+  the Assigned car label (maximum 80 characters) **before first enrollment**;
+  keep an already saved label unchanged. The page cannot read a MAC, match typed
+  addresses or connect by address, and the chooser may not display one. This is
+  an operator note, not verified identity. Keep actual addresses out of the public
+  GitHub repository; see [FLEET.md](FLEET.md).
+- Use the charging equipment provided for your kit and the instructions for that
   kit. Record when charging started and ended, the charger used, and what its
   indicators actually did. Do not assume one light color or charging time applies
   to every model. If the car or battery is damaged, swollen or unusually hot,
   stop and tell the instructor; do not open or repair it during this activity.
 - Take the car **off the charger**, power it on and keep it stationary with wheels
-  clear. Release other apps, tabs and laptops that may still control it. Stagger
-  enrollment: power on one assigned car, with all other classroom cars off.
+  clear. Release other apps, tabs and laptops that may still control it. At home,
+  enroll one of your cars with your second car off. In class, use a quiet area
+  away from the shared tracks and other powered cars, or coordinate nearby
+  owners to switch their cars off briefly. Only your intended car should be in
+  this enrollment area's Bluetooth reach; the whole class need not power down.
 - Open the evidence page in desktop Google Chrome on the physical laptop. Follow
   [laptop setup](LAPTOPS.md) and [launch instructions](BENCH.md). Start connection
   in Chrome's chooser; OS pre-pairing is not the default step.
@@ -51,7 +68,9 @@ and evidence record.
 2. Click **Choose assigned car**. The default chooser filters for the Anki
    service. Select only an entry you can identify as your assigned car. A model
    name can be shared by several cars; an absent or duplicate name is not enough.
-   **Cancel if uncertain.** Do not use another student's car to find out.
+   **Cancel if uncertain** and improve the physical isolation. Do not use another
+   student's car to find out. Signal strength/RSSI or a disconnected candidate
+   is not proof that a car belongs to you.
 3. If the filtered chooser is empty, release competing connections and check
    power first. Some firmware may not advertise the service. Only after isolating
    the assigned car, explicitly select the all-devices fallback and try again.
@@ -64,13 +83,17 @@ and evidence record.
    LED and SDK controls remain locked until confirmation. If the choice is
    wrong, disconnect and select again; no command is sent just by connecting.
 6. During enrollment, click **Remember confirmed car** to save that label against
-   the browser-scoped device ID. On later visits, **Refresh remembered cars**,
-   select the saved label and click **Reconnect remembered car**. Confirm the
-   physical assignment again on every connection. Refresh checks permission
-   grants for saved labels, including cars that may be off or absent; it is not
-   a nearby-car scan. A saved label alone does not enable reconnection.
-   If remembered access is unsupported or missing, repeat the isolated chooser
-   procedure. Keep the same browser profile and page origin; see [FLEET.md](FLEET.md).
+   the browser-scoped device ID. In the same open page, select that label and
+   **Reconnect remembered car** using its retained device object. After reload,
+   **Refresh remembered cars** can recover permission objects where supported;
+   it lists granted devices, including absent ones, without scanning or connecting.
+   If only the saved label remains, **Reconnect remembered car** opens Chrome's
+   chooser and rejects a different browser ID before GATT connection or commands.
+   Cancel if entries are indistinguishable. If Chrome no longer retains that
+   ID/permission, repeat isolated enrollment rather than guessing.
+   Confirm the physical assignment on every connection. Labels and permissions
+   do not transfer to a different profile, origin or another student's Codespace;
+   a saved label does not prove a grant persists. See [FLEET.md](FLEET.md).
 
 ## 4. Collect battery and LED observations
 
@@ -145,7 +168,8 @@ chooser/connection attempt, notification delivery, battery reply, SDK behavior
 The automated checks use fixtures and mock GATT objects; they do not qualify any
 physical car, charger, firmware or Bluetooth adapter.
 
-Keep the fleet enrollment page open when switching between your two cars. If
-Chrome cannot list saved permissions, the current page retains selected device
-objects for reconnecting; reloading requires isolated selection again. See
-[FLEET.md](FLEET.md) before simultaneous classroom use.
+Keep your enrollment page open when switching between your two cars. Chrome may
+not support saved-device lookup or permission recovery after reload; the guarded
+chooser still requires the same previously enrolled browser ID. Rehearse that
+path before class, plan a quiet area if enrollment is needed, and never assume
+shared-track proximity proves ownership. See [FLEET.md](FLEET.md).

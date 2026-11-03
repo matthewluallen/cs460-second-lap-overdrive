@@ -2,14 +2,21 @@
 
 Follow [tonight’s charge, connect and light checklist](TONIGHT.md) for the full
 activity; this page covers laptop setup and the battery evidence checkpoint.
-For the 30-car classroom, enroll each uniquely labelled car using [FLEET.md](FLEET.md).
-Repeated Ice Charger or International MXT names do not identify a student's car.
-Fleet/engine controls are on PR branch `codex/classroom-charge-connect-led` until
-merged; verify the served Git revision rather than assuming `main` includes them.
+Each of the 15 students owns two Fast & Furious cars and uses their own GitHub
+Codespace. Enroll your uniquely labelled pair using [FLEET.md](FLEET.md).
+Repeated Ice Charger or International MXT names do not identify your car.
+**Preparation:** fleet/engine controls are on PR branch
+`codex/classroom-charge-connect-led`, not yet `main`. Merge the reviewed PR before
+class; students then create or update their own Codespace from **main** and
+record its served revision. Do not assume an older Codespace includes the controls.
 
 Use **desktop Google Chrome on the student's physical laptop** for all four platforms.
 A Codespace can serve the page; it cannot use its remote host as your laptop's radio.
-Use the private forwarded HTTPS port in a separate tab (or local http://localhost:8000).
+Use your own normal Chrome profile and the private forwarded HTTPS address for
+port 8000 in a separate tab. Bookmark that exact address for home and classroom
+use. A local http://localhost:8000 launch is an alternative origin with separate
+permissions and labels. Access to your private Codespace is not permission to
+control a particular car; Chrome can still show other students' nearby cars.
 Do not open the HTML as a file, use an editor preview iframe, or use a remote desktop browser.
 
 For the saved battery checkpoint below, choose the [evidence page](evidence.html)
@@ -34,27 +41,54 @@ Do not guess a PIN. Absence of a PIN dialog does not establish how the link is s
 ## Remembering the assigned pair
 
 After an isolated chooser connection and **Confirm assigned car**, use **Remember
-confirmed car**. Later choose **Refresh remembered cars**, select the saved label
-and **Reconnect remembered car**; confirm the physical car again before LED/SDK
-changes. The list matches saved labels to `getDevices()` permission grants, not
-nearby advertisements or online status. There is no automatic fleet scan, model
-inference or MAC-address lookup. If this browser cannot refresh remembered grants,
-the manual chooser remains the fallback.
+confirmed car** for your labels, such as `S01-A` and `S01-B`. These are your local
+assignment hints, not an instructor-managed database. Keep the same page open:
+its retained device objects let you select a label and **Reconnect remembered
+car** without `getDevices()`. Confirm the physical car again before LED/SDK changes.
+
+After reload, **Refresh remembered cars** can recover permission objects where
+that optional browser API works. If a saved label has no usable object,
+**Reconnect remembered car** opens a guarded chooser: a different browser ID is
+rejected before GATT connection or commands. This helps only while the original
+browser identity remains available. Cancel when entries are indistinguishable;
+use physical isolation rather than guessing, and re-enroll if permission/ID
+changes prevent a match. Refresh is not a scan or online-status check. There is
+no automatic fleet scan, model inference or MAC-address lookup.
 
 Use the same Chrome profile and exact origin (scheme, host and port) each time.
 For example, `localhost:8000` and `127.0.0.1:8000` are different origins, as is a
-new port or forwarded HTTPS address. IDs are useful only within the retained
-browser/site permission; they are not hardware serials. Clearing permissions or
+new port, newly created Codespace or different forwarded HTTPS address. IDs are
+useful only within the retained browser/site permission; they are not hardware
+serials or Bluetooth addresses. Clearing permissions or
 site data, changing profile/origin or losing the saved label requires isolated
-enrollment again. Moving between the quick and evidence paths on the same origin
-can retain the registry, but never transfers an active session or trace.
+enrollment again. Labels do not transfer between your classmates' Codespaces.
+Moving between quick and evidence paths on the same origin can retain the
+registry, but loses the old page's device objects and never transfers a session
+or trace. Save and disconnect before navigating. Pulling updated `main` at the
+same origin does not itself change the browser's permission scope.
+
+You may keep a Bluetooth address from a separate trusted source in your private
+car inventory or connection context. Before initial enrollment, an address suffix
+can be included in the 80-character Assigned car label. Keep an already enrolled
+label unchanged unless deliberately forgetting/re-enrolling it. The page cannot
+read or match a typed MAC address, and Chrome's chooser is not promised to show
+one. This note does not verify identity; do not publish actual addresses in the
+GitHub repository. See [FLEET.md](FLEET.md) for the inventory guidance.
+
+Before class, rehearse same-page reconnection and, after saving/disconnecting,
+a reload plus **Refresh remembered cars** on this exact laptop/profile/origin.
+Record support and outcomes; ordinary Bluetooth support does not guarantee
+saved-device lookup or persistent permissions. See [FLEET.md](FLEET.md) for the
+home trial and a crowded-class first-enrollment plan. No flags are changed by the app.
 
 ## Positive control, then live observation
 1. Label the kit; charge it, take the car **off the charger**, power it on and
    keep it stationary with wheels clear. Release other controller apps/tabs.
-   During enrollment, have only the assigned car powered and all other classroom
-   cars off;
-   if you cannot identify the chooser entry, cancel. Never select a nearby
+   At home, enroll one of your cars with the second off. In class, use a quiet
+   area away from shared tracks and powered cars, or coordinate with nearby
+   owners to switch their cars off briefly. Only the intended car should be in
+   this enrollment area's Bluetooth reach; the whole class need not power down.
+   If you cannot identify the chooser entry, cancel. Never select a nearby
    peripheral just to see whether it is your car.
 2. On the evidence page, Start replay → Battery. Expect a **REPLAY** reply of 3700 mV. Save a trace,
    disconnect and start a fresh trace before live work. The fixture never touches the radio.
@@ -97,6 +131,7 @@ instructor-approved runtime test before making a battery-life claim.
   not advertise the service; the isolated-car fallback is an explicit second
   attempt, never an automatic broad scan. Failure to advertise is different from
   an empty battery. Cancel on duplicate or unrecognizable names.
+  Signal strength/RSSI or disconnecting a candidate is not proof of ownership.
 - Connected but no RX: record notification setup, request bytes and timeout;
   check the exact model/firmware and optional SDK step before assigning cause.
 - Battery replies but no light: use the engine LED control while SDK mode remains
@@ -124,8 +159,9 @@ Remembered-device semantics rechecked 5 November 2026:
 
 ### Browser without saved-device lookup
 
-Ordinary Bluetooth support does not guarantee `getDevices()`. Enroll both cars
-and keep one bench page open: retained device objects allow deliberate saved-ID
-reconnection without this optional API. After a reload, unsupported browsers
-need isolated selection again. See [FLEET.md](FLEET.md) for the complete fallback
-and the primary-source browser-support references. No flags are changed by the app.
+Ordinary Bluetooth support does not guarantee `getDevices()`. Keep one enrolled
+bench page open for direct reconnection using retained objects. After reload,
+the guarded chooser can reconnect an already saved ID if Chrome retains that
+identity; otherwise repeat isolated enrollment. A saved label alone does not
+prove a grant persists. See [FLEET.md](FLEET.md) for the browser-support references
+and before-class trial. No flags are changed by the app.

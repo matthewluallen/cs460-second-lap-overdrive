@@ -13,3 +13,7 @@ Runtime traces always timestamp events when they occur; never backdate evidence.
 The engine-LED/fleet-label follow-up uses a constructed November 3 checkpoint.
 It was implemented and checked after a user supplied a live trace on November 5,
 2026. The commit date is scenario chronology, not an earlier hardware test.
+The student-owned Codespaces/pair workflow and guarded chooser follow-up were
+also implemented and checked on November 5, 2026. Their November 3 commit date
+continues the constructed scenario chronology; it does not backdate browser,
+classroom or car evidence.

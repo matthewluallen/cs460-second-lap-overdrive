@@ -29,6 +29,12 @@ All motion commands remain simulation-only.
 [Chrome laptop setup and first battery check](bench/LAPTOPS.md) ·
 [bench launch and protocol references](bench/BENCH.md).
 
+The fleet and engine LED updates are currently in
+[PR #1](https://github.com/matthewluallen/cs460-second-lap-overdrive/pull/1).
+Merge that PR before asking students to run these controls from `main`. Existing
+Codespaces must also pull the merged `main` and reload the bench; opening a
+Codespace does not automatically update its checkout.
+
 For the Node platform, use Node 22 or 24. Run this from the repo root,
 then open the private forwarded port in a separate tab in desktop Google Chrome,
 or open http://localhost:8000 locally:
@@ -48,6 +54,13 @@ python -m http.server 8000 --bind 127.0.0.1 --directory bench
 ```
 
 The remote Codespace serves the page; the laptop owns the Bluetooth radio.
+Each student enrolls only their own pair in their own Chrome profile and private
+Codespace page. Use the same Codespace and forwarded port 8000 at home and in
+class; bookmark its HTTPS address. The saved car labels live in that browser for
+that site, not in GitHub or a shared classroom roster. Initial enrollment needs
+an unambiguous physical match. Later reconnects check the saved browser ID even
+when Chrome needs its chooser again. See [FLEET.md](bench/FLEET.md) for duplicate
+model names, crowded classrooms and what happens after permissions change.
 The main page is a compact quick activity. For saved classroom evidence, open
 `http://localhost:8000/evidence.html` (or `evidence.html` on the forwarded HTTPS
 origin) **before starting**. That page includes LED observations and trace

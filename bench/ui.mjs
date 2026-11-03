@@ -12,6 +12,15 @@ let refreshingCars=false,refreshNumber=0;
 let link=null,pendingLink=null,busy=false,mode='Disconnected',confirmed=false,session=0,timer=null,pendingLamp=false,liveOpening=0;
 let confirmedSession=null,lastLampAttempt=null,lampSequence=0,batterySequence=0,pendingBatteryAttempt=null,savedStoppedTrace=false,batteryRetryBlocked=false;
 const source=()=>mode==='Live car connected'?'LIVE':'REPLAY';
+function storedDisplayName(value){
+  // Optional display text only: never parse an assumed advertisement prefix or
+  // alter the opaque browser ID. The original browser name stays in the trace.
+  const escaped=(typeof value==='string'?value:'').replace(
+    /[\u0000-\u001f\u007f-\u009f\u061c\u200e-\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g,
+    c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0')
+  );
+  return escaped.length>128?escaped.slice(0,127)+'…':escaped;
+}
 function cancelCheck(){if(timer!==null){clearTimeout(timer);timer=null;}pendingBatteryAttempt=null;}
 function batteryCheck(kind){
   cancelCheck();
@@ -63,7 +72,7 @@ function controls(){
   $('rememberCar').disabled=!live||busy||timer!==null||!confirmed||stopped||!link?.selection?.browserId;
   $('refreshCars').disabled=!!link||busy||refreshingCars||liveOpening>0||stopped;
   $('rememberedCar').disabled=!!link||busy||refreshingCars||liveOpening>0||stopped;
-  $('connectRemembered').disabled=!!link||busy||refreshingCars||liveOpening>0||stopped||!rememberedDevices.has($('rememberedCar').value);
+  $('connectRemembered').disabled=!!link||busy||refreshingCars||liveOpening>0||stopped||!carLabels.find($('rememberedCar').value);
   $('forgetRemembered').disabled=!!link||busy||refreshingCars||stopped||!carLabels.find($('rememberedCar').value);
   if(evidence){
     $('recordObservation').disabled=!mayObserve()||!$('observation').value;
@@ -104,6 +113,8 @@ async function connect(live,rememberedDevice=null){
   if(link||busy||trace.stopped||(live&&liveOpening>0))return;
   const label=$('assignedCar').value.trim();
   if(live&&!label)return;
+  const savedLabel=live?carLabels.entries().find(car=>car.label.toLowerCase()===label.toLowerCase()):null;
+  const expectedBrowserId=rememberedDevice?.id??savedLabel?.browserId??null;
   const current=++session;
   if(live)liveOpening++;
   busy=true;confirmed=false;mode=live?'Choosing car…':'Opening replay…';resetResults();controls();
@@ -113,9 +124,10 @@ async function connect(live,rememberedDevice=null){
   pendingLink=next;controls();
   try{
     if(!note(kind+' operator','local session '+current+'; assigned label: '+JSON.stringify(label||'(replay fixture)')+'; context captured at connect: '+JSON.stringify($('sessionNotes').value.trim()||'(not recorded)')))throw Error('Trace limit reached before connection');
-    if(!note(kind+' browser',navigator.userAgent+'; bench fleet-led-v1; page '+(window.location?window.location.origin+window.location.pathname:'(not supplied)')))throw Error('Trace limit reached before connection');
+    if(!note(kind+' browser',navigator.userAgent+'; bench fleet-led-v2; page '+(window.location?window.location.origin+window.location.pathname:'(not supplied)')))throw Error('Trace limit reached before connection');
+    if(live&&expectedBrowserId&&!note('LIVE recognition guard','saved label '+JSON.stringify(savedLabel?.label||label)+' expects browser device ID '+JSON.stringify(expectedBrowserId)+'; '+(rememberedDevice?'checking retained permission object':'Chrome chooser selection must match before GATT connection')+'; physical confirmation is still required'))throw Error('Trace limit reached before saved-car check');
     // Keep requestDevice directly in the click's user gesture, without a prior await.
-    await next.open(live?navigator.bluetooth:null,{showAllDevices:$('allDevices').checked,rememberedDevice});
+    await next.open(live?navigator.bluetooth:null,{showAllDevices:$('allDevices').checked,rememberedDevice,expectedBrowserId});
     if(current!==session)return;
     link=next;pendingLink=null;mode=live?'Live car connected':'Replay fixture';
     if(live){
@@ -137,7 +149,7 @@ $('assignedCar').oninput=controls;
 function renderRemembered(){
   const selected=$('rememberedCar').value;
   const options=[new Option('Choose a remembered car','')];
-  for(const car of carLabels.entries())options.push(new Option(car.label+' · '+(car.name||'unnamed car')+(rememberedDevices.has(car.browserId)?' · permission available':' · refresh permissions'),car.browserId));
+  for(const car of carLabels.entries())options.push(new Option(car.label+' · '+(car.name||'unnamed car')+(rememberedDevices.has(car.browserId)?' · permission available':' · chooser required'),car.browserId));
   $('rememberedCar').replaceChildren(...options);
   if(carLabels.find(selected))$('rememberedCar').value=selected;
 }
@@ -147,21 +159,21 @@ $('refreshCars').onclick=async()=>{
   const request=++refreshNumber,current=session;
   refreshingCars=true;controls();
   try{
-    if(typeof navigator.bluetooth?.getDevices!=='function')throw Error('This browser cannot list prior permissions. '+rememberedDevices.size+' remembered car(s) can reconnect in this open page. Keep the page open; after reload, use Choose assigned car with isolated enrollment again.');
+    if(typeof navigator.bluetooth?.getDevices!=='function')throw Error('This browser cannot list prior permissions. '+rememberedDevices.size+' remembered car(s) can reconnect in this open page. Select a saved label and Reconnect; other saved cars use a guarded Chrome chooser.');
     const devices=await navigator.bluetooth.getDevices();
     if(current!==session||request!==refreshNumber)return;
     rememberedDevices.clear();
     for(const device of devices)if(carLabels.find(device.id))rememberedDevices.set(device.id,device);
-    $('fleetStatus').textContent=rememberedDevices.size+' remembered car permission(s) available. This is not a scan or proof that a car is nearby. Missing permission? Enroll again with only that car powered on.';
+    $('fleetStatus').textContent=rememberedDevices.size+' remembered car permission(s) available. This is not a scan or proof that a car is nearby. Select a saved label and Reconnect; missing handles use a guarded Chrome chooser. If the saved ID no longer matches after permission changes, forget its label and enroll the isolated car again.';
   }catch(error){if(current===session)$('fleetStatus').textContent=error.message;}
   finally{if(request===refreshNumber){refreshingCars=false;renderRemembered();controls();}}
 };
 $('rememberCar').onclick=()=>{
   if($('rememberCar').disabled)return;
   try{
-    const saved=carLabels.remember(link.selection,confirmedSession.label);
+    const saved=carLabels.remember({browserId:link.selection.browserId,name:storedDisplayName(link.selection.name)},confirmedSession.label);
     rememberedDevices.set(saved.browserId,link.device);
-    $('fleetStatus').textContent='Remembered '+saved.label+' in this browser for this site. Reconnect is ready while this page stays open. After a reload, Refresh needs browser support or isolated selection again. Recheck the physical label on every connection.';
+    $('fleetStatus').textContent='Remembered '+saved.label+' in this browser for this site. Reconnect is ready while this page stays open. After a reload, Reconnect can check your Chrome chooser selection against the saved ID. Recheck the physical label on every connection.';
     note('LIVE operator','saved browser-device label '+JSON.stringify(saved)+'; operator mapping, not authenticated identity');
     renderRemembered();
   }catch(error){$('fleetStatus').textContent=error.message;}
@@ -170,9 +182,9 @@ $('rememberCar').onclick=()=>{
 $('connectRemembered').onclick=()=>{
   if($('connectRemembered').disabled)return;
   const id=$('rememberedCar').value,saved=carLabels.find(id),device=rememberedDevices.get(id);
-  if(!saved||!device)return;
+  if(!saved)return;
   $('assignedCar').value=saved.label;
-  return connect(true,device);
+  return connect(true,device??null);
 };
 $('forgetRemembered').onclick=()=>{
   if($('forgetRemembered').disabled)return;

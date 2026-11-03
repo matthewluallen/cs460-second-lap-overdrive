@@ -162,3 +162,18 @@ Fleet review found two additional operational defects before publication:
 
 The new safeguards affect real-car selection and operational evidence only;
 intentional simulator, worksheet and dependency lesson behaviors remain intact.
+
+The student-owned Codespaces follow-up moves the saved-ID check before GATT
+connection. A wrong chooser selection cannot connect, write commands or disturb
+an existing connection to that other car. Returning students can use this check
+even when the browser needs a chooser instead of exposing saved-device lookup;
+it depends on the browser retaining the saved permission identity. It does not
+identify an unknown first-time car in a room full of duplicate model names.
+Each student owns a separate browser/site mapping for their own pair; GitHub
+access and shared track use do not authenticate car ownership.
+
+Protocol review also found that Anki's advertising name format can contain
+control bytes. The optional saved display name is now escaped and bounded so it
+cannot prevent enrollment, while the browser ID is unchanged and the original
+selection remains trace evidence. This is a compatibility precaution from
+primary-source review, not an observed cause of this user's LED issue.

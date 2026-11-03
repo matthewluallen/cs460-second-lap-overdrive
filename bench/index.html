@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Second Lap bench</title><style>
 :root{font:16px/1.5 system-ui;color:#142e35;background:#f3f2ea}body{max-width:58rem;margin:auto;padding:1.6rem}h1{font-size:2.5rem;margin:.3rem 0}h2{font-size:1.3rem}h1,h2{line-height:1.18}section{border-top:1px solid #aab8ae;padding:.7rem 0 1.1rem}button,select,input{font:inherit;padding:.45rem .7rem;margin:.15rem;border:1px solid #83968a;border-radius:.25rem}button{background:#173d40;color:white;cursor:pointer}button:disabled{opacity:.5;cursor:auto}label{display:inline-block}input:not([type="checkbox"]){max-width:100%;box-sizing:border-box}#sessionNotes{width:42rem}#selection{overflow-wrap:anywhere}pre{padding:1rem;background:#153338;color:#e6f5de;white-space:pre-wrap;overflow:auto;max-height:20rem}small{color:#485a53}</style></head><body>
-<small>SECOND LAP LABS · PILOT ENGINEERING · fleet-led-v1</small><h1>OVERDRIVE bench</h1><p>Start with a fixture, then compare one assigned stationary car. A completed write does not prove the car responded.</p>
+<small>SECOND LAP LABS · PILOT ENGINEERING · fleet-led-v2</small><h1>OVERDRIVE bench</h1><p>Start with a fixture, then compare one assigned stationary car. A completed write does not prove the car responded.</p>
 <section><h2>Tonight: charge, connect, light</h2>
 <p><a href="TONIGHT.md">Activity checklist</a> · <a href="LAPTOPS.md">Chrome laptop setup</a> · <a href="evidence.html">Detailed evidence bench</a></p>
 <p>For downloadable traces and observation records, start on the detailed evidence bench before connecting. Finish and disconnect before switching pages; sessions do not transfer.</p>
@@ -10,7 +10,10 @@
 <label>Charging / session context (captured when connecting) <input id="sessionNotes" maxlength="600" placeholder="Charger, times, indicators, off-charger state, OS/Chrome, Git revision, observer"></label>
 <p><small>These fields are operator notes, not measurements. Editing them after disconnect prepares the next connection; it does not change the current session. No charging, motion or firmware-update commands are provided.</small></p>
 <h2>Your cars</h2>
-<p>For repeated Ice Charger / International MXT models, use unique physical labels such as S01-A and S01-B. <a href="FLEET.md">Classroom enrollment for 30 cars</a>. First enrollment requires only the intended car powered on nearby; names cannot distinguish duplicate models.</p>
+<p>Enroll your own two cars here, using physical labels such as S01-A and S01-B. Your saved labels belong to this Chrome profile and this site. Use the same Codespace and forwarded port at home and in class. <a href="FLEET.md">Your pair: home and classroom setup</a>.</p>
+<p>For first enrollment, power only your intended car in a place without competing cars in range. In class, use a separate enrollment area or coordinate with nearby owners. Ice Charger and International MXT names repeat; cancel if uncertain.</p>
+<p>Choose a saved label and reconnect. If Chrome needs its picker again, the page checks the saved browser ID before connecting. A different car is rejected. Lost permissions or a new Codespace may require enrollment again; saved names alone cannot identify a car.</p>
+<p><small>If you recorded the car’s Bluetooth address elsewhere, include it in your car label or session context. This is your inventory note: this page cannot read a MAC address or connect using a typed one. The browser device ID is a different identifier.</small></p>
 <label>Remembered car <select id="rememberedCar"><option value="">Choose a remembered car</option></select></label>
 <button id="refreshCars">Refresh remembered cars</button><button id="connectRemembered" disabled>Reconnect remembered car</button><button id="forgetRemembered" disabled>Forget selected label</button>
 <p id="fleetStatus" role="status"></p>

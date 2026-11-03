@@ -13,6 +13,8 @@ const evidenceHtml=await readFile(new URL('./evidence.html',import.meta.url),'ut
 const compactHtml=await readFile(new URL('./index.html',import.meta.url),'utf8');
 const ui=(await readFile(new URL('./ui.mjs',import.meta.url),'utf8'))
   .replace(/^import .* from '\.\/(?:link|records|trace|car-labels)\.mjs';\n/gm,'');
+const labelsModule=(await readFile(new URL('./car-labels.mjs',import.meta.url),'utf8'))
+  .replace(/^export /gm,'');
 class Element {
   value='';textContent='';disabled=false;checked=false;dataset={};children=[];
   append(option){this.children.push(option);if(this.children.length===1)this.value=option.value;}
@@ -46,11 +48,12 @@ function harness(bluetooth,traceOptions,page='evidence',storage=memoryStore()){
   const document={getElementById:id=>elements.get(id)??null,
     querySelectorAll:selector=>{assert.equal(selector,'[data-op]');return [...operations.values()];},
     createElement:tag=>{assert.equal(tag,'a');const a={click:()=>downloads.push({name:a.download,blob:blobs.get(a.href)})};return a;}};
-  const context={CarLink,Replay,CarLabels,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
+  const context={CarLink,Replay,TextEncoder,TraceLog:traceOptions?class extends TraceLog {constructor(){super(traceOptions);}}:TraceLog,window,document,navigator:{bluetooth,userAgent:'MOCK Chrome / TestOS'},Blob,
     Option:class {constructor(text,value){this.text=text;this.value=value;}},
     URL:{createObjectURL:blob=>{const key='blob:mock-'+blobs.size;blobs.set(key,blob);return key;},revokeObjectURL:key=>blobs.delete(key)},
     setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout:id=>timers.delete(id)};
-  vm.runInNewContext(ui,context,{filename:'bench/ui.mjs'});
+  // Plain-record validation must share the UI's realm, as it does in a browser.
+  vm.runInNewContext('const CarLabels=(()=>{'+labelsModule+'\nreturn CarLabels;})();\n'+ui,context,{filename:'bench/ui.mjs'});
   const instance={elements,operations,timers,downloads,
     el:id=>elements.get(id),op:id=>operations.get(id),
     click:async id=>{const element=elements.get(id)??operations.get(id);if(!element.disabled)await element.onclick();},
@@ -79,7 +82,7 @@ test('MOCK UI live commands stay gated until assigned-car confirmation, then res
   assert.equal(h.el('status').textContent,'Live car connected');assert.equal(m.writes.length,0);
   assert.deepEqual(m.choices,[{filters:[{services:[uuids.service]}]}]);
   assert.match(h.el('selection').textContent,/browser device ID: browser-scoped-mock-id/);
-  assert.match(h.el('trace').textContent,/bench fleet-led-v1; page http:\/\/localhost:8000\/evidence.html/);
+  assert.match(h.el('trace').textContent,/bench fleet-led-v2; page http:\/\/localhost:8000\/evidence.html/);
   assert.doesNotMatch(h.el('trace').textContent,/not-for-traces|#private/);
   for(const op of ['lampOn','lampOff','sdkOn','sdkOff']){assert.equal(h.op(op).disabled,true);await h.op(op).onclick();}
   assert.equal(m.writes.length,0);assert.equal(h.op('battery').disabled,false);
@@ -358,7 +361,8 @@ test('MOCK UI rejects a known-car label mismatch and missing or unsupported perm
   await h.click('close');await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/cannot list prior permissions/);
   h.set('rememberedCar',m.device.id);assert.equal(h.el('connectRemembered').disabled,false); // Granted handle retained in this page.
   m.bluetooth.getDevices=async()=>[];await h.click('refreshCars');assert.match(h.el('fleetStatus').textContent,/0 remembered/);
-  assert.equal(h.el('connectRemembered').disabled,true);await h.click('forgetRemembered');assert.equal(new CarLabels(storage).entries().length,0);
+  assert.match(h.el('fleetStatus').textContent,/Reconnect; missing handles use a guarded Chrome chooser/);
+  assert.equal(h.el('connectRemembered').disabled,false,'saved IDs remain available through the guarded chooser');await h.click('forgetRemembered');assert.equal(new CarLabels(storage).entries().length,0);
 });
 test('MOCK UI storage denial does not break the live battery workflow or claim a saved car',async()=>{
   const m=mockCar(),storage={getItem:()=>null,setItem:()=>{throw Error('storage denied');}},h=harness(m.bluetooth,undefined,'compact',storage);
@@ -366,10 +370,11 @@ test('MOCK UI storage denial does not break the live battery workflow or claim a
   await h.click('battery');m.notify([3,0x1b,0x62,0x0e]);assert.match(h.el('batteryResult').textContent,/3682/);
   assert.equal(new CarLabels(storage).entries().length,0);
 });
-test('MOCK UI cannot confirm a new device using a physical label already bound to another ID',async()=>{
+test('MOCK UI cannot connect a new device using a physical label already bound to another ID',async()=>{
   const m=mockCar(),storage=memoryStore();new CarLabels(storage).remember({browserId:'original-device-id',name:'Ice Charger'},'S01-A');
   const h=harness(m.bluetooth,undefined,'evidence',storage);h.set('assignedCar','s01-a');await h.click('live');
-  assert.match(h.el('recognition').textContent,/different browser device/);assert.equal(h.el('confirm').disabled,true);
+  assert.match(h.el('commandResult').textContent,/saved|match|different/i);assert.equal(h.el('confirm').disabled,true);
+  assert.equal(h.el('status').textContent,'Disconnected');assert.equal(m.device.gatt.connected,false);
   await h.el('confirm').onclick();assert.equal(h.op('engineGreen').disabled,true);assert.equal(m.writes.length,0);
   await h.click('close');h.set('rememberedCar','original-device-id');await h.click('forgetRemembered');
   await h.click('live');assert.equal(h.el('confirm').disabled,false);
@@ -386,6 +391,62 @@ test('MOCK UI reconnects either enrolled car in the same open page without getDe
   assert.equal(a.device.gatt.connected,true);assert.equal(b.device.gatt.connected,false);assert.equal(h.op('engineGreen').disabled,true);
   await h.click('close');h.set('rememberedCar',b.device.id);await h.click('connectRemembered');assert.equal(choosers,2);
   assert.equal(b.device.gatt.connected,true);assert.equal(a.device.gatt.connected,false);await h.click('close');
-  const reload=harness(bluetooth,undefined,'compact',storage);reload.set('rememberedCar',b.device.id);assert.equal(reload.el('connectRemembered').disabled,true);
+  const reload=harness(bluetooth,undefined,'compact',storage);reload.set('rememberedCar',b.device.id);assert.equal(reload.el('connectRemembered').disabled,false);
   assert.equal(a.writes.length+b.writes.length,0);
+});
+
+test('MOCK UI saves bounded escaped display names without changing the browser ID or original selection trace',async()=>{
+  const cases=[
+    {raw:'\u0010Ice\u0000 Charger\u202e',display:'\\u0010Ice\\u0000 Charger\\u202e'},
+    {raw:'@'+'x'.repeat(200)+'\u0000tail',display:'@'+'x'.repeat(126)+'…'},
+    {raw:'\u0010'+'x'.repeat(122),display:'\\u0010'+'x'.repeat(122)},
+    {raw:undefined,display:''}
+  ];
+  for(const [index,{raw,display}] of cases.entries()){
+    const m=mockCar(),storage=memoryStore();m.device.name=raw;m.device.id='opaque-original-id-'+index;
+    const h=harness(m.bluetooth,undefined,'evidence',storage);await connect(h);await h.click('confirm');
+    await h.click('rememberCar');
+    const row=new CarLabels(storage).find(m.device.id);
+    assert.ok(row,'an unusual optional name must not prevent enrollment');
+    assert.equal(row.browserId,m.device.id);assert.equal(row.name,display);assert.ok(row.name.length<=128);
+    assert.match(h.el('fleetStatus').textContent,/Remembered kit-red-1/);
+    assert.equal(m.device.name,raw);assert.equal(m.writes.length,0);
+    const selectionLine=h.el('trace').textContent.split('\n').find(line=>line.includes(' | LIVE selection | '));
+    const original=JSON.parse(selectionLine.split(' | LIVE selection | ')[1].split(' · browser name/ID only;')[0]);
+    assert.equal(original.name,raw??'');assert.equal(original.browserId,m.device.id);
+    await h.click('close');h.set('rememberedCar',m.device.id);await h.click('connectRemembered');
+    assert.equal(m.choices.length,1,'name normalization must not discard the granted device object');
+    assert.equal(h.op('engineGreen').disabled,true);await h.click('close');
+  }
+});
+
+test('MOCK UI reload without getDevices reconnects saved IDs through a guarded chooser and rejects the wrong car before GATT',async()=>{
+  const first=mockCar(),second=mockCar(),storage=memoryStore();
+  first.device.id='saved-first-id';second.device.id='saved-second-id';first.device.name=second.device.name='Ice Charger';
+  let selected=first.device,choices=0,firstConnects=0,secondConnects=0;
+  const connectFirst=first.device.gatt.connect,connectSecond=second.device.gatt.connect;
+  first.device.gatt.connect=async()=>{firstConnects++;return connectFirst();};
+  second.device.gatt.connect=async()=>{secondConnects++;return connectSecond();};
+  const bluetooth={requestDevice:async()=>{choices++;return selected;}};
+  const enrollment=harness(bluetooth,undefined,'evidence',storage);
+  for(const [device,label] of [[first.device,'S01-A'],[second.device,'S01-B']]){
+    selected=device;enrollment.set('assignedCar',label);await enrollment.click('live');await enrollment.click('confirm');await enrollment.click('rememberCar');await enrollment.click('close');
+  }
+  const originalRows=new CarLabels(storage).entries(),reloaded=harness(bluetooth,undefined,'evidence',storage);
+  reloaded.set('rememberedCar',first.device.id);assert.equal(reloaded.el('connectRemembered').disabled,false);
+  assert.match(reloaded.el('rememberedCar').children.find(option=>option.value===first.device.id).text,/chooser required/);
+  await reloaded.click('refreshCars');assert.match(reloaded.el('fleetStatus').textContent,/guarded Chrome chooser/);
+  selected=second.device;const before=[firstConnects,secondConnects];await reloaded.click('connectRemembered');
+  assert.deepEqual([firstConnects,secondConnects],before,'wrong choice must not reach either GATT connection');
+  assert.equal(first.writes.length+second.writes.length,0);assert.equal(reloaded.el('status').textContent,'Disconnected');
+  assert.match(reloaded.el('commandResult').textContent,/saved|match|different/i);
+  assert.equal(reloaded.op('engineGreen').disabled,true);assert.deepEqual(new CarLabels(storage).entries(),originalRows);
+  selected=first.device;await reloaded.click('connectRemembered');
+  assert.equal(firstConnects,before[0]+1);assert.equal(secondConnects,before[1]);
+  assert.equal(reloaded.el('assignedCar').value,'S01-A');assert.equal(reloaded.op('engineGreen').disabled,true);
+  await reloaded.click('confirm');assert.equal(reloaded.op('engineGreen').disabled,false);await reloaded.click('close');
+  reloaded.set('rememberedCar',second.device.id);selected=second.device;await reloaded.click('connectRemembered');
+  assert.equal(secondConnects,before[1]+1);assert.equal(reloaded.el('assignedCar').value,'S01-B');
+  assert.equal(reloaded.op('engineGreen').disabled,true);assert.equal(first.writes.length+second.writes.length,0);
+  assert.equal(choices,5);assert.match(reloaded.el('trace').textContent,/LIVE recognition guard.*Chrome chooser selection must match before GATT/);
 });

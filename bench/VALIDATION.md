@@ -158,7 +158,7 @@ identifying timestamps are not included in public documentation.
 The follow-up adds fixed engine green/off patterns, SDK-on sequencing for those
 actions, both version widths and explicitly remembered physical labels. These
 changes are under review on PR branch `codex/classroom-charge-connect-led`, not
-assumed present on `main`. The `fleet-led-v1` follow-up passed **119 JavaScript tests** (101 bench and
+assumed present on `main`. The `fleet-led-v2` follow-up passed **123 JavaScript tests** (105 bench and
 18 platform) and **28 Python tests** locally on November 5, 2026. The checks
 exercise:
 
@@ -180,6 +180,21 @@ reported `getDevices()` unavailable; its explicit fallback message was verified.
 An additional two-car mock verifies reconnecting either enrolled device within
 the same page without this API, no repeated chooser, renewed confirmation, and
 loss of retained objects after reload.
+
+The student-owned Codespaces follow-up adds a guarded chooser for a saved label
+when no retained device object is available. Tests enroll two identical names,
+reload without `getDevices()`, reject a wrong selected ID before any GATT call,
+then reconnect the correct ID while preserving physical confirmation. A separate
+transport check verifies that rejection never disconnects an already-connected
+other car. These are mocks of retained permission IDs, not evidence that a
+specific browser preserves IDs across restart or a changed Codespace origin.
+Optional browser names with control characters, missing names and long names
+now save as escaped/bounded display text without changing original trace evidence
+or the opaque browser ID. The additional local checks ran November 5, 2026.
+
+An optionally recorded Bluetooth address is an operator inventory note in the
+existing car-label or context field. It is not read or verified by Web Bluetooth,
+not substituted for the browser ID and not used as a connection address.
 
 The label registry detects a changed backing value before saving, protecting
 against ordinary stale-tab overwrites; it is not an atomic transaction across

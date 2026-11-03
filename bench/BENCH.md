@@ -87,7 +87,11 @@ stop with an explicit incomplete-evidence notice. Disconnect, save, then clear.
 Reconnect and confirm the same car for any outstanding lamp-off/SDK-off cleanup;
 disconnect sends no automatic cleanup command and uncompleted cleanup remains
 unknown. For repeated models, follow [the 30-car enrollment guide](FLEET.md):
-remember each isolated physical car once, then reconnect by its saved browser ID.
+each student remembers their own pair on their own Codespace page, then
+reconnects by the saved browser ID. If Chrome needs its chooser again, a saved-ID
+mismatch is rejected before any GATT connection. The saved IDs are browser/site
+permission identifiers; permission loss or a new Codespace may require isolated
+enrollment again. Shared model names and classroom tracks do not determine ownership.
 
 If Bluetooth is unavailable, open the HTTPS forwarded port directly, check OS
 Bluetooth support/permissions and release any competing connection. If service

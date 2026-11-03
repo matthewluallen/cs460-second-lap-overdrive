@@ -55,6 +55,27 @@ test('MOCK chooser cancellation does not fall back, connect, or write',async()=>
   assert.ok(m.log.some(([source,message])=>source==='LIVE setup error'&&message.startsWith('chooser: NotFoundError')));
   await m.link.open(m.api);m.link.close();
 });
+test('MOCK saved car mismatch cannot touch GATT or disconnect another session, then correct ID can retry',async()=>{
+  const m=mockCar();let connections=0,disconnections=0;
+  const connect=m.device.gatt.connect;
+  m.device.gatt.connect=async()=>{connections++;return connect();};
+  m.device.gatt.connected=true; // May be connected by a different page or controller.
+  m.device.gatt.disconnect=()=>{disconnections++;m.device.gatt.connected=false;};
+  for(const rememberedDevice of [null,m.device]){
+    await assert.rejects(m.link.open(m.api,{rememberedDevice,expectedBrowserId:'my-other-car'}),/does not match your saved car/);
+    assert.equal(connections,0);assert.equal(disconnections,0);assert.equal(m.writes.length,0);
+    assert.equal(m.device.gatt.connected,true);assert.ok(!m.link.device);assert.ok(!m.link.tx);
+  }
+  assert.ok(m.log.some(([kind,message])=>kind==='LIVE setup error'&&message.startsWith('saved car check:')));
+  await m.link.open(m.api,{expectedBrowserId:m.device.id});assert.equal(connections,1);
+  await assert.rejects(m.link.send('engineGreen'),/Confirm the assigned car/);
+  assert.equal(m.writes.length,0);m.link.close();assert.equal(disconnections,1);
+});
+test('MOCK invalid saved identity fails before the chooser instead of disabling the check',async()=>{
+  const m=mockCar();
+  for(const expectedBrowserId of ['',0,{},false])await assert.rejects(m.link.open(m.api,{expectedBrowserId}),/nonempty browser device ID/);
+  assert.equal(m.choices.length,0);assert.equal(m.writes.length,0);
+});
 test('MOCK concurrent chooser attempts are rejected before opening another chooser',async()=>{
   const m=mockCar(),gate=deferred();let calls=0;
   const opening=m.link.open({requestDevice:()=>{calls++;return gate.promise;}});
