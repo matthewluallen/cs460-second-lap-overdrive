@@ -14,9 +14,27 @@ The company maintains a [public website and journal](https://second-lap-labs.gen
 with a founder profile, development entries and project records.
 
 Read SIMULATION_NOTICE.txt before testing. This repository is a course scenario.
-It runs a **local simulator**, not real Anki hardware. No external packages,
-accounts, API keys, internet access or installation are required for the demo.
-Use Python 3.10 or newer. No claim of physical kit compatibility is made here.
+There are two runnable paths. The Python simulator models drive/stop in memory.
+The **Chrome bench** can replay fixtures or ask one selected OVERDRIVE car
+for ping, firmware version and battery telemetry, and switch its headlight.
+The live path is implemented but has not been tested on a physical course kit.
+All motion commands remain simulation-only.
+
+**Class starts here:** [capstone assignment](docs/CS_460_FA_26_Semester_Project.docx) ·
+[founder video](media/second-lap-pitch.mp4) ·
+[Chrome laptop setup and first battery check](bench/LAPTOPS.md) ·
+[bench launch and protocol references](bench/BENCH.md).
+
+Run this from the repo root, then open the private forwarded port in a
+separate tab in desktop Google Chrome, or open http://localhost:8000 locally:
+
+```sh
+python -m http.server 8000 --bind 127.0.0.1 --directory bench
+```
+
+The remote Codespace serves the page; the laptop owns the Bluetooth radio.
+Start in replay, then compare a live off-charger reading. Trace entries identify
+their source. The Python simulator requires Python 3.10+ and no extra packages:
 
 ```sh
 python -m lapreturn demo
@@ -34,7 +52,7 @@ The shell accepts one JSON object per line. State lasts until you exit. Example:
 
 These public pilot tokens only address disposable local simulation state.
 The protocol and units are teaching abstractions, not an Anki wire protocol.
-Physical integration must use an independently validated adapter and safety gate.
+Real driving requires an independently validated adapter and safety gate.
 
 Start with docs/student-brief.txt and docs/protocol.txt. Review the supplied
 business materials and history as evidence, not as verified documentation.
@@ -43,5 +61,5 @@ See [history instructions](history/README.md) to inspect commits and dates.
 
 For Codespaces, choose **Code → Codespaces → Create codespace on main**, then
 run the commands above in its terminal. The default Codespaces image includes
-Python. This starter does not launch a web server or connect to Bluetooth.
+Python. No server starts automatically. The bench uses a separate static server.
 Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTING.md).

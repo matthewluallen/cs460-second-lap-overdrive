@@ -1,9 +1,13 @@
-Physical adapter acceptance contract  NOT IMPLEMENTED
+Physical adapter acceptance contract  PARTIAL BENCH; NO MOTOR PATH
 
 Validate exact kit generation, vehicle model, firmware, host OS and BLE adapter.
 Do not assume Drive and OVERDRIVE kits share every capability or app dependency.
 Inventory batteries, chargers, track surfaces, wheels and runtime per kit.
-Required operations: discover allowlisted device; connect; read identity;
+Current bench: Chrome chooser, GATT notification subscription, ping, version,
+battery, simple light outputs and disconnect, all scoped to one selected kit.
+See bench/LAPTOPS.md for validation and log model/firmware/host. A software
+fixture is not a physical result. Requirements for any future motion adapter:
+discover a known assigned device; connect; read identity;
 set bounded speed; stop; read telemetry; disconnect.
 Measure stop latency, loss-of-link behavior and retry behavior on each kit type.
 First experiments use wheels lifted or a contained low-speed track.

@@ -15,3 +15,9 @@ git diff <older> <newer>
 Compare a claim with the code and records available at the relevant revision.
 The current student brief supersedes earlier assignment wording. Commit dates
 alone do not prove when work occurred, who performed it, or who owns its rights.
+
+The later course integration imports a separately developed bench notebook.
+Five fictional engineering commits on `rowan-bench-2026` span March–August 2026;
+normal `git log --graph --all` exposes its relationship to the pilot. The course
+integration and guide were published in November, after the September pilot
+snapshot. This explains why earlier pilot records omit the separate bench.

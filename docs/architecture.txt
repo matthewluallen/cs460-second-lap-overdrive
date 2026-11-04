@@ -1,7 +1,12 @@
-Pilot architecture
-The local client submits JSON commands to a controller with team tokens.
-Vehicles are represented as in-memory state. A future adapter may implement
-discovery, connection, speed, stop and telemetry for validated physical kits.
-No hardware adapter is included. Controller tests do not validate BLE behavior.
-An AI assistant can suggest plans or summarize logs. It should not directly
-issue raw motor commands. The host controller owns command validation.
+Two separate paths make up the pilot.
+1. lapreturn is a Python simulator. JSON commands, tokens, vehicle state and
+   movement are local to its process. It has no physical BLE transport.
+2. bench is a static browser app. A private Codespace port (or local loopback)
+   serves files; Chrome on the student's laptop selects a single device, connects
+   to the GATT service, subscribes, then sends fixed non-motion queries/commands.
+   The replay transport uses fixtures and the same packet codec. Trace labels
+   distinguish replay, live writes and actual notifications. The support worksheet
+   is synthetic and tab-local; neither worksheet entries nor the Python simulator
+   can send hardware commands. The chatbot has no command path.
+No physical kit has been qualified. Measured motion control, OTA, and a radio
+incident affecting multiple cars are outside the bench's implementation.

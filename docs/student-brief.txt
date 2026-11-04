@@ -6,8 +6,10 @@ Assess what works, which claims withstand scrutiny, what can go wrong, what
 should change, and under what measurable conditions you would fund the project.
 Each student receives a course kit. Troubleshooting older hardware is part of
 the investigation; document observations and compare with a working reference.
-The included controller runs a local simulator. Physical integration is separate
-work and must be validated on the actual assigned car, firmware and host.
+The Python controller runs a local simulator. The separate Chrome bench supports
+a single-car telemetry and light trial; it has not been qualified on a physical kit.
+Begin with bench/LAPTOPS.md and save evidence from your own laptop and car.
+Read docs/CS_460_FA_26_Semester_Project.docx for points, class resources and checkpoints.
 
 EVERY TEAM ADDRESSES SIX AREAS
 1. System and operation: architecture, trust boundaries, protocols, sensors,

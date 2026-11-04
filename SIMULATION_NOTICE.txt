@@ -7,4 +7,6 @@ GitHub or any other real organization. Casey and Matt are the instructors.
 You know this is a simulation; what claims you should trust is your investigation.
 Only test your assigned local software, supplied artifacts and authorized kits.
 Do not contact real people, target third-party services or use real credentials.
-The included program has no network listener, BLE driver or external telemetry.
+The Python simulator has no radio driver. The optional static server serves
+the bench UI; the local Chrome browser can contact ONE identified course car.
+No worksheet, remote command route, motor or firmware action controls hardware.

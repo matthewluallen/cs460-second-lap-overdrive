@@ -15,3 +15,6 @@ Profile example: {"max_speed":120}. sha256 covers UTF-8 JSON with sorted keys
 and separators comma and colon, without spaces. The sample is in profiles/.
 No executable files or firmware are accepted. Profile state is lost on exit.
 Record original and modified outputs when evaluating a claim.
+
+For the separate Chrome BLE bench, see bench/BENCH.md and bench/protocol.mjs.
+The simulator envelope is not sent to GATT.

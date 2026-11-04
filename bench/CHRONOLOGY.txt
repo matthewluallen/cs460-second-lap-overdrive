@@ -1,0 +1,3 @@
+CS460 teaching simulation. Second Lap Labs and its contributors are fictional.
+The bench notebook uses constructed development dates. See the integration
+commit on the course main branch for actual publication history.

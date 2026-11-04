@@ -17,3 +17,6 @@ Submit to the instructor-designated team repository or channel. The instructors
 will announce when findings may be published during the exercise. Agree on a
 merge order and run the combined system after integrating each contribution.
 Do not commit credentials, personal data or private interview transcripts.
+
+For bench contributions run `node --test bench/*.test.mjs` (Node 18+). Tag
+observations REPLAY, MOCK or LIVE and record the exact kit and revision.
