@@ -1,0 +1,23 @@
+name: Import course bench notebook
+on:
+  push:
+    branches: [staff-publication-2026-10-14]
+    paths: ['.github/workflows/import-bench-history.yml', 'history/bench-history.bundle']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    if: github.repository == 'matthewluallen/cs460-second-lap-overdrive'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Import reviewed educational history
+        run: |
+          set -eu
+          git bundle verify history/bench-history.bundle
+          git fetch ./history/bench-history.bundle refs/heads/rowan-bench-2026:refs/heads/rowan-bench-2026
+          test "$(git rev-parse rowan-bench-2026)" = 9a159c632583e0c96ab1ffea811de3b609470609
+          test "$(git rev-list --count rowan-bench-2026)" = 5
+          git push origin refs/heads/rowan-bench-2026:refs/heads/rowan-bench-2026
