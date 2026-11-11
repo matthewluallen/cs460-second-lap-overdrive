@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start": "node platform/server.mjs",
-    "test": "node --test bench/*.test.mjs platform/*.test.mjs",
+    "test": "node --test bench/*.test.mjs platform/*.test.mjs instructor-drive/*.test.mjs",
     "test:platform": "node --test platform/*.test.mjs",
     "dependency-lab": "node platform/dependency-lab.mjs"
   },

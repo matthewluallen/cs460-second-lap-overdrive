@@ -1,0 +1,15 @@
+
+* Suite ble_advertisement:
+..
+2 tests - 2 pass, 0 fail, 0 skipped (37 ticks, 0.000 sec)
+
+* Suite vehicle_advertisement:
+.....
+5 tests - 5 pass, 0 fail, 0 skipped (14 ticks, 0.000 sec)
+
+* Suite vehicle_protocol:
+............
+12 tests - 12 pass, 0 fail, 0 skipped (29 ticks, 0.000 sec)
+
+Total: 19 tests (92 ticks, 0.000 sec)
+Pass: 19, fail: 0, skip: 0.

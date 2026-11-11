@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>One-car instructor trial</title>
+<style>
+:root{font:16px/1.5 system-ui,-apple-system,sans-serif;color:#17363c;background:#f4f3ed;color-scheme:light}
+*{box-sizing:border-box}body{max-width:48rem;margin:auto;padding:1.25rem 1.25rem 3rem}h1{font-size:2rem;line-height:1.15;margin:.4rem 0 1rem}h2{font-size:1.15rem;margin:0 0 .8rem}p{margin:.6rem 0}.eyebrow,.hint{font-size:.9rem;color:#476165}
+.safety-note{padding:.75rem 1rem;background:#fff3df;border-left:4px solid #b32624;font-size:.93rem}.emergency{position:sticky;top:0;z-index:2;display:flex;gap:.8rem;align-items:center;justify-content:space-between;padding:.7rem 0;background:#f4f3ed;border-bottom:1px solid #c8ceca}.status{font-size:.9rem;text-align:right}.status strong{display:block}#stop{background:#ae2424;border-color:#ae2424;font-weight:750;min-height:3.2rem;white-space:nowrap}
+section{background:#fff;padding:1.2rem;margin:1rem 0;border:1px solid #d5ddda;border-radius:10px}section[hidden]{display:none}label{display:block;margin:.65rem 0}.fields{display:flex;gap:.8rem;flex-wrap:wrap}.fields label{flex:1;min-width:13rem}input,select,button{font:inherit;border:1px solid #78918e;border-radius:5px}input:not([type=checkbox]),select{display:block;width:100%;padding:.6rem;margin-top:.25rem;background:white;color:inherit}input[type=checkbox]{width:1.1rem;height:1.1rem;vertical-align:-.15rem;accent-color:#18484c;margin-right:.45rem}.check{display:flex;gap:.4rem;align-items:flex-start}.check input{flex-shrink:0;margin-top:.25rem}.check span{flex:1}button{padding:.65rem .9rem;background:#18484c;color:white;cursor:pointer;min-height:2.8rem}button.secondary{background:white;color:#18484c}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{outline:3px solid #318b91;outline-offset:3px}.actions{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem}.step{font-size:.8rem;color:#476165;margin-right:.5rem}.target{font-weight:650;overflow-wrap:anywhere}.prompt{padding:.7rem .9rem;background:#edf4f0;border-radius:5px}#result:empty{display:none}#result{padding:.7rem 0;font-weight:600}#speed{max-width:9rem}details{margin-top:1.2rem;border-top:1px solid #c8ceca;padding-top:1rem}summary{cursor:pointer;font-weight:650}details .body{padding-top:.5rem}.debug-row{font-size:.9rem;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:20rem;overflow:auto;background:#17363c;color:#e5f2eb;padding:1rem;font-size:.8rem;border-radius:5px}a{color:#14606a}input:disabled,select:disabled{background:#f2f4f2;color:#536567}.links{font-size:.9rem}.links a{display:inline-block;margin:.2rem .5rem .2rem 0}@media(max-width:480px){body{padding:1rem}.emergency{align-items:flex-start}.status{font-size:.8rem}#stop{font-size:.9rem}section{padding:1rem}.actions button{flex:1}}
+</style>
+</head>
+<body>
+<p class="eyebrow">CS 460 · Instructor trial · Hardware movement unverified</p>
+<h1>Drive one confirmed car</h1>
+<div class="emergency">
+  <button id="stop" title="Request STOP and disconnect. Escape does the same.">Emergency STOP</button>
+  <div class="status" id="modeState" role="status" aria-live="polite"><strong>SIMULATION</strong>Loading…</div>
+</div>
+<p class="safety-note">Keep an operator beside the car. A lost Bluetooth link or frozen browser can prevent STOP; the operator must be able to switch the car off.</p>
+<p id="result" role="alert"></p>
+
+<section id="connectStep" aria-labelledby="connectTitle">
+  <h2 id="connectTitle"><span class="step">1</span>Connect one car</h2>
+  <div class="fields">
+    <label>Mode
+      <select id="mode"><option value="simulation">SIMULATION · no radio</option><option value="live">LIVE · real car</option></select>
+    </label>
+    <label>Physical car label
+      <input id="label" maxlength="80" placeholder="e.g. INSTRUCTOR-A" autocomplete="off">
+    </label>
+  </div>
+  <label class="check"><input type="checkbox" id="safe"><span>I’m supervising this one isolated, undamaged car. It is off its charger; other cars and controllers are off. Wheels are raised clear for first tests, or on a contained track after qualification. An operator can switch it off.</span></label>
+  <p class="hint">Close other car apps and bench tabs. In SIMULATION, this checklist is a rehearsal.</p>
+  <div class="actions"><button id="select" disabled>Connect one car</button><button class="secondary" id="disconnect" disabled>Disconnect</button></div>
+</section>
+
+<section id="identifyStep" aria-labelledby="identifyTitle" hidden>
+  <h2 id="identifyTitle"><span class="step">2</span>Confirm the exact car</h2>
+  <p>Physical label: <span class="target" id="targetLabel"></span></p>
+  <p class="prompt" id="identityPrompt" role="status" aria-live="polite"></p>
+  <div class="actions"><button id="powerCheck" disabled>Check using power button</button><button class="secondary" id="identify" disabled>Try light signal · optional</button></div>
+  <p class="hint" id="powerHelp">Use one press and release of the grey underside button. Do not hold or rapidly repeat; five rapid presses can start autonomous driving.</p>
+  <label class="check"><input type="checkbox" id="observed" disabled><span id="observedText">I personally identified this exact labeled car.</span></label>
+  <button id="confirm" disabled>Confirm this car</button>
+</section>
+
+<section id="driveStep" aria-labelledby="driveTitle" hidden>
+  <h2 id="driveTitle"><span class="step">3</span>Drive one short pulse</h2>
+  <label>Speed · mm/s, maximum 200<input id="speed" type="number" min="1" max="200" step="1" value="100" inputmode="numeric"></label>
+  <div class="actions"><button id="arm" disabled>Arm · 5 seconds</button><button id="pulse" disabled>Drive · 750 ms pulse</button><button class="secondary" id="normalStop" disabled>Stop / disarm</button></div>
+  <p class="hint">After each pulse, check that the car stopped before arming again. The 750 ms timer is a requested limit, not a guaranteed physical stop.</p>
+</section>
+
+<details id="debug">
+  <summary>Debug, evidence & instructions</summary>
+  <div class="body">
+    <label>Session notes<input id="context" maxlength="600" placeholder="Observer, model, OS, browser and charger notes"></label>
+    <label class="check"><input type="checkbox" id="fallback"><span>The filtered chooser failed. This car is physically isolated; show all devices on the next selection.</span></label>
+    <p class="debug-row" id="debugState">State: DISCONNECTED</p>
+    <p class="debug-row" id="identity">No selected device. Browser IDs are not MAC addresses or physical identity proof.</p>
+    <p class="debug-row" id="telemetry">No live measurements.</p>
+    <p class="debug-row" id="debugResult"></p>
+    <p class="hint">Arming checks the reviewed firmware profile, battery and ping before enabling drive mode and requesting zero speed. No lane control or firmware updates. Escape, hiding this page, losing focus during an armed trial, and leaving request STOP and disconnect; crashes cannot run cleanup.</p>
+    <button class="secondary" id="export">Download trace</button>
+    <p class="hint">Keep SIMULATION separate from LIVE evidence. Record observed movement and physical stop separately; completed writes do not prove either.</p>
+    <pre id="trace" aria-label="Session trace"></pre>
+    <p class="links"><a href="README.md">Run & acceptance checklist</a><a href="IDENTIFICATION.md">Identify your car</a><a href="SOURCES.md">Protocol & licenses</a><a href="VALIDATION.md">Test results</a><a href="/">Stationary course bench</a></p>
+  </div>
+</details>
+<script type="module" src="ui.mjs"></script>
+</body>
+</html>

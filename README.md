@@ -130,3 +130,16 @@ run the commands above in its terminal. The default Codespaces image includes
 Python. No server starts automatically. Choose the Node platform or the static
 fallback above; run only one on port 8000.
 Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTING.md).
+
+
+## Instructor-only motion research preview
+
+A separate [single-car proof of concept](instructor-drive/README.md) implements
+real legacy Anki speed/STOP packets behind an explicit server opt-in. Its page
+starts in SIMULATION; LIVE requires a freshly observed physical car match and
+one explicit bounded pulse. Ordinary `npm start`, the static bench fallback,
+and the existing course exercises remain stationary. Do not enable or publish
+LIVE for students until review and [hardware acceptance](instructor-drive/README.md#hardware-acceptance-record--all-items-initially-pending).
+See [source/license research](instructor-drive/SOURCES.md) and
+[the audit/test record](instructor-drive/VALIDATION.md). This does not change the
+course's battery-first activity or make driving a student requirement.
