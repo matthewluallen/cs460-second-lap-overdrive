@@ -137,7 +137,9 @@ Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTI
 A separate [single-car proof of concept](instructor-drive/README.md) implements
 real legacy Anki speed/STOP packets behind an explicit server opt-in. Its page
 starts in SIMULATION; LIVE requires a freshly observed physical car match and
-one explicit bounded pulse. Ordinary `npm start`, the static bench fallback,
+an explicit bounded pulse. An experimental track scan additionally requires
+observed pulse movement/STOP and contained-track confirmation; missing readings
+produce an incomplete result. Ordinary `npm start`, the static bench fallback,
 and the existing course exercises remain stationary. Do not enable or publish
 LIVE for students until review and [hardware acceptance](instructor-drive/README.md#hardware-acceptance-record--all-items-initially-pending).
 See [source/license research](instructor-drive/SOURCES.md) and

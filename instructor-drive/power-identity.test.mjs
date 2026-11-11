@@ -75,9 +75,9 @@ test('MOCK power check requires an explicit true safety acknowledgement and a se
   await r.drive.stop('Cancel',true);
 });
 
-test('MOCK no disconnection within 30 seconds fails closed and a later disconnect is not identity evidence',async()=>{
+test('MOCK no disconnection within 2 minutes fails closed and a later disconnect is not identity evidence',async()=>{
   const r=rig();await r.drive.select();r.drive.beginPowerCheck({safe:true});
-  await r.clock.advance(29999);assert.equal(r.drive.state,'WAITING_POWER_OFF');
+  await r.clock.advance(119999);assert.equal(r.drive.state,'WAITING_POWER_OFF');
   await r.clock.advance(1);assert.equal(r.drive.state,'DISCONNECTED');assert.equal(r.radio.connected,false);
   assert.notEqual(r.drive.identityMethod,'power-cycle');r.radio.lose();await flush();
   assert.equal(r.drive.state,'DISCONNECTED');assert.throws(()=>r.drive.confirm(confirmation));
@@ -107,7 +107,7 @@ for(const stage of ['WAITING_POWER_OFF','POWER_OFF_SEEN','reconnected'])test('MO
   await r.drive.stop('Operator cancelled identity check',true);
   assert.equal(r.drive.state,'DISCONNECTED');assert.notEqual(r.drive.identityMethod,'power-cycle');
   await r.drive.select();assert.equal(r.drive.state,'SELECTED');assert.notEqual(r.drive.identityMethod,'power-cycle');
-  assert.throws(()=>r.drive.confirm(confirmation));await r.clock.advance(30000);
+  assert.throws(()=>r.drive.confirm(confirmation));await r.clock.advance(120000);
   assert.equal(r.drive.state,'SELECTED','cancelled timer cannot alter a fresh selection');assert.equal(r.radio.writes.length,0);
   await r.drive.stop('End test',true);
 });
@@ -130,7 +130,7 @@ test('MOCK invisible light report or failed light writes never silently authoriz
 });
 
 test('MOCK completed power-cycle witness is not invalidated by its old off deadline and is never an automatic confirmation',async()=>{
-  const r=rig();await seenOff(r);await r.drive.select();await r.clock.advance(30000);
+  const r=rig();await seenOff(r);await r.drive.select();await r.clock.advance(120000);
   assert.equal(r.drive.state,'SELECTED');assert.equal(r.drive.identityMethod,'power-cycle');
   await assert.rejects(r.drive.arm());assert.equal(r.radio.writes.length,0);await r.drive.stop('End test',true);
 });
@@ -168,4 +168,16 @@ test('MOCK evidence refusal while recording expected power loss clears the witne
   r.drive.note=()=>false;r.radio.lose();await flush();
   assert.equal(r.drive.state,'DISCONNECTED');assert.equal(r.drive.powerTarget,null);assert.equal(r.drive.identityMethod,null);
   assert.throws(()=>r.drive.confirm(confirmation));assert.equal(r.radio.writes.length,0);
+});
+
+
+test('MOCK service setup timeout retains only a partial same-ID power witness for explicit retry',async()=>{
+  const r=rig();await seenOff(r);
+  r.radio.open=async()=>{r.radio.retryBrowserId='the-selected-MXT';throw Object.assign(new Error('discovery timed out'),{name:'SetupTimeoutError'});};
+  await assert.rejects(r.drive.select(),/timed out/);
+  assert.equal(r.drive.state,'POWER_OFF_SEEN');assert.equal(r.drive.powerTarget.browserId,'the-selected-MXT');
+  assert.equal(r.drive.identityMethod,null);assert.equal(r.radio.writes.length,0);assert.throws(()=>r.drive.confirm(confirmation));
+  r.radio.open=Radio.prototype.open;await r.drive.select();
+  assert.equal(r.drive.identityMethod,'power-cycle');assert.throws(()=>r.drive.confirm({...confirmation,observed:false}));
+  await r.drive.stop('End test',true);
 });

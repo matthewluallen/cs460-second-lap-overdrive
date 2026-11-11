@@ -28,6 +28,6 @@ test_four_team_lifecycle (test_functional.FunctionalTests.test_four_team_lifecyc
 test_invalid_action_does_not_move (test_functional.FunctionalTests.test_invalid_action_does_not_move) ... ok
 
 ----------------------------------------------------------------------
-Ran 28 tests in 0.510s
+Ran 28 tests in 0.772s
 
 OK

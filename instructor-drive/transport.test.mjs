@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {BrowserTransport} from './transport.mjs';
+import {BrowserTransport,SetupTimeoutError} from './transport.mjs';
 import {CarLink} from '../bench/link.mjs';
 import {uuids} from '../bench/protocol.mjs';
 import {DriveController} from './controller.mjs';
@@ -175,16 +175,111 @@ test('MOCK exact power-cycle browser ID can reconnect, with no automatic command
   assert.deepEqual(r.choices,[{filters:[{services:[uuids.service]}]}]);
 });
 
-test('MOCK stalled GATT setup times out, frees its lease and rejects reconnect until reload',async()=>{
+test('MOCK explicit power-cycle reconnect reuses only the remembered exact device and discovers fresh attributes',async t=>{
+  const r=radio(),events=[],{transport}=make(r,{note:(...row)=>{events.push(row);return true;}});
+  t.after(()=>transport.close());
+  await transport.open();transport.close();await flush();
+  assert.equal(r.connects,1);assert.equal(r.choices.length,1);
+  r.bluetooth.requestDevice=async()=>{throw new DOMException('A redundant chooser was cancelled','NotFoundError');};
+  const prior=events.length,identity=await transport.open({expectedBrowserId:r.device.id});
+  assert.equal(identity.browserId,r.device.id);assert.equal(r.connects,2);assert.equal(r.choices.length,1);
+  assert.equal(r.stages.filter(stage=>stage===uuids.service).length,2);
+  assert.equal(r.stages.filter(stage=>stage==='notifications ready').length,2);
+  assert.equal(events.slice(prior).some(([source])=>source==='LIVE chooser'),false);
+  assert.ok(events.slice(prior).some(([source])=>source==='LIVE remembered selection'));
+  assert.equal(r.writes.length,0);
+});
+
+test('MOCK generic fresh selection still opens a chooser and never silently reuses the remembered car',async t=>{
+  const a=radio(),b=radio(),{transport}=make(a);t.after(()=>transport.close());
+  await transport.open();transport.close();await flush();
+  let choices=0;a.bluetooth.requestDevice=async()=>{choices++;return b.device;};
+  const identity=await transport.open();
+  assert.equal(choices,1);assert.equal(identity.browserId,b.device.id);
+  assert.equal(a.connects,1);assert.equal(b.connects,1);assert.equal(a.writes.length+b.writes.length,0);
+});
+
+test('MOCK failed remembered reconnect never opens an alternative chooser or connects another car',async()=>{
+  const r=radio(),other=radio(),{transport,gate}=make(r);
+  await transport.open();transport.close();await flush();
+  let choices=0;r.bluetooth.requestDevice=async()=>{choices++;return other.device;};
+  r.device.gatt.connect=async()=>{throw new DOMException('Prior permission unavailable','SecurityError');};
+  await assert.rejects(transport.open({expectedBrowserId:r.device.id}),/Prior permission unavailable/);
+  await flush();assert.equal(choices,0);assert.equal(other.connects,0);assert.equal(gate.held,false);
+  assert.equal(r.writes.length+other.writes.length,0);assert.equal(transport.connected,false);
+});
+
+test('MOCK selection without a usable browser ID cannot enter setup or create an ambiguous retry target',async()=>{
+  const r=radio(),{transport,gate}=make(r);r.device.id='';
+  await assert.rejects(transport.open(),/no usable device ID/);await flush();
+  assert.equal(r.connects,0);assert.equal(r.writes.length,0);assert.equal(transport.retryBrowserId,null);assert.equal(gate.held,false);
+});
+
+test('MOCK stalled GATT setup times out, frees its lease and blocks manual retry until original operation settles',async()=>{
   const r=radio(),pending=deferred(),clock=timers();
   r.device.gatt.connect=async()=>{await pending.promise;r.device.gatt.connected=true;return r.device.gatt;};
-  const {transport,gate}=make(r,clock),opening=transport.open(),rejected=assert.rejects(opening,/GATT setup timed out/);
-  await flush();assert.equal(r.choices.length,1);clock.fire(10000);await rejected;await flush();
+  const {transport,gate}=make(r,clock),opening=transport.open(),rejected=assert.rejects(opening,error=>{
+    assert.ok(error instanceof SetupTimeoutError);assert.equal(error.name,'SetupTimeoutError');assert.equal(error.stage,'GATT connection');return true;
+  });
+  await flush();assert.equal(r.choices.length,1);clock.fire(30000);await rejected;await flush();
   assert.equal(transport.connected,false);assert.equal(gate.held,false);assert.equal(r.writes.length,0);
-  assert.equal(clock.pending.size,0);
-  await assert.rejects(transport.open(),/reload before reconnecting/);assert.equal(r.choices.length,1);
+  assert.equal(clock.pending.size,0);assert.equal(transport.poisoned,true);assert.equal(transport.setupPending,true);
+  assert.equal(transport.retryBrowserId,r.device.id);
+  await assert.rejects(transport.open(),/still finishing/);assert.equal(r.choices.length,1);
   pending.resolve();await flush();
   assert.equal(r.device.gatt.connected,false);assert.equal(r.disconnects,1);assert.equal(r.writes.length,0);
+  assert.equal(transport.setupPending,false);assert.equal(transport.poisoned,false);
+  assert.equal(r.choices.length,1,'settling does not automatically reopen the chooser');
+});
+
+test('MOCK timed-out service discovery permits an explicit same-car retry after actual rejection and obtains fresh attributes',async t=>{
+  const r=radio(),pending=deferred(),clock=timers(),original=r.device.gatt.getPrimaryService;let lookups=0;
+  r.device.gatt.getPrimaryService=uuid=>++lookups===1?pending.promise:original(uuid);
+  const {transport,gate}=make(r,clock),progress=[];t.after(()=>transport.close());
+  transport.progress=current=>progress.push({stage:current.stage,pending:current.setupPending,poisoned:current.poisoned});
+  const opening=transport.open({expectedBrowserId:r.device.id});
+  const rejected=assert.rejects(opening,error=>error.name==='SetupTimeoutError'&&error.stage==='service/characteristic discovery');
+  await flush();assert.equal(lookups,1);assert.equal(transport.stage,'service/characteristic discovery');
+  clock.fire(30000);await rejected;assert.equal(gate.held,false);assert.equal(r.disconnects,1);
+  await assert.rejects(transport.open(),/still finishing/);assert.equal(r.connects,1);
+  pending.reject(new Error('GATT Server is disconnected'));await flush();
+  assert.equal(transport.poisoned,false);assert.equal(transport.setupPending,false);assert.equal(transport.link.opening,false);
+  assert.equal(transport.retryBrowserId,r.device.id);assert.equal(r.connects,1);assert.equal(r.writes.length,0);
+  assert.ok(progress.some(row=>row.stage.includes('manual retry available')&&!row.pending&&!row.poisoned));
+  await transport.open();assert.equal(r.connects,2);assert.equal(lookups,2);assert.equal(transport.stage,'ready');
+  assert.equal(transport.retryBrowserId,null);assert.equal(r.writes.length,0);
+  assert.ok(progress.some(row=>row.stage==='notification setup'));
+});
+
+test('MOCK a recovery retry cannot change the captured car or touch a wrong car before GATT',async t=>{
+  const r=radio(),wrong=radio(),pending=deferred(),clock=timers(),original=r.device.gatt.getPrimaryService;
+  r.device.gatt.getPrimaryService=()=>pending.promise;
+  const {transport}=make(r,clock);t.after(()=>transport.close());
+  const opening=transport.open(),rejected=assert.rejects(opening,SetupTimeoutError);await flush();clock.fire(30000);await rejected;
+  pending.reject(new Error('Disconnected'));await flush();
+  await assert.rejects(transport.open({expectedBrowserId:wrong.device.id}),/same browser device ID/);
+  assert.equal(r.choices.length,1);assert.equal(transport.retryBrowserId,r.device.id);
+  let extraChoices=0;r.bluetooth.requestDevice=async()=>{extraChoices++;return wrong.device;};
+  r.device.gatt.getPrimaryService=original;
+  await transport.open();assert.equal(transport.connected,true);assert.equal(transport.retryBrowserId,null);
+  assert.equal(extraChoices,0);assert.equal(wrong.connects,0);assert.equal(wrong.disconnects,0);
+  assert.equal(wrong.writes.length,0);assert.equal(r.writes.length,0);
+});
+
+test('MOCK cancellation while an original browser operation is pending also blocks overlapping chooser/setup',async()=>{
+  const r=radio(),pending=deferred();r.bluetooth.requestDevice=()=>pending.promise;
+  const {transport}=make(r),opening=transport.open(),rejected=assert.rejects(opening,/cancelled/);await flush();
+  transport.close();await assert.rejects(transport.open(),/still finishing/);
+  assert.equal(r.connects,0);pending.resolve(r.device);await rejected;await flush();
+  assert.equal(transport.setupPending,false);assert.equal(transport.poisoned,false);assert.equal(transport.retryBrowserId,null);
+});
+
+test('MOCK a throwing progress display cannot prevent timeout cleanup or settlement recovery',async()=>{
+  const r=radio(),pending=deferred(),clock=timers();r.device.gatt.getPrimaryService=()=>pending.promise;
+  const {transport}=make(r,clock);transport.progress=()=>{throw Error('UI unavailable');};
+  const opening=transport.open(),rejected=assert.rejects(opening,SetupTimeoutError);await flush();clock.fire(30000);await rejected;
+  assert.equal(transport.connected,false);pending.reject(new Error('Disconnected'));await flush();
+  assert.equal(transport.setupPending,false);assert.equal(transport.poisoned,false);assert.equal(r.writes.length,0);
 });
 
 test('MOCK browser-style timers keep their global receiver through transport, real light trial and controller',async()=>{

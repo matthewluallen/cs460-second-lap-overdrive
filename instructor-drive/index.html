@@ -12,7 +12,7 @@ section{background:#fff;padding:1.2rem;margin:1rem 0;border:1px solid #d5ddda;bo
 </style>
 </head>
 <body>
-<p class="eyebrow">CS 460 · Instructor trial · Hardware movement unverified</p>
+<p class="eyebrow">CS 460 · Instructor trial · Hardware qualification in progress</p>
 <h1>Drive one confirmed car</h1>
 <div class="emergency">
   <button id="stop" title="Request STOP and disconnect. Escape does the same.">Emergency STOP</button>
@@ -51,6 +51,22 @@ section{background:#fff;padding:1.2rem;margin:1rem 0;border:1px solid #d5ddda;bo
   <label>Speed · mm/s, maximum 200<input id="speed" type="number" min="1" max="200" step="1" value="100" inputmode="numeric"></label>
   <div class="actions"><button id="arm" disabled>Arm · 5 seconds</button><button id="pulse" disabled>Drive · 750 ms pulse</button><button class="secondary" id="normalStop" disabled>Stop / disarm</button></div>
   <p class="hint">After each pulse, check that the car stopped before arming again. The 750 ms timer is a requested limit, not a guaranteed physical stop.</p>
+</section>
+
+<section id="trackStep" hidden>
+  <h2>Discover the track · experimental</h2>
+  <p class="hint">First complete a wheels-clear pulse and observe its physical STOP. A scan then drives this same car on a contained closed track, at no more than the speed you just verified. STOP is scheduled within 45 seconds; missing track readings request it sooner. Browser timing is not a guaranteed physical stop.</p>
+  <label class="check"><input type="checkbox" id="pulseObserved" disabled><span>I saw this car’s wheels move during the last pulse and stop afterward.</span></label>
+  <button class="secondary" id="qualify" disabled>Record movement & STOP observation</button>
+  <p id="qualification" class="hint"></p>
+  <label class="check"><input type="checkbox" id="contained" disabled><span>The same car is now on the closed, contained track. I am beside it and can switch it off.</span></label>
+  <button id="scan" disabled>Start track scan · up to 45 seconds</button>
+  <p class="hint">After recording the observation, confirm track placement, then Arm above and start the scan. The 200 mm/s ceiling stays in place. Community reports say optical readings may be unreliable at this speed; an incomplete scan is a valid result.</p>
+  <p id="trackStatus" role="status" aria-live="polite">No scan recorded.</p>
+  <p id="trackPieces" class="debug-row"></p>
+  <div id="trackMap"></div>
+  <p id="trackWarnings" class="hint"></p>
+  <button class="secondary" id="exportTrack" disabled>Download track evidence</button>
 </section>
 
 <details id="debug">

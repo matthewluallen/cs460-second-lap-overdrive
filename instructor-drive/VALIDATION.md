@@ -1,6 +1,6 @@
 # Audit and validation record
 
-Date: **11 November 2026**. Audited base: [`main` at `92ea7893df0b80fc7a54df4952328fb031376f99`](https://github.com/matthewluallen/cs460-second-lap-overdrive/tree/92ea7893df0b80fc7a54df4952328fb031376f99). This record covers source review, software tests, a native desktop-browser simulation and a real GATT session with the operator's selected International MXT. **Battery notifications and completed LED/SDK writes were observed; the custom light pattern was not. No motor opcode `0x24` was sent to hardware. Movement and stopping remain unverified.** The proposed feature stays on a review branch, disabled by default, pending physical acceptance.
+Date: **11 November 2026**. Audited base: [`main` at `92ea7893df0b80fc7a54df4952328fb031376f99`](https://github.com/matthewluallen/cs460-second-lap-overdrive/tree/92ea7893df0b80fc7a54df4952328fb031376f99). This record covers source review, software tests, a native desktop-browser simulation and a real GATT session with the operator's selected International MXT. **The custom light pattern was not observed. A later completed power-button identity check enabled one real 100 mm/s pulse: the operator observed the raised wheels move briefly and stop. Track discovery, stopping distance, emergency-stop and link-loss behavior remain unqualified.** The proposed feature stays on a review branch, disabled by default, pending physical acceptance.
 
 ## Repository and course audit
 
@@ -23,7 +23,7 @@ The baseline ran on Node **v25.6.1** and Python **3.14.7**. Dependency installat
 | Check | Observed result | Scope |
 | --- | --- | --- |
 | Baseline `npm test` | 160 passed, 0 failed | 142 existing bench tests plus 18 platform/dependency tests before this change. |
-| Current `npm test` | **241 passed, 0 failed, 0 skipped** | Completed checkpoint after adding power-button identity and same-ID transport checks; includes existing suite plus instructor protocol, controller, transport and route-gate checks. |
+| Current `npm test` | **294 passed, 0 failed, 0 skipped** | Current checkpoint includes connection recovery, remembered-device reconnect, track recorder, scan qualification/fault handling, UI and the unchanged course suites. |
 | `python3 -m unittest discover -s tests -v` | **28 passed, 0 failed** | Existing coursework simulator regression suite. |
 | Official Anki SDK C suite, compiled on this host | **19 passed, 0 failed, 0 skipped** | 12 upstream protocol, 5 vehicle-advertisement and 2 BLE-advertisement tests at official commit `410352617b8660338746a6bb2b2dd173afb1b91a`; no radio involved. |
 
@@ -55,7 +55,7 @@ The session was explicitly disconnected at **22:22:24 UTC**. **No speed opcode `
 
 Firmware **9511** was indicated by the encoded advertised name, with the repository's earlier user trace separately establishing extended version decoding. This LIVE excerpt does not establish a fresh arming/version-response exchange. Firmware **11866** has attributed community hardware evidence. Both remain provisional qualification candidates; neither is accepted as proof that this implementation moves/stops this International MXT.
 
-After the unsuccessful LED check, a power-button identity alternative was implemented and covered by software tests: a 30-second expected-disconnect window, an operator's deliberate power-off, explicit reconnect to the same browser ID checked before GATT, and explicit operator attestation. The light trial is now optional. The new power-button workflow still needs physical acceptance; a blue connection light or an unrelated radio dropout cannot replace its deliberate physical observation.
+After the unsuccessful LED check, a power-button identity alternative was implemented and covered by software tests: an initially 30-second expected-disconnect window (now two minutes), an operator's deliberate power-off, explicit reconnect to the same browser ID checked before GATT, and explicit operator attestation. The light trial is now optional. The subsequent power-button acceptance observation is recorded below; a blue connection light or an unrelated radio dropout cannot replace its deliberate physical observation.
 
 ## Release acceptance remains pending
 
@@ -73,10 +73,30 @@ installed Chrome completed select, simulated light identification, explicit
 confirmation, arm, pulse and STOP again. Debug remained collapsible and trace
 export worked. Ten reproducible UI integration tests now cover the actual UI,
 controller, codec and trace modules with a synthetic DOM and explicitly fake
-LIVE transport; they use no radio. The final local `npm test` result is 241/241.
+LIVE transport; they use no radio. That earlier local `npm test` checkpoint was 241/241; the current result is 294/294.
 
 In an additional LIVE trial, the browser observed the operator's prompted
 physical OFF action and entered `POWER_OFF_SEEN`. A premature reconnect was
 cancelled/timed out before successful re-identification; the interface remained
 disarmed. This partial result does not qualify the car for motion. A continuous
 operator-run identity/drive trial remains pending and must be recorded separately.
+
+## Discovery recovery and experimental track work
+
+The operator’s 22:34 trace showed GATT connection succeeding, followed by service discovery stalling until the old 10-second deadline. Its later disconnected error followed our cleanup; it does not prove the original cause. The old implementation also permanently blocked retries after the original browser operation had settled. The new transport preserves the pending operation, waits for actual settlement, and permits only a deliberate same-device retry. Its setup budget is 30 seconds; motor-write/reply budgets are unchanged.
+
+At 22:48 UTC, native Chrome completed connection, fresh service/characteristic discovery and notification setup. The operator’s prompted physicalOFF action produced the expected disconnect at22:49:14 UTC. Chrome then cancelled a redundant second chooser in about 130 ms, leaving the session disarmed. [Redacted discovery trace](validation/live-discovery-recovery.txt). This prompted a further fix: explicit same-car reconnection now reuses only the previously selected permitted BluetoothDevice, validates its ID again, and rediscovers all attributes. It never auto-reconnects or opens a fallback chooser. The stationary physicalOFF window is now two minutes to accommodate operator interaction.
+
+The experimental scan controller requires a successful 750 ms pulse-limit STOP plus explicit observed physical movement/STOP in the same session, and cannot exceed that pulse’s speed or 200 mm/s. It schedules STOP within 45 seconds, checks ping replies, and aborts if no valid optical position arrives within 5 seconds or subsequent position readings disappear for 2 seconds. Disconnects, cancelled scans, malformed/ambiguous evidence and STOP revoke scan qualification. Browser scheduling and radio delivery remain best effort.
+
+The recorder independently decodes full classic 0x27 position and 0x29 transition messages. Synthetic tests cover start/finish halves, missing/unknown pieces, turn inference, flat position-and-heading closure, malformed packets, bounds, timeouts and session isolation. It does not fabricate missing tiles or return a sample track in SIMULATION. Special Fast & Furious tiles are retained as unsupported evidence, preventing a false complete layout. A generated schematic is derived only from supported observed loop geometry and still needs physical comparison.
+
+Current local verification: **294 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The public draft PR’s earlier seven-job matrix passed at its first checkpoint: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43112540000). Later changes require their own CI result.
+
+## First observed real motor pulse
+
+At **22:53 UTC**, the corrected direct reconnect completed against the same previously selected browser device after the operator’s prompted physical OFF/ON check. The operator’s reports and observed disconnect/reconnect were used for the explicit physical confirmation. No second chooser or automatic reconnect was used.
+
+Fresh replies were `05 19 27 25 00 00` (**firmware 9511**), `03 1b 0a 0e` (**3594 mV**), and `01 17` (ping). The page then sent SDK `03 90 01 01`, speed zero, a fresh ping and the single **100 mm/s** command `06 24 64 00 e8 03 01` at **22:53:56.133 UTC**. The 750 ms timer requested zero at **22:53:56.885 UTC**, and the write completed at **22:53:56.889 UTC**:752 ms to the scheduled STOP request,756 ms to its completed write. These are host timestamps, not measured mechanical stopping latency. [Redacted LIVE pulse trace](validation/live-pulse-excerpt.txt).
+
+The nearby operator separately reported that the raised wheels **moved briefly, then stopped**. This is the first positive movement/physical-STOP observation for this exact MXT/session. It does not establish actual100 mm/s wheel speed, track travel, braking distance, behavior after radio/browser failure, or suitability for students. The same-session observation was recorded to permit the next explicitly supervised contained-track scan at no more than100 mm/s. All broader acceptance items remain pending.

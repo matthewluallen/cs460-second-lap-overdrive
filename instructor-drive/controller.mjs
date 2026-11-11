@@ -8,6 +8,7 @@ export class DriveController {
     this.queue=Promise.resolve();this.waiters=new Map();
     transport.receive=bytes=>this.receive(bytes);
     transport.lost=()=>this.connectionLost();
+    transport.progress=()=>this.stateTo(this.state);
   }
   connectionLost(){
     if(this.state==='WAITING_POWER_OFF' && this.powerTarget && !this.transport.connected){
@@ -24,7 +25,7 @@ export class DriveController {
     this.signalled=false;this.identityMethod=null;this.powerTarget={...this.identity};
     this.emit('Operator started power-button identity trial for '+JSON.stringify(this.powerTarget)+'; no command sent. Press the button ONCE on the labeled physical car to switch it off.');
     this.stateTo('WAITING_POWER_OFF');
-    this.powerTimer=this.setTimer(()=>void this.stop('No expected disconnect within 30 seconds; physical identity not established',true),30000);
+    this.powerTimer=this.setTimer(()=>void this.stop('No expected disconnect within 2 minutes; physical identity not established',true),120000);
   }
   emit(message){
     const kept=this.note(this.transport.mode,message);
@@ -71,7 +72,7 @@ export class DriveController {
     if(!this.enabled)throw new Error('Instructor opt-in is disabled');
     const target=this.state==='POWER_OFF_SEEN'?this.powerTarget:null;
     if(this.state!=='DISCONNECTED'&&!target)throw new Error('Disconnect before selecting another car');
-    const epoch=++this.epoch;this.stopResult='';this.firmware=null;this.battery=null;this.stateTo('SELECTING');
+    const epoch=++this.epoch;this.stopResult='';this.stopReason='';this.firmware=null;this.battery=null;this.stateTo('SELECTING');
     try{
       // Browser chooser must retain its user gesture. No timer cancels the picker.
       const identity=await this.transport.open({...options,expectedBrowserId:target?.browserId??null});this.current(epoch);
@@ -82,8 +83,16 @@ export class DriveController {
       this.emit('Selected '+JSON.stringify(identity)+'; NOT physical identity proof');
       this.stateTo('SELECTED');
     }catch(error){
-      if(epoch===this.epoch)await this.stop(error.message,true);
-      else if(this.state==='DISCONNECTED')this.transport.close();
+      if(epoch===this.epoch){
+        const recover=target&&error.name==='SetupTimeoutError'&&this.transport.retryBrowserId===target.browserId;
+        await this.stop(error.message,true);
+        // stop/disconnect advances twice. A later user cancellation must never
+        // resurrect this partial witness. Retry still requires exact-ID setup
+        // and the operator's separate physical observation confirmation.
+        if(recover&&this.epoch===epoch+2&&this.state==='DISCONNECTED'){
+          this.powerTarget=target;this.stateTo('POWER_OFF_SEEN');
+        }
+      }else if(this.state==='DISCONNECTED')this.transport.close();
       throw error;
     }
   }
@@ -136,7 +145,7 @@ export class DriveController {
   stop(reason='Emergency STOP',disconnect=false){
     // Repeated stop callers share one operation; escalate to disconnect if needed.
     if(this.stopping){this.disconnectAfterStop ||= disconnect;return this.stopping;}
-    const epoch=++this.epoch;
+    const epoch=++this.epoch;this.stopReason=reason;
     this.clearTimer(this.armTimer);this.clearTimer(this.motionTimer);this.clearTimer(this.powerTimer);this.powerTarget=null;
     for(const waiter of this.waiters.values())waiter.reject(new Error(reason));
     this.waiters.clear();this.disconnectAfterStop=disconnect;

@@ -56,6 +56,7 @@ async function fixture(t,{config=true}={}){
   let source=await readFile(new URL('./ui.mjs',import.meta.url),'utf8');
   source=source.replace("'/link.mjs'",absolute('../bench/link.mjs')).replace("'/trace.mjs'",absolute('../bench/trace.mjs'))
     .replace("'./controller.mjs'",absolute('./controller.mjs'))
+    .replace("'./scan-controller.mjs'",absolute('./scan-controller.mjs'))
     .replace("import {BrowserTransport,SimulationTransport} from './transport.mjs';",
       'const BrowserTransport=globalThis.__driveUIRadio,SimulationTransport=globalThis.__driveUISimulation;');
   source+=`\nglobalThis.__driveUIHooks={controller:()=>controller,trace};\n//# sourceURL=instructor-drive-ui-fixture-${++fixtureNumber}.mjs`;
@@ -174,4 +175,34 @@ test('UI server opt-in refusal leaves all connection and motion controls disable
   assert.equal(f.controller(),undefined);assert.equal(f.element('select').disabled,true);assert.equal(f.element('mode').disabled,true);
   assert.equal(f.element('confirm').disabled,true);assert.equal(f.element('arm').disabled,true);assert.equal(f.element('pulse').disabled,true);
   assert.match(f.element('result').textContent,/opt-in is disabled/);assert.equal(f.radios.length,0);
+});
+
+test('UI track scan needs completed pulse STOP, physical attestation, containment and a new arm; blur stops it',async t=>{
+  const f=await fixture(t);await f.connect({live:true});await f.lightConfirm();
+  assert.equal(f.element('scan').disabled,true);assert.equal(f.element('qualify').disabled,true);
+  await f.click('arm');await f.click('pulse');
+  assert.equal(f.element('qualify').disabled,true,'motion request is not observed physical STOP');
+  await new Promise(resolve=>setTimeout(resolve,800));await flush();
+  assert.equal(f.controller().state,'CONFIRMED');assert.equal(f.controller().pulseReadyForQualification,true);
+  await f.check('pulseObserved',true);await f.click('qualify');
+  assert.equal(f.controller().scanQualified,true);assert.equal(f.element('scan').disabled,true);
+  await f.check('contained',true);await f.click('arm');assert.equal(f.element('scan').disabled,false);
+  await f.click('scan');assert.equal(f.controller().state,'SCANNING');
+  assert.equal(f.element('speed').disabled,true);assert.equal(f.element('scan').disabled,true);
+  assert.match(f.element('trackStatus').textContent,/LIVE.*RECORDING/);
+  await f.window.dispatch('blur');assert.equal(f.controller().state,'DISCONNECTED');
+  assert.equal(f.controller().scanQualified,false);assert.equal(f.element('scan').disabled,true);
+  assert.match(f.element('trackStatus').textContent,/INCOMPLETE/);
+  assert.equal(f.element('exportTrack').disabled,false);assert.equal(f.element('trackMap').innerHTML,'');
+  assert.deepEqual(f.radios[0].writes.at(-1),[6,0x24,0,0,0xe8,3,1]);
+});
+
+test('UI service cleanup shows its stage and blocks retry until the original operation settles',async t=>{
+  const f=await fixture(t);await f.mode('live');const radio=f.radios[0];
+  f.element('label').value='INSTRUCTOR-A';await f.check('safe',true);
+  radio.open=async()=>{radio.setupPending=true;radio.retryBrowserId=radio.id;throw new Error('service discovery stalled');};
+  await f.click('select');assert.equal(f.controller().state,'DISCONNECTED');
+  assert.equal(f.element('select').disabled,true);assert.match(f.element('result').textContent,/finishing the previous/);
+  radio.setupPending=false;radio.progress();
+  assert.equal(f.element('select').disabled,false);assert.equal(f.element('select').textContent,'Retry same car');
 });
