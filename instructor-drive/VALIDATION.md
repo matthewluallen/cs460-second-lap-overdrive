@@ -91,7 +91,7 @@ The experimental scan controller requires a successful 750 ms pulse-limit STOP p
 
 The recorder independently decodes full classic 0x27 position and 0x29 transition messages. Synthetic tests cover start/finish halves, missing/unknown pieces, turn inference, flat position-and-heading closure, malformed packets, bounds, timeouts and session isolation. It does not fabricate missing tiles or return a sample track in SIMULATION. Special Fast & Furious tiles are retained as unsupported evidence, preventing a false complete layout. A generated schematic is derived only from supported observed loop geometry and still needs physical comparison.
 
-Current local verification: **294 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The public draft PR’s earlier seven-job matrix passed at its first checkpoint: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43112540000). Later changes require their own CI result.
+Current local verification: **294 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The current code commit `7e8b450` also passed all seven CI jobs: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43116067946). This covers Node 18/22/24 bench tests, Node 22/24 pinned-platform tests, and Python 3.10/3.12 simulator tests.
 
 ## First observed real motor pulse
 

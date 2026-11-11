@@ -4,7 +4,7 @@
 
 The instructor page starts in **SIMULATION**, with synthetic responses and no radio. LIVE uses actual Web Bluetooth GATT writes to the one explicitly selected and physically confirmed car. There is no automatic movement, reconnect/resume, multi-car broadcast, lane control, firmware update, raw-command entry or server motor endpoint.
 
-The original **750 ms pulse** remains the first movement test. An optional **experimental track scan** becomes available only after a successful pulse/STOP sequence and the operator's observation of both on the same car in the same connection session. It can drive longer than a pulse, so its separate procedure and acceptance checks below apply. Neither physical driving nor track reconstruction has been verified on this car.
+The original **750 ms pulse** remains the first movement test. An optional **experimental track scan** becomes available only after a successful pulse/STOP sequence and the operator's observation of both on the same car in the same connection session. It can drive longer than a pulse, so its separate procedure and acceptance checks below apply. The single raised-wheels movement/stop observation does not verify track travel, emergency/fault stopping or track reconstruction.
 
 ## Run locally
 
@@ -89,19 +89,19 @@ See [VALIDATION.md](VALIDATION.md) for the actual results, browser findings and 
 
 ## Hardware acceptance record — all items initially pending
 
-Complete this record for **one specifically identified car** before student access. Preserve raw LIVE TX/RX logs and operator observations separately; keep real device identifiers in private inventory. Requalification is needed after a car, firmware, host, browser or transport change. The November 11 LIVE session established GATT communication and battery notifications, but its custom LED trials produced no observed light change and no motor command was sent. Read [the actual validation record](VALIDATION.md); movement and STOP acceptance remain pending.
+Complete this record for **one specifically identified car** before student access. Preserve raw LIVE TX/RX logs and operator observations separately; keep real device identifiers in private inventory. Requalification is needed after a car, firmware, host, browser or transport change. The initial November 11 LED session produced no observed custom light change and sent no motor command. A later **22:53 UTC** trial completed the physical OFF/ON identification and exact-device reconnect, received fresh firmware **9511**, battery **3594 mV** and ping replies, then sent one requested **100 mm/s** pulse. The operator separately saw the raised wheels move briefly and stop. [Redacted pulse trace](validation/live-pulse-excerpt.txt) and [full validation record](VALIDATION.md#first-observed-real-motor-pulse). Full acceptance, including track and fault behavior, remains incomplete.
 
 | Record field | Value to enter |
 | --- | --- |
-| Operator and date/time | Pending |
+| Operator and date/time | Instructor observation, 11 November 2026, 22:53 UTC; operator identity retained privately |
 | Reviewed commit / PR | Pending |
-| Physical label and car model | Pending |
-| Exact browser device ID / selected name | Pending |
-| Raw firmware reply / decoded version | Pending |
-| Host OS, browser version, BLE adapter | Pending |
-| Initial/final raw battery mV | Pending |
-| Fixture and contained-track description | Pending |
-| Log/evidence file and observed stop distance/time | Pending |
+| Physical label and car model | International MXT; unique inventory label retained privately |
+| Exact browser device ID / selected name | Retained privately; exact-device reconnect recorded |
+| Raw firmware reply / decoded version | `05 19 27 25 00 00` / 9511 |
+| Host OS, browser version, BLE adapter | macOS 26.6.2, Chrome 157; adapter detail pending |
+| Initial/final raw battery mV | 3594 mV at arming; final reading pending |
+| Fixture and contained-track description | Raised wheels observed; fixture details and track acceptance pending |
+| Log/evidence file and observed stop distance/time | [LIVE pulse trace](validation/live-pulse-excerpt.txt); STOP requested after 752 ms and write completed after 756 ms, both host timings; mechanical latency/distance unmeasured |
 | Optional scan evidence, physical track comparison and incomplete cases | Pending |
 | Reviewer / instructor sign-off | Pending |
 
@@ -110,7 +110,8 @@ Complete this record for **one specifically identified car** before student acce
 - [ ] Record either the visibly observed off → green → off pattern on that exact car **or** deliberate physical power-off → observed GATT disconnect → explicit same-ID reconnect → operator attestation. Blue connection lights, completed writes and scan counts alone do not qualify. No other car reacts.
 - [ ] Raw ping, version and battery replies are captured. Allowed version is recorded, not inferred from a model name. Unknown/malformed replies and out-of-gate battery values cannot authorize motion.
 - [ ] Arming itself causes no movement. An unused arm expires after 5 seconds, without later movement.
-- [ ] In the fixture, one 100 mm/s pulse moves the wheels only after the explicit action. STOP is visibly observed; measure latency rather than equating a completed write with braking.
+- [x] One explicit requested 100 mm/s pulse on this MXT produced observed raised-wheel movement followed by a physical stop, at 22:53 UTC on November 11.
+- [ ] Measure mechanical stopping latency and wheel speed/distance in the fixture; the 752/756 ms host timestamps are not mechanical measurements. Repeatability remains to be established.
 - [ ] Emergency STOP interrupts a pulse. Repeated STOP is safe. Further movement requires re-arming; switching mode, disconnecting or reconnecting never auto-starts.
 - [ ] In the fixture, test Escape/cancellation, loss of focus/visibility, notification timeout, write failure/stall and BLE disconnection. Record actual car behavior and any failed STOP delivery. Keep immediate physical intervention available.
 - [ ] Confirm no queued late nonzero command runs after STOP/cancellation. Confirm a stale chooser/connection cannot replace the current selected car.
