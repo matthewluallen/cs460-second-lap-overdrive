@@ -31,7 +31,7 @@ jobs:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
       - name: Run bench codec, transport, UI and evidence tests (no radio)
-        run: node --test bench/*.test.mjs
+        run: node --test bench/*.test.mjs instructor-drive/*.test.mjs
 
   platform:
     name: Pinned platform / Node ${{ matrix.node }}

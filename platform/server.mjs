@@ -11,7 +11,14 @@ const versions=Object.freeze({
   lodash:require('lodash/package.json').version
 });
 const benchDirectory=fileURLToPath(new URL('../bench/',import.meta.url));
+const driveDirectory=fileURLToPath(new URL('../instructor-drive/',import.meta.url));
 export const MAX_BODY_BYTES=4096;
+
+// Deployment opt-in only: this is not authentication. Keep enabled servers on
+// an instructor-controlled localhost origin, never a student/public preview.
+export function instructorDriveEnabled(value){
+  return value==='I_ACCEPT_UNTESTED_HARDWARE';
+}
 
 class InputError extends Error {}
 
@@ -34,7 +41,7 @@ function route(action){
   };
 }
 
-export function createApp(){
+export function createApp({instructorLiveDrive=false}={}){
   const app=express();
   const book=new Records(); // Shared by this app's clients; disposable on restart.
   // Express 4.17.1 defaults to qs's extended parser. Keep that deliberately old
@@ -78,7 +85,20 @@ export function createApp(){
     res.status(201).json({source:'MOCK',record});
   }));
 
-  // Only bench assets are public. No repository-root mount, proxy, or car API.
+  // A query, cookie, browser storage value, or HTTP request cannot enable this
+  // route. Assets live outside bench so its static fallback remains stationary.
+  app.use('/instructor-drive',(req,res,next)=>{
+    res.set('Cache-Control','no-store');
+    if(instructorLiveDrive!==true)return res.status(404).json({error:'Not found'});
+    next();
+  });
+  if(instructorLiveDrive===true){
+    app.get('/instructor-drive/config.json',(req,res)=>res.json({instructorLiveDrive:true}));
+    app.use('/instructor-drive',express.static(driveDirectory,{dotfiles:'deny',index:'index.html'}));
+  }
+
+  // Only designated browser assets are public. No repository-root mount, proxy,
+  // or motor API: the instructor page owns its selected browser GATT connection.
   app.use(express.static(benchDirectory,{dotfiles:'deny',index:'index.html'}));
   app.use((req,res)=>res.status(404).json({error:'Not found'}));
   app.use((error,req,res,next)=>{
@@ -107,8 +127,10 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
   try{
     const port=parsePort(process.env.PORT);
     // HOST is intentionally not configurable. This teaching server is loopback-only.
-    const server=createApp().listen(port,'127.0.0.1',()=>{
+    const instructorLiveDrive=instructorDriveEnabled(process.env.CS460_INSTRUCTOR_LIVE_DRIVE);
+    const server=createApp({instructorLiveDrive}).listen(port,'127.0.0.1',()=>{
       console.log(`CS 460 mock support server: http://127.0.0.1:${port}`);
+      if(instructorLiveDrive)console.log('Instructor drive prototype enabled at /instructor-drive/; physical movement remains unverified.');
     });
     server.on('error',()=>{
       console.error('Could not start the local server; check whether PORT is already in use.');

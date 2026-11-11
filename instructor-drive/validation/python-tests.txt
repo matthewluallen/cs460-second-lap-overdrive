@@ -1,0 +1,33 @@
+test_deliberate_caller_recomputed_checksum_is_not_publisher_authentication (test_adversarial.DeliberateScenarioCharacterizationTests.test_deliberate_caller_recomputed_checksum_is_not_publisher_authentication) ... ok
+test_deliberate_duplicate_nonce_repeats_non_idempotent_advance (test_adversarial.DeliberateScenarioCharacterizationTests.test_deliberate_duplicate_nonce_repeats_non_idempotent_advance) ... ok
+test_deliberate_requested_team_bypasses_authenticated_team (test_adversarial.DeliberateScenarioCharacterizationTests.test_deliberate_requested_team_bypasses_authenticated_team) ... ok
+test_deliberate_telemetry_exposes_every_teams_events (test_adversarial.DeliberateScenarioCharacterizationTests.test_deliberate_telemetry_exposes_every_teams_events) ... ok
+test_dispatch_requires_object_without_coercing_pair_arrays (test_adversarial.ShellGuardrailTests.test_dispatch_requires_object_without_coercing_pair_arrays) ... ok
+test_dispatch_requires_string_operation_and_preserves_request (test_adversarial.ShellGuardrailTests.test_dispatch_requires_string_operation_and_preserves_request) ... ok
+test_line_at_existing_limit_is_accepted (test_adversarial.ShellGuardrailTests.test_line_at_existing_limit_is_accepted) ... ok
+test_oversize_line_closes_without_processing_following_request (test_adversarial.ShellGuardrailTests.test_oversize_line_closes_without_processing_following_request) ... ok
+test_recursion_error_response_is_bounded_and_next_request_runs (test_adversarial.ShellGuardrailTests.test_recursion_error_response_is_bounded_and_next_request_runs) ... ok
+test_shell_deep_json_is_rejected_and_prior_state_survives (test_adversarial.ShellGuardrailTests.test_shell_deep_json_is_rejected_and_prior_state_survives) ... ok
+test_shell_malformed_inputs_leave_state_and_next_request_usable (test_adversarial.ShellGuardrailTests.test_shell_malformed_inputs_leave_state_and_next_request_usable) ... ok
+test_invalid_commands_are_atomic (test_adversarial.SimulatorEnvelopeTests.test_invalid_commands_are_atomic) ... ok
+test_invalid_profiles_do_not_change_state (test_adversarial.SimulatorEnvelopeTests.test_invalid_profiles_do_not_change_state) ... ok
+test_process_state_and_returned_copies_are_isolated (test_adversarial.SimulatorEnvelopeTests.test_process_state_and_returned_copies_are_isolated) ... ok
+test_profile_and_command_keep_absolute_500_bound (test_adversarial.SimulatorEnvelopeTests.test_profile_and_command_keep_absolute_500_bound) ... ok
+test_profile_reduction_clamps_speed_and_stop_still_works (test_adversarial.SimulatorEnvelopeTests.test_profile_reduction_clamps_speed_and_stop_still_works) ... ok
+test_cli_default_runs_three_labelled_deliberate_baselines (test_cwe_lab.CweLabTests.test_cli_default_runs_three_labelled_deliberate_baselines) ... ok
+test_cli_per_case_runs_only_the_selected_lesson (test_cwe_lab.CweLabTests.test_cli_per_case_runs_only_the_selected_lesson) ... ok
+test_cli_rejects_unknown_case_without_running_lessons (test_cwe_lab.CweLabTests.test_cli_rejects_unknown_case_without_running_lessons) ... ok
+test_cli_runs_are_deterministic_and_do_not_share_state (test_cwe_lab.CweLabTests.test_cli_runs_are_deterministic_and_do_not_share_state) ... ok
+test_lessons_call_actual_methods_on_fresh_pilots (test_cwe_lab.CweLabTests.test_lessons_call_actual_methods_on_fresh_pilots) ... ok
+test_profile_distinguishes_integrity_authenticity_and_absolute_limit (test_cwe_lab.CweLabTests.test_profile_distinguishes_integrity_authenticity_and_absolute_limit) ... ok
+test_repeat_reports_two_effects_despite_one_nonce (test_cwe_lab.CweLabTests.test_repeat_reports_two_effects_despite_one_nonce) ... ok
+test_report_reflects_repaired_policy_instead_of_canned_success (test_cwe_lab.CweLabTests.test_report_reflects_repaired_policy_instead_of_canned_success) ... ok
+test_drive_then_stop (test_functional.FunctionalTests.test_drive_then_stop) ... ok
+test_envelope_and_invalid_token (test_functional.FunctionalTests.test_envelope_and_invalid_token) ... ok
+test_four_team_lifecycle (test_functional.FunctionalTests.test_four_team_lifecycle) ... ok
+test_invalid_action_does_not_move (test_functional.FunctionalTests.test_invalid_action_does_not_move) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 0.772s
+
+OK

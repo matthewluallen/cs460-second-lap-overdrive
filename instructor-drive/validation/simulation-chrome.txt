@@ -1,0 +1,26 @@
+2026-11-11T22:11:31.648Z | SIMULATION | Instructor preview opened; default simulation, no radio
+2026-11-11T22:11:34.004Z | SIMULATION | Operator setup {"label":"SIM-TEST","context":""}
+2026-11-11T22:11:34.004Z | SIMULATION | Selected {"name":"Synthetic car — no radio","browserId":"SIMULATION-ONLY"}; NOT physical identity proof
+2026-11-11T22:11:35.335Z | SIMULATION | Light sequence writes completed. Operator must observe the exact physical car.
+2026-11-11T22:11:38.109Z | SIMULATION | Operator physically confirmed {"label":"SIM-TEST","name":"Synthetic car — no radio","browserId":"SIMULATION-ONLY"}
+2026-11-11T22:11:38.904Z | SIMULATION | TX request 01 18
+2026-11-11T22:11:38.904Z | SIMULATION | RX 03 19 27 25
+2026-11-11T22:11:38.904Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:38.904Z | SIMULATION | TX request 01 1a
+2026-11-11T22:11:38.904Z | SIMULATION | RX 03 1b 74 0e
+2026-11-11T22:11:38.904Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:38.904Z | SIMULATION | TX request 01 16
+2026-11-11T22:11:38.904Z | SIMULATION | RX 01 17
+2026-11-11T22:11:38.904Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:38.904Z | SIMULATION | TX request 03 90 01 01
+2026-11-11T22:11:38.904Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:38.904Z | SIMULATION | TX request 06 24 00 00 e8 03 01
+2026-11-11T22:11:38.904Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:38.904Z | SIMULATION | Armed for one pulse; firmware 9511, battery 3700 mV; physical stop NOT verified
+2026-11-11T22:11:40.229Z | SIMULATION | TX request 01 16
+2026-11-11T22:11:40.229Z | SIMULATION | RX 01 17
+2026-11-11T22:11:40.229Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:40.229Z | SIMULATION | TX request 06 24 64 00 e8 03 01
+2026-11-11T22:11:40.229Z | SIMULATION | Write completed; physical result unverified
+2026-11-11T22:11:40.981Z | SIMULATION | STOP requested: 750 ms pulse limit
+2026-11-11T22:11:40.981Z | SIMULATION | STOP write completed; physical stop unverified

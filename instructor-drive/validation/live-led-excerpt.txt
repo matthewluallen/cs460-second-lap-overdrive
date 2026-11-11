@@ -1,0 +1,47 @@
+LIVE EXCERPT — selected LED TX and decoded battery messages only.
+Device identifiers and operator context omitted. This is not a movement or stop test.
+Operator reported no visible custom LED change. No motor opcode 0x24 was sent.
+
+2026-11-11T22:17:45.207Z | LIVE identification | started by operator for this selected candidate only; off → green → off; does not confirm or save physical identity
+2026-11-11T22:17:45.207Z | LIVE TX attempt | 03 90 01 00 · sdkOn (requested; completion and car response not yet known)
+2026-11-11T22:17:45.212Z | LIVE TX | 03 90 01 00 · sdkOn (write completed; observe car or RX)
+2026-11-11T22:17:45.213Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (requested; completion and car response not yet known)
+2026-11-11T22:17:45.215Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (write completed; observe car or RX)
+2026-11-11T22:17:45.616Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00 · engineGreen (requested; completion and car response not yet known)
+2026-11-11T22:17:45.625Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00 · engineGreen (write completed; observe car or RX)
+2026-11-11T22:17:46.827Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (requested; completion and car response not yet known)
+2026-11-11T22:17:46.827Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (write completed; observe car or RX)
+2026-11-11T22:17:46.827Z | LIVE TX attempt | 03 90 00 00 · sdkOff (requested; completion and car response not yet known)
+2026-11-11T22:17:46.827Z | LIVE TX | 03 90 00 00 · sdkOff (write completed; observe car or RX)
+2026-11-11T22:17:46.827Z | LIVE identification | ended: signal, engine-off and SDK-off writes completed; observe the physical car; identity unverified; original light/SDK state not restored
+2026-11-11T22:17:47.764Z | LIVE identification | started by operator for this selected candidate only; off → green → off; does not confirm or save physical identity
+2026-11-11T22:17:47.764Z | LIVE TX attempt | 03 90 01 00 · sdkOn (requested; completion and car response not yet known)
+2026-11-11T22:17:47.767Z | LIVE TX | 03 90 01 00 · sdkOn (write completed; observe car or RX)
+2026-11-11T22:17:47.767Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (requested; completion and car response not yet known)
+2026-11-11T22:17:47.768Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (write completed; observe car or RX)
+2026-11-11T22:17:48.168Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00 · engineGreen (requested; completion and car response not yet known)
+2026-11-11T22:17:48.172Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00 · engineGreen (write completed; observe car or RX)
+2026-11-11T22:17:49.373Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (requested; completion and car response not yet known)
+2026-11-11T22:17:49.373Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (write completed; observe car or RX)
+2026-11-11T22:17:49.373Z | LIVE TX attempt | 03 90 00 00 · sdkOff (requested; completion and car response not yet known)
+2026-11-11T22:17:49.374Z | LIVE TX | 03 90 00 00 · sdkOff (write completed; observe car or RX)
+2026-11-11T22:17:49.374Z | LIVE identification | ended: signal, engine-off and SDK-off writes completed; observe the physical car; identity unverified; original light/SDK state not restored
+2026-11-11T22:17:58.872Z | LIVE identification | started by operator for this selected candidate only; off → green → off; does not confirm or save physical identity
+2026-11-11T22:17:58.872Z | LIVE TX attempt | 03 90 01 00 · sdkOn (requested; completion and car response not yet known)
+2026-11-11T22:17:58.876Z | LIVE TX | 03 90 01 00 · sdkOn (write completed; observe car or RX)
+2026-11-11T22:17:58.876Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (requested; completion and car response not yet known)
+2026-11-11T22:17:58.877Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (write completed; observe car or RX)
+2026-11-11T22:17:59.278Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00 · engineGreen (requested; completion and car response not yet known)
+2026-11-11T22:17:59.282Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00 · engineGreen (write completed; observe car or RX)
+2026-11-11T22:18:00.484Z | LIVE TX attempt | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (requested; completion and car response not yet known)
+2026-11-11T22:18:00.497Z | LIVE TX | 11 33 03 00 00 00 00 00 03 00 00 00 00 02 00 00 00 00 · engineOff (write completed; observe car or RX)
+2026-11-11T22:18:00.497Z | LIVE TX attempt | 03 90 00 00 · sdkOff (requested; completion and car response not yet known)
+2026-11-11T22:18:00.498Z | LIVE TX | 03 90 00 00 · sdkOff (write completed; observe car or RX)
+2026-11-11T22:18:00.498Z | LIVE identification | ended: signal, engine-off and SDK-off writes completed; observe the physical car; identity unverified; original light/SDK state not restored
+2026-11-11T22:18:09.993Z | LIVE decoded | battery 3528 mV
+2026-11-11T22:18:18.544Z | LIVE decoded | battery 3491 mV
+2026-11-11T22:18:32.166Z | LIVE decoded | battery 3483 mV
+2026-11-11T22:18:38.104Z | LIVE decoded | battery 3483 mV
+2026-11-11T22:18:45.275Z | LIVE decoded | battery 3506 mV
+2026-11-11T22:18:59.497Z | LIVE decoded | battery 3494 mV
+2026-11-11T22:19:05.648Z | LIVE decoded | battery 3505 mV

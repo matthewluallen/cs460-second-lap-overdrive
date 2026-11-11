@@ -1,0 +1,41 @@
+LIVE hardware evidence, 11 November 2026. Identifiers redacted; repetitive unsolicited0x86 diagnostics omitted. No motor command sent. This is a partial power check: the second chooser was cancelled before identity confirmation.
+
+2026-11-11T22:48:43.126Z | SIMULATION | Instructor preview opened; default simulation, no radio
+2026-11-11T22:48:51.255Z | LIVE | Operator setup {"label":"REDACTED-PHYSICAL-LABEL","context":""}
+2026-11-11T22:48:51.257Z | LIVE chooser | Anki service filter; select only the assigned car
+2026-11-11T22:48:56.623Z | LIVE selection | {"name":"@'%\u0001    Drive","browserId":"REDACTED-BROWSER-ID"} · browser name/ID only; not verified vehicle identity
+2026-11-11T22:48:56.623Z | LIVE GATT | connecting
+2026-11-11T22:48:56.798Z | LIVE GATT | connected; finding Anki service
+2026-11-11T22:48:57.039Z | LIVE GATT | service and characteristics found; starting notifications
+2026-11-11T22:48:57.097Z | LIVE GATT | notify ready; no command sent
+2026-11-11T22:48:57.098Z | LIVE | Selected {"name":"@'%\u0001    Drive","browserId":"REDACTED-BROWSER-ID"}; NOT physical identity proof
+2026-11-11T22:48:57.098Z | LIVE RX | 0b 86 5d 00 28 08 00 00 14 10 00 00
+2026-11-11T22:48:57.156Z | LIVE RX | 0b 86 ba 00 2d 08 00 00 13 10 00 00
+2026-11-11T22:48:57.216Z | LIVE RX | 0b 86 50 00 2c 08 00 00 13 10 00 00
+2026-11-11T22:48:57.277Z | LIVE RX | 0b 86 c5 00 2d 08 00 00 14 10 00 00
+2026-11-11T22:48:57.336Z | LIVE RX | 0b 86 47 00 2c 08 00 00 6a 10 00 00
+2026-11-11T22:48:57.399Z | LIVE RX | 0b 86 c8 00 28 08 00 00 13 10 00 00
+2026-11-11T22:48:57.456Z | LIVE RX | 0b 86 49 00 2c 08 00 00 01 10 00 00
+2026-11-11T22:48:57.516Z | LIVE RX | 0b 86 c5 00 2d 08 00 00 13 10 00 00
+2026-11-11T22:48:57.540Z | LIVE | Operator started power-button identity trial for {"name":"@'%\u0001    Drive","browserId":"REDACTED-BROWSER-ID"}; no command sent. Press the button ONCE on the labeled physical car to switch it off.
+2026-11-11T22:48:57.576Z | LIVE RX | 0b 86 46 00 2c 08 00 00 14 10 00 00
+2026-11-11T22:48:57.636Z | LIVE RX | 0b 86 c7 00 2d 08 00 00 13 10 00 00
+2026-11-11T22:48:57.696Z | LIVE RX | 0b 86 44 00 2c 08 00 00 13 10 00 00
+2026-11-11T22:48:57.756Z | LIVE RX | 0b 86 ca 00 28 08 00 00 13 10 00 00
+2026-11-11T22:48:57.816Z | LIVE RX | 0b 86 43 00 2c 08 00 00 1c 10 00 00
+2026-11-11T22:48:57.876Z | LIVE RX | 0b 86 cd 00 2d 08 00 00 13 10 00 00
+2026-11-11T22:48:57.937Z | LIVE RX | 0b 86 3b 00 2c 08 00 00 13 10 00 00
+2026-11-11T22:48:57.997Z | LIVE RX | 0b 86 d6 00 2d 08 00 00 13 10 00 00
+2026-11-11T22:48:58.073Z | LIVE RX | 0b 86 3a 00 2c 08 00 00 13 10 00 00
+2026-11-11T22:48:58.116Z | LIVE RX | 0b 86 d3 00 28 08 00 00 13 10 00 00
+2026-11-11T22:48:58.176Z | LIVE RX | 0b 86 39 00 2c 08 00 00 13 10 00 00
+2026-11-11T22:48:58.236Z | LIVE RX | 0b 86 d2 00 2d 08 00 00 13 10 00 00
+2026-11-11T22:48:58.296Z | LIVE RX | 0b 86 38 00 2c 08 00 00 4d 10 00 00
+2026-11-11T22:48:58.356Z | LIVE RX | 0b 86 03 00 22 08 00 00 8a 0e 00 00
+2026-11-11T22:49:14.669Z | LIVE GATT | disconnected
+2026-11-11T22:49:14.670Z | LIVE | Expected disconnect observed during operator power-button trial. Switch the same labeled car on, then explicitly reconnect its exact browser ID.
+2026-11-11T22:49:32.803Z | LIVE chooser | Anki service filter; select only the assigned car
+2026-11-11T22:49:32.934Z | LIVE setup error | chooser: NotFoundError: User cancelled the requestDevice() chooser.
+2026-11-11T22:49:32.935Z | LIVE | STOP requested: User cancelled the requestDevice() chooser.
+2026-11-11T22:49:32.935Z | LIVE | Disarmed; this page sent no motor command in this session. Physical state unverified.
+2026-11-11T22:49:32.936Z | LIVE | UI error: User cancelled the requestDevice() chooser.

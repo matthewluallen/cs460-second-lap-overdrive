@@ -17,3 +17,12 @@ Real hardware release requires an independent supervisor, measured limits,
 watchdog, recovery procedure and physical access to stop or remove the car.
 A stop command sent over a lost link is not a guaranteed emergency stop.
 Keep firmware updates outside this initial assignment.
+
+
+Additive instructor prototype (November 11, 2026; not hardware acceptance):
+The separately gated instructor-drive/ implements one browser-selected car,
+positive operator identity confirmation, bounded legacy speed commands and
+best-effort STOP. The stationary bench remains unchanged. See
+instructor-drive/README.md, SOURCES.md and VALIDATION.md. The opt-in deployment
+flag does not replace independent supervision, physical recovery or the
+acceptance requirements above. No student release is authorized by this code.

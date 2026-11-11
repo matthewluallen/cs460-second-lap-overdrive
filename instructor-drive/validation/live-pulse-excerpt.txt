@@ -1,0 +1,40 @@
+LIVE, 11 November 2026. Selected actual trace lines; identifiers redacted and repeated diagnostic notifications omitted. Operator separately reported raised wheels moved briefly then stopped. Scheduled STOP request was752ms after nonzero request; write completed756ms after request. These are host timestamps, not measured physical braking latency.
+
+2026-11-11T22:51:52.308Z | LIVE GATT | connecting
+2026-11-11T22:51:52.395Z | LIVE GATT | connected; finding Anki service
+2026-11-11T22:51:52.602Z | LIVE GATT | service and characteristics found; starting notifications
+2026-11-11T22:51:52.692Z | LIVE GATT | notify ready; no command sent
+2026-11-11T22:52:50.370Z | LIVE | RX 03 1b c5 0d
+2026-11-11T22:52:55.350Z | LIVE | RX 03 1b c6 0d
+2026-11-11T22:53:15.241Z | LIVE | RX 03 1b bd 0d
+2026-11-11T22:53:24.992Z | LIVE | RX 03 1b c1 0d
+2026-11-11T22:53:28.793Z | LIVE GATT | disconnected
+2026-11-11T22:53:28.794Z | LIVE | Expected disconnect observed during operator power-button trial. Switch the same labeled car on, then explicitly reconnect its exact browser ID.
+2026-11-11T22:53:45.838Z | LIVE remembered selection | Explicit same-car reconnect using the previously selected browser device; no chooser and no new physical identity proof
+2026-11-11T22:53:45.838Z | LIVE GATT | connecting
+2026-11-11T22:53:45.905Z | LIVE GATT | connected; finding Anki service
+2026-11-11T22:53:46.123Z | LIVE GATT | service and characteristics found; starting notifications
+2026-11-11T22:53:46.173Z | LIVE GATT | notify ready; no command sent
+2026-11-11T22:53:54.606Z | LIVE | Operator physically confirmed {"label":"REDACTED-PHYSICAL-LABEL","name":"\u0001'%\u0001    Drive","browserId":"REDACTED-BROWSER-ID","method":"power-cycle"}
+2026-11-11T22:53:55.199Z | LIVE | TX request 01 18
+2026-11-11T22:53:55.201Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:55.263Z | LIVE | RX 05 19 27 25 00 00
+2026-11-11T22:53:55.263Z | LIVE | TX request 01 1a
+2026-11-11T22:53:55.264Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:55.323Z | LIVE | RX 03 1b 0a 0e
+2026-11-11T22:53:55.323Z | LIVE | TX request 01 16
+2026-11-11T22:53:55.324Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:55.383Z | LIVE | RX 01 17
+2026-11-11T22:53:55.384Z | LIVE | TX request 03 90 01 01
+2026-11-11T22:53:55.384Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:55.384Z | LIVE | TX request 06 24 00 00 e8 03 01
+2026-11-11T22:53:55.385Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:55.385Z | LIVE | Armed for one pulse; firmware 9511, battery 3594 mV; physical stop NOT verified
+2026-11-11T22:53:56.090Z | LIVE | TX request 01 16
+2026-11-11T22:53:56.092Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:56.133Z | LIVE | RX 01 17
+2026-11-11T22:53:56.133Z | LIVE | TX request 06 24 64 00 e8 03 01
+2026-11-11T22:53:56.134Z | LIVE | Write completed; physical result unverified
+2026-11-11T22:53:56.885Z | LIVE | STOP requested: 750 ms pulse limit
+2026-11-11T22:53:56.885Z | LIVE | STOP TX request 06 24 00 00 e8 03 01
+2026-11-11T22:53:56.889Z | LIVE | STOP write completed; physical stop unverified
