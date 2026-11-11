@@ -286,3 +286,13 @@ test('both explicitly reviewed classic firmware replies arm, with battery bounda
     assert.equal(moving(r.radio).length,0);await r.drive.stop('End fixture',true);
   }
 });
+
+
+test('repeated disconnect STOP never erases earlier motor-command attempts from status',async()=>{
+  const r=rig();await armed(r);await r.drive.pulse(100);await r.clock.advance(750);
+  await r.drive.stop('Page hidden',true);assert.equal(r.drive.state,'DISCONNECTED');
+  await r.drive.stop('Page exit',true);
+  assert.doesNotMatch(r.drive.stopResult,/no motor command/);
+  assert.match(r.drive.stopResult,/unavailable\/unverified/);
+  assert.equal(moving(r.radio).length,1);
+});

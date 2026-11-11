@@ -45,6 +45,7 @@ export class DriveController {
       this.current(epoch);
       if(!this.transport.connected)throw new Error('Radio unavailable');
       if(!emergency)this.emit('TX request '+[...bytes].map(x=>x.toString(16).padStart(2,'0')).join(' '));
+      if(bytes[1]===0x24)this.motorAttempted=true;
       await this.transport.write(bytes);
       this.current(epoch);
       if(!emergency)this.emit('Write completed; physical result unverified');
@@ -161,7 +162,7 @@ export class DriveController {
         }
       }catch(error){this.disconnectAfterStop=true;}
       finally{
-        const status=delivered?'STOP write completed; physical stop unverified':this.drivePrepared?'STOP delivery unavailable/unverified; physically switch car off if moving':'Disarmed; this page sent no motor command in this session. Physical state unverified.';
+        const status=delivered?'STOP write completed; physical stop unverified':(this.drivePrepared||this.motorAttempted)?'STOP delivery unavailable/unverified; physically switch car off if moving':'Disarmed; this page sent no motor command in this session. Physical state unverified.';
         try{this.note(this.transport.mode,status);}catch{}
         this.stopResult=status;
         if(this.disconnectAfterStop||!this.transport.connected||!this.label){

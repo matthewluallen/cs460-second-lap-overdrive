@@ -23,7 +23,7 @@ The baseline ran on Node **v25.6.1** and Python **3.14.7**. Dependency installat
 | Check | Observed result | Scope |
 | --- | --- | --- |
 | Baseline `npm test` | 160 passed, 0 failed | 142 existing bench tests plus 18 platform/dependency tests before this change. |
-| Current `npm test` | **294 passed, 0 failed, 0 skipped** | Current checkpoint includes connection recovery, remembered-device reconnect, track recorder, scan qualification/fault handling, UI and the unchanged course suites. |
+| Current `npm test` | **295 passed, 0 failed, 0 skipped** | Current checkpoint includes connection recovery, remembered-device reconnect, track recorder, scan qualification/fault handling, UI and the unchanged course suites. |
 | `python3 -m unittest discover -s tests -v` | **28 passed, 0 failed** | Existing coursework simulator regression suite. |
 | Official Anki SDK C suite, compiled on this host | **19 passed, 0 failed, 0 skipped** | 12 upstream protocol, 5 vehicle-advertisement and 2 BLE-advertisement tests at official commit `410352617b8660338746a6bb2b2dd173afb1b91a`; no radio involved. |
 
@@ -73,7 +73,7 @@ installed Chrome completed select, simulated light identification, explicit
 confirmation, arm, pulse and STOP again. Debug remained collapsible and trace
 export worked. Ten reproducible UI integration tests now cover the actual UI,
 controller, codec and trace modules with a synthetic DOM and explicitly fake
-LIVE transport; they use no radio. That earlier local `npm test` checkpoint was 241/241; the current result is 294/294.
+LIVE transport; they use no radio. That earlier local `npm test` checkpoint was 241/241; the current result is 295/295.
 
 In an additional LIVE trial, the browser observed the operator's prompted
 physical OFF action and entered `POWER_OFF_SEEN`. A premature reconnect was
@@ -91,7 +91,7 @@ The experimental scan controller requires a successful 750 ms pulse-limit STOP p
 
 The recorder independently decodes full classic 0x27 position and 0x29 transition messages. Synthetic tests cover start/finish halves, missing/unknown pieces, turn inference, flat position-and-heading closure, malformed packets, bounds, timeouts and session isolation. It does not fabricate missing tiles or return a sample track in SIMULATION. Special Fast & Furious tiles are retained as unsupported evidence, preventing a false complete layout. A generated schematic is derived only from supported observed loop geometry and still needs physical comparison.
 
-Current local verification: **294 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The current code commit `7e8b450` also passed all seven CI jobs: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43116067946). This covers Node 18/22/24 bench tests, Node 22/24 pinned-platform tests, and Python 3.10/3.12 simulator tests.
+Current local verification: **295 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The current code commit `7e8b450` also passed all seven CI jobs: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43116067946). This covers Node 18/22/24 bench tests, Node 22/24 pinned-platform tests, and Python 3.10/3.12 simulator tests.
 
 ## First observed real motor pulse
 
@@ -100,3 +100,7 @@ At **22:53 UTC**, the corrected direct reconnect completed against the same prev
 Fresh replies were `05 19 27 25 00 00` (**firmware 9511**), `03 1b 0a 0e` (**3594 mV**), and `01 17` (ping). The page then sent SDK `03 90 01 01`, speed zero, a fresh ping and the single **100 mm/s** command `06 24 64 00 e8 03 01` at **22:53:56.133 UTC**. The 750 ms timer requested zero at **22:53:56.885 UTC**, and the write completed at **22:53:56.889 UTC**:752 ms to the scheduled STOP request,756 ms to its completed write. These are host timestamps, not measured mechanical stopping latency. [Redacted LIVE pulse trace](validation/live-pulse-excerpt.txt).
 
 The nearby operator separately reported that the raised wheels **moved briefly, then stopped**. This is the first positive movement/physical-STOP observation for this exact MXT/session. It does not establish actual100 mm/s wheel speed, track travel, braking distance, behavior after radio/browser failure, or suitability for students. The same-session observation was recorded to permit the next explicitly supervised contained-track scan at no more than100 mm/s. All broader acceptance items remain pending.
+
+## Follow-up scan preparation
+
+Switching to another tab triggered STOP/disconnect and correctly cleared the scan qualification. No track scan had started. A new physical identity check is required before another qualified pulse/scan. Inspection also exposed a reporting error: a second cleanup after disconnect could overwrite the prior STOP status with “no motor command” because the prepared-session flag had cleared. The controller now retains whether any motor write was attempted for the lifetime of the page, so repeated cleanup cannot erase that evidence. A regression test covers pulse, STOP, hidden-page disconnect and repeated exit cleanup. The local suite now passes 295 JavaScript tests; Python remains 28 from the unchanged simulator checks.
