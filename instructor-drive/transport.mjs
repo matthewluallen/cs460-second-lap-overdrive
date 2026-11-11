@@ -29,7 +29,7 @@ export class BrowserTransport {
   get connected(){return !!this.link.device?.gatt?.connected;}
   get setupPending(){return !!this.setupOperation&&!this.setupOperation.settled;}
   updateStage(stage){this.stage=stage;try{this.progress?.(this);}catch{}}
-  async open({showAllDevices=false,expectedBrowserId=null}={}){
+  async open({showAllDevices=false,expectedBrowserId=null,rescanSavedDevice=false}={}){
     if(!this.enabled)throw new Error('Instructor flag required');
     if(this.setupPending||this.openAttempt)throw new Error('Previous browser operation is still finishing; wait before manually retrying');
     if(this.connected)throw new Error('Disconnect before selecting another car');
@@ -40,7 +40,7 @@ export class BrowserTransport {
     const requiredBrowserId=this.retryBrowserId||expectedBrowserId;
     // Reuse only an exact, already permitted device after another explicit open.
     // A generic fresh selection still uses the chooser; no reconnect is automatic.
-    const rememberedDevice=requiredBrowserId&&this.rememberedDevice?.id===requiredBrowserId?this.rememberedDevice:null;
+    const rememberedDevice=rescanSavedDevice!==true&&requiredBrowserId&&this.rememberedDevice?.id===requiredBrowserId?this.rememberedDevice:null;
     const generation=++this.generation;
     const attempt={generation,rememberedDevice};this.openAttempt=attempt;
     const current=()=>{if(generation!==this.generation)throw new Error('Connection selection cancelled');};

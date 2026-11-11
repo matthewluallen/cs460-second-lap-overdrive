@@ -23,7 +23,7 @@ The baseline ran on Node **v25.6.1** and Python **3.14.7**. Dependency installat
 | Check | Observed result | Scope |
 | --- | --- | --- |
 | Baseline `npm test` | 160 passed, 0 failed | 142 existing bench tests plus 18 platform/dependency tests before this change. |
-| Current `npm test` | **295 passed, 0 failed, 0 skipped** | Current checkpoint includes connection recovery, remembered-device reconnect, track recorder, scan qualification/fault handling, UI and the unchanged course suites. |
+| Current `npm test` | **297 passed, 0 failed, 0 skipped** | Current checkpoint includes connection recovery, remembered-device reconnect, track recorder, scan qualification/fault handling, UI and the unchanged course suites. |
 | `python3 -m unittest discover -s tests -v` | **28 passed, 0 failed** | Existing coursework simulator regression suite. |
 | Official Anki SDK C suite, compiled on this host | **19 passed, 0 failed, 0 skipped** | 12 upstream protocol, 5 vehicle-advertisement and 2 BLE-advertisement tests at official commit `410352617b8660338746a6bb2b2dd173afb1b91a`; no radio involved. |
 
@@ -73,7 +73,7 @@ installed Chrome completed select, simulated light identification, explicit
 confirmation, arm, pulse and STOP again. Debug remained collapsible and trace
 export worked. Ten reproducible UI integration tests now cover the actual UI,
 controller, codec and trace modules with a synthetic DOM and explicitly fake
-LIVE transport; they use no radio. That earlier local `npm test` checkpoint was 241/241; the current result is 295/295.
+LIVE transport; they use no radio. That earlier local `npm test` checkpoint was 241/241; the current result is 297/297.
 
 In an additional LIVE trial, the browser observed the operator's prompted
 physical OFF action and entered `POWER_OFF_SEEN`. A premature reconnect was
@@ -91,7 +91,7 @@ The experimental scan controller requires a successful 750 ms pulse-limit STOP p
 
 The recorder independently decodes full classic 0x27 position and 0x29 transition messages. Synthetic tests cover start/finish halves, missing/unknown pieces, turn inference, flat position-and-heading closure, malformed packets, bounds, timeouts and session isolation. It does not fabricate missing tiles or return a sample track in SIMULATION. Special Fast & Furious tiles are retained as unsupported evidence, preventing a false complete layout. A generated schematic is derived only from supported observed loop geometry and still needs physical comparison.
 
-Current local verification: **295 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The current code commit `7e8b450` also passed all seven CI jobs: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43116067946). This covers Node 18/22/24 bench tests, Node 22/24 pinned-platform tests, and Python 3.10/3.12 simulator tests.
+Current local verification: **297 JavaScript tests and 28 Python tests passed**. Scan tests use explicit mock transports and synthetic optical packets; they do not establish actual movement, link-loss stop, track sensing or a real mapped lap. The current code commit `7e8b450` also passed all seven CI jobs: [CI run](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43116067946). This covers Node 18/22/24 bench tests, Node 22/24 pinned-platform tests, and Python 3.10/3.12 simulator tests.
 
 ## First observed real motor pulse
 
@@ -104,3 +104,9 @@ The nearby operator separately reported that the raised wheels **moved briefly, 
 ## Follow-up scan preparation
 
 Switching to another tab triggered STOP/disconnect and correctly cleared the scan qualification. No track scan had started. A new physical identity check is required before another qualified pulse/scan. Inspection also exposed a reporting error: a second cleanup after disconnect could overwrite the prior STOP status with “no motor command” because the prepared-session flag had cleared. The controller now retains whether any motor write was attempted for the lifetime of the page, so repeated cleanup cannot erase that evidence. A regression test covers pulse, STOP, hidden-page disconnect and repeated exit cleanup. The local suite now passes 295 JavaScript tests; Python remains 28 from the unchanged simulator checks.
+
+## Power-cycle rediscovery follow-up
+
+Later retained-device reconnect attempts failed before application commands with a NetworkError stating that the device was no longer in range. One intervening fresh chooser selection reconnected the same saved browser ID and completed GATT setup in under one second. The UI now requests fresh discovery after the power-button check and after a settled setup timeout, while still enforcing the saved exact ID before GATT. Tests verify replacement of a stale object with a freshly returned object of the same ID, and rejection of a different ID without touching its GATT. No automatic retry or motion was added. The current local suite passes 297 JavaScript tests. This is a recovery strategy; underlying browser/OS/peripheral behavior remains uncertain, and no live track map has yet been recorded.
+
+A subsequent fresh candidate selection completed GATT/notifications, then disconnected before physical confirmation. Its browser ID differed from the earlier positively identified MXT. That candidate was not established as the instructor’s car, and received no application/motor commands. Similar nearby advertisements are insufficient identity evidence; further motion remains blocked pending physical identification. No second live pulse or track scan was performed in this follow-up.

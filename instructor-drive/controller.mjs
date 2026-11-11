@@ -76,7 +76,7 @@ export class DriveController {
     const epoch=++this.epoch;this.stopResult='';this.stopReason='';this.firmware=null;this.battery=null;this.stateTo('SELECTING');
     try{
       // Browser chooser must retain its user gesture. No timer cancels the picker.
-      const identity=await this.transport.open({...options,expectedBrowserId:target?.browserId??null});this.current(epoch);
+      const identity=await this.transport.open({...options,expectedBrowserId:target?.browserId??null,rescanSavedDevice:!!target||!!this.transport.retryBrowserId});this.current(epoch);
       if(target&&identity.browserId!==target.browserId)throw new Error('Selected device does not match the power-checked car');
       if(!identity.browserId)throw new Error('Selected device has no browser ID');
       this.identity=Object.freeze({...identity});this.label=null;this.signalled=false;

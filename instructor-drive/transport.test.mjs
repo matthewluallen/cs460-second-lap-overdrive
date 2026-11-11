@@ -300,3 +300,21 @@ test('MOCK browser-style timers keep their global receiver through transport, re
     transport.close();globalThis.setTimeout=originalSet;globalThis.clearTimeout=originalClear;
   }
 });
+
+
+test('MOCK explicit same-ID rediscovery replaces a stale remembered handle before connecting',async t=>{
+  const old=radio(),fresh=radio(),{transport}=make(old);t.after(()=>transport.close());
+  await transport.open();transport.close();await flush();fresh.device.id=old.device.id;
+  old.device.gatt.connect=async()=>{throw new DOMException('Bluetooth Device is no longer in range.','NetworkError');};
+  let choices=0;old.bluetooth.requestDevice=async()=>{choices++;return fresh.device;};
+  const identity=await transport.open({expectedBrowserId:old.device.id,rescanSavedDevice:true});
+  assert.equal(identity.browserId,old.device.id);assert.equal(choices,1);assert.equal(fresh.connects,1);
+  assert.equal(old.connects,1);assert.equal(old.writes.length+fresh.writes.length,0);
+});
+
+test('MOCK same-car rediscovery rejects a wrong chooser selection before GATT',async()=>{
+  const old=radio(),other=radio(),{transport}=make(old);await transport.open();transport.close();await flush();
+  old.bluetooth.requestDevice=async()=>other.device;
+  await assert.rejects(transport.open({expectedBrowserId:old.device.id,rescanSavedDevice:true}),/does not match/);
+  assert.equal(other.connects,0);assert.equal(other.writes.length,0);assert.equal(old.connects,1);
+});

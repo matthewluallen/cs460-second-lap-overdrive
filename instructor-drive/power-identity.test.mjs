@@ -54,7 +54,7 @@ test('MOCK prompted off/on check needs same browser device and explicit physical
   assert.throws(()=>r.drive.confirm(confirmation));r.radio.lose();await flush();
   assert.equal(r.drive.state,'POWER_OFF_SEEN');assert.equal(r.radio.opens.length,1,'disconnect never reconnects automatically');
   assert.throws(()=>r.drive.confirm(confirmation));await assert.rejects(r.drive.arm());
-  await r.drive.select();assert.equal(r.radio.opens[1].expectedBrowserId,'the-selected-MXT');
+  await r.drive.select();assert.equal(r.radio.opens[1].expectedBrowserId,'the-selected-MXT');assert.equal(r.radio.opens[1].rescanSavedDevice,true);
   assert.equal(r.drive.state,'SELECTED');assert.equal(r.drive.identityMethod,'power-cycle');
   assert.equal(r.radio.writes.length,0);assert.equal(r.radio.signals,0);
   for(const patch of [{observed:false},{safe:false},{typedLabel:'wrong label'},{browserId:'another-MXT'},{observed:'true'},{safe:'true'}]){
@@ -95,7 +95,7 @@ test('MOCK unprompted connection loss cannot establish a power-cycle identity wi
 test('MOCK wrong-car reconnect fails instead of treating an unrelated car as power-cycle matched',async()=>{
   const r=rig();await seenOff(r);r.radio.browserId='another-MXT';
   await assert.rejects(r.drive.select(),/does not match/);
-  assert.equal(r.radio.opens[1].expectedBrowserId,'the-selected-MXT');assert.equal(r.drive.state,'DISCONNECTED');
+  assert.equal(r.radio.opens[1].expectedBrowserId,'the-selected-MXT');assert.equal(r.radio.opens[1].rescanSavedDevice,true);assert.equal(r.drive.state,'DISCONNECTED');
   assert.notEqual(r.drive.identityMethod,'power-cycle');assert.throws(()=>r.drive.confirm({...confirmation,browserId:'another-MXT'}));
   assert.equal(r.radio.writes.length,0);
 });

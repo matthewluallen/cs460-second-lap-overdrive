@@ -54,7 +54,7 @@ function render(){
   if(s==='WAITING_POWER_OFF'){
     $('identityPrompt').textContent='Press and release the grey button once to turn this labeled car OFF. Wait for this page to notice the disconnection. Do not click Disconnect.';
   }else if(s==='POWER_OFF_SEEN'){
-    $('identityPrompt').textContent='A disconnection was observed. If you caused it by switching this labeled car off, press once to turn it ON, then click “Reconnect same car” above. The browser must return the same device.';
+    $('identityPrompt').textContent='A disconnection was observed. If you caused it by switching this labeled car off, press once to turn it ON, then click “Reconnect same car” above and select the same car in the fresh chooser. A different device is rejected before connection.';
   }else if(s==='IDENTIFYING'){
     $('identityPrompt').textContent=isLive?'Watch this labeled car for off → green → off. No visible pattern means no light confirmation.':'Rehearsing the light step. No real car receives commands.';
   }else if(proof==='power'){
