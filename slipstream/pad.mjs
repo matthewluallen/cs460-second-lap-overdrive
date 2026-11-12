@@ -7,6 +7,7 @@ const params = new URLSearchParams(location.hash.slice(1));
 const room = params.get('r') || '', joinKey = params.get('s') || params.get('j') || '', seated = params.has('s');
 const KEY = 'slipstream.pad.' + room + '.' + joinKey.slice(0, 8);
 const state = {throttle: 0, steer: 0, attack: false, support: false, special: false};
+let throttlePointer = null;
 let online = false, driveReady = false, previousView = null, previousRoundStatus = null, tiltNeutral = null, tiltSample = null, tiltAngle = null;
 let haptics = false, lastBuzz = -Infinity;
 try { haptics = localStorage.getItem('slipstream.haptics') === 'on'; } catch {}
@@ -47,7 +48,7 @@ function start() {
   $('join').hidden = true; $('play').hidden = false;
   link = channel({room, key: me.playerKey, role: 'player', onMessage, onStatus: status => {
     online = status === 'online';
-    if (!online) { driveReady = false; resetInputs(); feedback('Connection lost. Throttle reset; wait for the host.', 'disabled'); }
+    if (!online) { lockControls(); feedback('Connection lost. Throttle reset; wait for the host.', 'disabled'); }
     $('link').textContent = status === 'online' ? '' : status === 'refused' ? 'Room closed' : 'Reconnecting…';
     if (status === 'refused') { try { sessionStorage.removeItem(KEY); } catch {} }
   }});
@@ -56,14 +57,16 @@ function start() {
 }
 
 function onMessage(m) {
-  if (m.type === 'kicked') { driveReady = false; resetInputs(); $('car').textContent = 'Removed'; $('status').textContent = 'The host removed you.'; allowed = false; return; }
-  if (m.type === 'pending') { driveReady = false; resetInputs(); allowed = false; $('car').textContent = 'Waiting…'; $('status').textContent = 'Waiting for the host to let you in.'; return; }
+  if (m.type === 'kicked') { lockControls(); $('car').textContent = 'Removed'; $('status').textContent = 'The host removed you.'; allowed = false; return; }
+  if (m.type === 'pending') { lockControls(); allowed = false; $('car').textContent = 'Waiting…'; $('status').textContent = 'Waiting for the host to let you in.'; return; }
   if (m.type === 'approved') { allowed = true; feedback('Approved. Wait for a car, then raise the throttle.', 'ready'); $('status').textContent = 'You are in.'; return; }
   if (m.type !== 'state') return;
   const mine = m.me, lobby = m.lobby ?? {};
   hasCar = !!mine;
   const ready = online && allowed && hasCar && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
-  if (!ready) resetInputs({keepSelection: !mine});
+  const changedCar = !!mine && mine.id !== previousView?.id;
+  if (!ready || changedCar) resetInputs({keepSelection: !mine});
+  if (changedCar) { setSteer(0); tiltNeutral = null; feedback('Car changed. Raise the throttle when ready.', 'ready'); }
   driveReady = ready;
   $('throttle').setAttribute('aria-disabled', String(!ready));
   if (mine && previousView && previousView.id === mine.id) {
@@ -113,6 +116,8 @@ function onMessage(m) {
     $('cars').replaceChildren(); $('leave').hidden = false;
   } else {
     $('car').textContent = 'Waiting for a car…'; $('leave').hidden = true;
+    $('energy').style.width = '0%'; $('hits').textContent = '';
+    for (const bay of ['attack', 'support', 'special']) { $(bay).disabled = true; $(bay + 'Name').textContent = '—'; }
     const free = (lobby.cars ?? []).filter(c => c.free);
     $('status').textContent = free.length ? 'Pick a car:' : 'Ask the host to set a car to “Phone”.';
     $('cars').replaceChildren(...free.map(c => { const b = document.createElement('button'); b.textContent = c.name; b.onclick = () => { once.car = c.id; }; return b; }));
@@ -136,7 +141,13 @@ function setThrottle(value) {
   $('throttle').setAttribute('aria-valuenow', String(Math.round(state.throttle * 100)));
   $('fill').style.height = Math.round(state.throttle * 100) + '%'; $('pct').textContent = Math.round(state.throttle * 100);
 }
+function lockControls() {
+  driveReady = false; resetInputs();
+  $('throttle').setAttribute('aria-disabled', 'true');
+  for (const bay of ['attack', 'support', 'special']) $(bay).disabled = true;
+}
 function resetInputs({keepSelection = false} = {}) {
+  throttlePointer = null;
   const selection = keepSelection ? Object.fromEntries(Object.entries(once).filter(([key]) => key === 'car' || key === 'release')) : {};
   state.throttle = 0; state.attack = state.support = state.special = false; once = selection;
   down.clear();
@@ -150,8 +161,14 @@ slider.addEventListener('keydown', event => {
   setThrottle(event.code === 'Home' ? 0 : event.code === 'End' ? 1 : state.throttle + (event.code === 'ArrowUp' ? 0.05 : -0.05));
 });
 function drag(event) { const box = slider.getBoundingClientRect(); setThrottle(1 - (event.clientY - box.top - 12) / (box.height - 24)); }
-slider.addEventListener('pointerdown', event => { slider.setPointerCapture(event.pointerId); drag(event); });
-slider.addEventListener('pointermove', event => { if (event.buttons || event.pointerType === 'touch') drag(event); });
+slider.addEventListener('pointerdown', event => {
+  if (!driveReady || document.hidden || (event.button !== undefined && event.button !== 0)) return;
+  throttlePointer = event.pointerId; slider.setPointerCapture(event.pointerId); drag(event);
+});
+slider.addEventListener('pointermove', event => { if (throttlePointer === event.pointerId && throttlePointer !== null) drag(event); });
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) slider.addEventListener(type, event => {
+  if (throttlePointer === event.pointerId) throttlePointer = null;
+});
 $('brake').onclick = () => { resetInputs(); send(); feedback('Braking. Throttle reset.', 'ready'); };
 
 // --- weapons --------------------------------------------------------------------

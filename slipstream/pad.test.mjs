@@ -143,3 +143,49 @@ test('spending weapon energy alone is not presented as a damage event', async ()
   p.callbacks.onMessage({...p.state, me: {...p.state.me, energy: 0.5}});
   assert.equal(p.node('feedback').textContent, 'Ready'); assert.equal(p.buzzes.length, 0);
 });
+
+
+test('a held touch cannot restore throttle after disconnect or a host stop', async () => {
+  const p=pad();await p.ready();const slider=p.node('throttle');
+  const touch={pointerId:7,pointerType:'touch',clientY:12,button:0};
+  slider.events.pointerdown(touch);assert.equal(p.run('state.throttle'),1);
+  p.callbacks.onStatus('offline');
+  assert.equal(slider.attrs['aria-disabled'],'true');assert.equal(p.node('attack').disabled,true);
+  p.callbacks.onStatus('online');p.callbacks.onMessage(p.state);
+  slider.events.pointermove(touch);assert.equal(p.run('state.throttle'),0);
+  slider.events.pointerdown(touch);assert.equal(p.run('state.throttle'),1);
+  p.callbacks.onMessage({...p.state,lobby:{phase:'stopped'}});p.callbacks.onMessage(p.state);
+  slider.events.pointermove(touch);assert.equal(p.run('state.throttle'),0);
+});
+
+test('direct car reassignment clears held controls and requires deliberate new input', async () => {
+  const p=pad();await p.ready();
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:1}});
+  p.run('setThrottle(1); setSteer(1); state.attack=true; down.add("KeyW"); once.uturn=true');
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:2}});
+  assert.equal(p.run('state.throttle'),0);assert.equal(p.run('state.steer'),0);
+  assert.equal(p.run('state.attack'),false);assert.equal(p.run('down.size'),0);assert.equal(p.run('once.uturn'),undefined);
+  assert.match(p.node('feedback').textContent,/Car changed/);
+  p.run('setThrottle(.5)');assert.equal(p.run('state.throttle'),.5);
+  p.callbacks.onMessage({...p.state,me:null});p.run('setSteer(1)');
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:3}});
+  assert.equal(p.run('state.steer'),0);assert.equal(p.run('state.throttle'),0);
+});
+
+test('unassigned and revoked phones show disabled weapon controls', async () => {
+  const p=pad();await p.ready();
+  p.callbacks.onMessage({...p.state,lobby:{phase:'battle'}});assert.equal(p.node('attack').disabled,false);
+  p.callbacks.onMessage({...p.state,me:null});assert.equal(p.node('attack').disabled,true);
+  assert.equal(p.node('energy').style.width,'0%');assert.equal(p.node('hits').textContent,'');
+  p.callbacks.onMessage({...p.state,lobby:{phase:'battle'}});
+  p.callbacks.onMessage({type:'kicked'});assert.equal(p.node('attack').disabled,true);
+  assert.equal(p.node('throttle').attrs['aria-disabled'],'true');
+});
+
+test('throttle ignores unrelated pointers and ended gestures', async () => {
+  const p=pad();await p.ready();const slider=p.node('throttle');
+  slider.events.pointermove({pointerId:7,pointerType:'touch',clientY:12});assert.equal(p.run('state.throttle'),0);
+  slider.events.pointerdown({pointerId:7,button:0,clientY:100});
+  slider.events.pointermove({pointerId:8,clientY:12});assert.equal(p.run('state.throttle'),.5);
+  slider.events.pointerup({pointerId:7});slider.events.pointermove({pointerId:7,clientY:12});assert.equal(p.run('state.throttle'),.5);
+});

@@ -43,7 +43,7 @@ python3 -m lapreturn.cwe_lab     # expect three "flaw_reproduced": false, exit 0
 npm run dependency-lab           # expect "regressionCheckPassed": true
 ```
 
-Review-fix verification on 12 November 2026: **412 Node tests pass on Node
+Review-fix verification on 12 November 2026: **416 Node tests pass on Node
 22.23.5**, **38 Python tests pass on Python 3.14.7**, audit reports zero
 vulnerabilities, and the dependency/CWE probes pass. Host/phone browser walkthroughs
 covered approval, simulated driving, story completion, and portrait/landscape
@@ -128,3 +128,11 @@ The initial PR was produced across sessions with Claude (via Claude Code); revie
 fixes and game-design work were subsequently assisted by Codex. Treat all of it
 as needing the same review as any machine-generated change, especially the untested
 hardware assumptions above.
+
+## Phone input follow-up
+
+Phone throttle now tracks an active pointer gesture. Disconnects, stops and car
+reassignments invalidate old gestures and held inputs; a new car starts with
+neutral steering. Unassigned/revoked phones disable stale weapon controls.
+Regression tests exercise the actual phone handlers with synthetic browser events;
+physical touchscreen and sensor behavior still need device validation.
