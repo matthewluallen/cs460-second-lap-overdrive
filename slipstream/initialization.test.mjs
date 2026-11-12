@@ -5,12 +5,12 @@ import {Recorder} from './trace.mjs';
 import {hex} from './protocol.mjs';
 import {initializationPhases} from './initialization.mjs';
 
-function radio({replies=true}={}) {
+function radio({replies=true, confirmation=true}={}) {
  let notify;
  const sent=[];
  return {initializationProfile:'fast-furious',initializationTimeoutMs:30,sent,
   onNotify(fn){notify=fn;return()=>{};},close(){this.closed=true;},
-  async write(b){sent.push([...b]);if(replies && b[1]===0x16)queueMicrotask(()=>notify(Uint8Array.of(1,0x17)));
+  async write(b){sent.push([...b]);if(confirmation && b[1]===0x49)queueMicrotask(()=>notify(Uint8Array.of(3,0x23,255,255)));if(replies && b[1]===0x16)queueMicrotask(()=>notify(Uint8Array.of(1,0x17)));
    if(replies && b[1]===0x18)queueMicrotask(()=>notify(Uint8Array.of(5,0x19,0x27,0x25,0,0)));}
  };
 }
@@ -42,4 +42,15 @@ test('F&F road defaults match independent native-memory extraction',()=>{
  '13 48 01 0d 8a 0a 0a 0a 0a 0a 0b 0a 0a 4a 4b 4b 80 00 00 00',
  '08 49 01 10 00 01 02 00 0d']);
  assert.throws(()=>initializationPhases('guess'),/Unknown/);
+});
+
+test('F&F pongs alone cannot confirm firmware initialization',async()=>{
+ const r=radio({confirmation:false}),car=new Car(r);await car.start();
+ assert.equal(car.faulted,true);assert.equal(car.connected,false);
+ assert.match(car.initializationStatus,/confirmation.*timed out/i);
+});
+test('F&F retains native initialization confirmation and upgrades',async()=>{
+ const r=radio(),car=new Car(r);await car.start();
+ assert.deepEqual(car.firmwareInitialization,{id:0x23,type:'carInit',upgrades:65535});
+ assert.equal(car.faulted,false);
 });

@@ -7,7 +7,7 @@ export const UUIDS = Object.freeze({service: uuid('beef'), notify: uuid('bee0'),
 
 export const ID = Object.freeze({
   DISCONNECT: 0x0d, PING: 0x16, PING_REPLY: 0x17, VERSION: 0x18, VERSION_REPLY: 0x19,
-  BATTERY: 0x1a, BATTERY_REPLY: 0x1b, LIGHTS: 0x1d, SPEED: 0x24, CHANGE_LANE: 0x25,
+  CAR_INIT: 0x23, BATTERY: 0x1a, BATTERY_REPLY: 0x1b, LIGHTS: 0x1d, SPEED: 0x24, CHANGE_LANE: 0x25,
   CANCEL_LANE_CHANGE: 0x26, POSITION: 0x27, TRANSITION: 0x29, INTERSECTION: 0x2a,
   DELOCALIZED: 0x2b, SET_OFFSET: 0x2c, OFFSET_UPDATE: 0x2d, TURN: 0x32, LIGHTS_PATTERN: 0x33,
   OFFSET_ADJUST: 0x34, SPEED_UPDATE: 0x36, STATUS: 0x3f, LANE_CHANGE_UPDATE: 0x41, CONFIG: 0x45,
@@ -95,6 +95,8 @@ function decodeOne(m) {
   const v = new DataView(m.buffer, m.byteOffset, m.byteLength), size = m[0], id = m[1];
   const has = n => size >= n;
   switch (id) {
+    // F&F build 403: CarMsgCarInitComplete (006b8638/006b86c0), upgrades u16.
+    case ID.CAR_INIT: if (size !== 3) break; return {id, type:'carInit', upgrades:v.getUint16(2,true)};
     case ID.PING_REPLY: return {id, type: 'ping'};
     case ID.VERSION_REPLY: if (!has(3)) break; return {id, type: 'version', version: has(5) ? v.getUint32(2, true) : v.getUint16(2, true)};
     case ID.BATTERY_REPLY: if (!has(3)) break; return {id, type: 'battery', millivolts: v.getUint16(2, true)};

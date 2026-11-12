@@ -64,6 +64,11 @@ car turned off and suspected battery depletion. Groundshock returned firmware,
 pings, battery and a lane-update message, but no position/transition messages during
 the scan. The first-track watchdog stopped it after five seconds. Its displayed
 battery was approximately 4.14 V. The UI later logged another Bluetooth disconnect
-at 17:36:33, after the recorded scan and STOP. Its physical motion during the scan
+at 17:36:33, after the recorded scan and STOP. The operator subsequently confirmed
+turning the car off to leave; this later disconnect is not an unexplained failure. Its physical motion during the scan
 has not yet been confirmed by the operator. No map was completed. Do not claim this
 profile fixes localization merely because the initialization replies succeeded.
+
+Subsequent regression: [CAR-COMPATIBILITY-REGRESSION.md](CAR-COMPATIBILITY-REGRESSION.md).
+Startup now also requires native 0x23 initialization confirmation; ping alone is
+insufficient. The unlocalized-speed bootstrap question remains unresolved.

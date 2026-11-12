@@ -18,6 +18,7 @@ export class Car {
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
+    this.firmwareInitialization = null;
     this.millivolts = null; this.version = null; this.status = {};
     this.lightKey = ''; this.lastSpeedSent = -1; this.delocalized = false; this.rx = 0; this.tx = 0;
     this.unsubscribe = transport.onNotify(bytes => this.#receive(bytes));
@@ -31,6 +32,13 @@ export class Car {
           this.initializationStatus = phase.name;
           await this.#initializationPhase(phase);
         }
+        // The native app requires its distinct 0x23 confirmation as well as phase pongs.
+        // It may arrive during network setup, before the last ping barrier.
+        if (this.transport.initializationProfile === 'fast-furious' && !this.firmwareInitialization) {
+          this.initializationStatus = 'Waiting for firmware initialization confirmation';
+          await this.#initializationPhase({name:'Firmware initialization confirmation',packets:[],reply:'carInit'});
+        }
+        if (!this.connected || this.closing || this.faulted) throw new Error('Connection closed during initialization');
         this.initializationStatus = 'Connected; track telemetry not yet verified';
         this.initializing = false; this.stop();
         this.send('battery', encode.battery()); this.setLights(...this.color);
@@ -116,7 +124,8 @@ export class Car {
     const now = this.clock(); this.rx++;
     for (const m of messages) {
       if (m.type === 'position' || m.type === 'transition') this.lastTrackAt = now;
-      if (m.type === 'battery') this.millivolts = m.millivolts;
+      if (m.type === 'carInit') this.firmwareInitialization = m;
+      else if (m.type === 'battery') this.millivolts = m.millivolts;
       else if (m.type === 'version') this.version = m.version;
       else if (m.type === 'status') this.status = m;
       else if (m.type === 'delocalized') this.delocalized = true;

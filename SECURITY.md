@@ -284,3 +284,10 @@ Regression: `public live session exposes only Slipstream pages and authenticated
   The app-derived profile disables SDK override and autonomous jump boost and sets
   delocalized speed to zero. Firmware acceptance and physical effects are unverified;
   host watchdogs, special-tile quarantine and supervision remain required.
+
+- Native startup confirmation follow-up: F&F initialization additionally requires
+  the exact-length 0x23 firmware confirmation, not just successful phase pings.
+  Missing confirmation faults/closes; it cannot refresh the track watchdog.
+  The independent 42-case startup fault matrix preserves motion blocking and STOP
+  latches. Delocalized-speed zero remains unchanged; no firmware equivalence or
+  physical compatibility is claimed. See CAR-COMPATIBILITY-REGRESSION.md.

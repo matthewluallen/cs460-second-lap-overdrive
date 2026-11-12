@@ -3,6 +3,14 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Latest real-car compatibility status
+
+Read [CAR-COMPATIBILITY-REGRESSION.md](slipstream/review/CAR-COMPATIBILITY-REGRESSION.md).
+The scan is still unresolved. Native 0x23 startup confirmation is now required;
+488 Node / 38 Python tests pass. A possible zero-speed localization bootstrap
+conflict requires an explicit movement-policy decision before changing it.
+Groundshock's later disconnect was the operator turning it off to leave.
+
 ## What this repo is now
 
 Two bodies of work sit on top of the original CS460 teaching scenario:
