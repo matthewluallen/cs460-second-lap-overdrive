@@ -246,3 +246,6 @@ public issue. Include the commit, the exact request and the observed result.
 - M3: unexpected Bluetooth loss or write faults while commanded to move open
   a named shared pit. Disconnected/faulted cars cannot be recovered in place;
   remove and reconnect them. This does not prove that the lost car physically stops.
+- M4: scans require an identified scanner, a track-clear confirmation and a
+  three-second countdown; other cars remain latched. Completed scans stop.
+  Pit resume waits through the same countdown before rearming CPU drivers.

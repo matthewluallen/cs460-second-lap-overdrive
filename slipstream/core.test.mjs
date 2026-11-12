@@ -314,7 +314,7 @@ test('a recorded session replays to the same map, lane sign and commands', async
   const d = add({}, {index: 4, progress: 0.3, lateral: 22.5, offsetSign: 1});
   recorder.start(game.drivers, 'unit test');
   game.startScan(d); assert.ok(await run(90, () => game.phase === 'ready'));
-  d.input.throttle = 0.7; for (const lane of [-45, 45, 0]) { d.input.lane = lane; await run(5); }
+  game.resume(); d.input.throttle = 0.7; for (const lane of [-45, 45, 0]) { d.input.lane = lane; await run(5); }
   const trace = JSON.parse(JSON.stringify(recorder.stop()));
   assert.equal(trace.format, TRACE_FORMAT); assert.equal(trace.source, 'simulator'); assert.equal(trace.dropped, 0);
   assert.ok(trace.events.some(e => e[2] === 'tx') && trace.events.some(e => e[2] === 'rx'));

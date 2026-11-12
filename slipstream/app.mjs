@@ -138,7 +138,7 @@ $('connect').onclick = async event => {
 // --- top bar ---------------------------------------------------------------------
 $('scan').onclick = () => {
   if (game.phase === 'scanning') return game.cancelScan();
-  try { requireVisible(); endRound('Track scan'); game.resume(); game.startScan(); } catch (error) { log(error.message); }
+  try { requireVisible(); if(countdown || game.pitReason) throw new Error('Complete or cancel the current start/recovery first'); const driver=game.drivers.find(d=>d.id===Number($('scanCar').value)); if(!driver || !driver.car.connected) throw new Error('Choose the car to scan'); if(!$('scanClear').checked) throw new Error('Confirm the track is clear and other cars are removed'); endRound('Track scan'); game.stopAll(); countdown={kind:'scan',scanner:driver.id,until:performance.now()+3000}; $('scanClear').checked=false; $('roundHelp').textContent='Scanning with '+driver.car.name+' after the countdown. Other cars remain stopped.';renderRound(); } catch (error) { log(error.message); }
 };
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
@@ -166,7 +166,7 @@ function endRound(reason = 'ended') {
   if (session.status === 'running' || session.status === 'paused') session.finish(performance.now(), reason);
 }
 $('pitResume').onclick = () => {
-  try { requireVisible(); game.resumeFromPit(); held.clear(); session.resume(performance.now()); log('Track clear acknowledged. Apply throttle to continue.'); refresh(); }
+  try { requireVisible(); if(countdown) return; if(!game.pitReady) throw new Error('Recover or remove affected cars first'); held.clear(); countdown={kind:'pit',until:performance.now()+3000};log('Track clear acknowledged. Waiting for countdown.');refresh(); }
   catch (error) { $('pitMessage').textContent = error.message; }
 };
 function halt(reason = 'Host stopped') { endRound(reason); game.stopAll(); held.clear(); renderRound(); }
@@ -215,6 +215,8 @@ function tickRound(now) {
       const ready = countdown; countdown = null; $('countdown').hidden = true;
       try {
         requireVisible();
+        if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');game.startScan(scanner);return; }
+        if(ready.kind==='pit') {game.resumeFromPit();game.armComputers();session.resume(now);return;}
         if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
         game.resume(); game.armComputers(); if (ready.kind === 'free') { log('Free drive armed after countdown'); return; } if (ready.mode === 'battle') game.startBattle();
         const opts = ready.mission ? {mission: ready.mission.id, goal: ready.mission.goalPerCar * ready.ids.length, durationMs: ready.mission.durationMs} : {};
@@ -489,6 +491,9 @@ function pushState(snapshot, now) {
 // --- loops ---------------------------------------------------------------------------
 const PHASE = {garage: 'Garage', scanning: 'Scanning', ready: 'Track ready', battle: 'Battle'};
 function refresh(snapshot = game.snapshot()) {
+  const scanOptions=game.drivers.filter(d=>d.car.connected),scanKey=scanOptions.map(d=>d.id+':'+d.car.name).join('|');
+  if($('scanCar').dataset.key!==scanKey){const selected=$('scanCar').value;$('scanCar').replaceChildren(...scanOptions.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));if(scanOptions.some(d=>String(d.id)===selected))$('scanCar').value=selected;$('scanCar').dataset.key=scanKey;}
+
   renderRound();
   const busy = session.status === 'running' || session.status === 'paused' || !!countdown;
   $('carCount').textContent = game.drivers.length + ' / 4 cars';

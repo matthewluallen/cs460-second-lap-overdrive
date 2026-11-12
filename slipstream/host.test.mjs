@@ -197,10 +197,11 @@ test('shared pit pauses a round, preserves its clock and requires explicit clear
   assert.equal(h.run('game.halted'), true);
   h.node('resume').click(); assert.equal(h.run('game.halted'), true);
   h.node('pitResume').click();
+  assert.equal(h.run('game.halted'),true);h.tick(22999);assert.equal(h.run('game.halted'),true);h.tick(23000);
   assert.equal(h.run('session.status'), 'running');
   assert.equal(h.run('game.halted'), false);
   assert.equal(h.run('game.drivers[0].level'), 0);
-  h.tick(20040); await settle();
+  h.tick(23040); await settle();
   assert.equal(h.run('session.view().remainingMs'), remaining - 40);
 });
 
@@ -293,3 +294,5 @@ test('H2 slow intersection missions are blocked without relaxing the default wat
 test('M1 leave and host revocation survive an online reconnect',()=>{for(const revoke of [false,true]){const h=host();h.node('addSim').click();h.run(`const d=game.drivers[0];game.setControl(d,'phone');const p={id:1,approved:true,name:'P',car:d.id};players.set(1,p);seat(p);${revoke?'releasePad(d,true)':"onRelay({type:'input',player:1,release:true})"};onRelay({type:'online',player:1});`);assert.equal(h.run('p.driver'),null);h.run("onRelay({type:'input',player:1,car:d.id,throttle:0})");assert.equal(h.run('p.driver === d'),true);}});
 
 test('M2 gamepad identity survives an earlier driver leaving gamepad mode and blur disarms',()=>{const h=host();h.node('addSim').click();h.node('addSim').click();h.run(`const a=game.drivers[0],b=game.drivers[1];game.setControl(a,'gamepad');game.setControl(b,'gamepad');const make=(index)=>({index,id:'Pad '+index,mapping:'standard',axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))});const pa=make(0),pb=make(1);navigator.getGamepads=()=>[pa,pb];pa.buttons[0].pressed=pb.buttons[0].pressed=true;readControls(.04);pa.buttons[0].pressed=pb.buttons[0].pressed=false;readControls(.04);readControls(.04);game.setControl(a,'none');readControls(.04);pa.buttons[7].value=.8;pb.buttons[7].value=.3;readControls(.04);`);assert.equal(h.run('b.input.throttle'),.3);h.event('blur');h.run('readControls(.04)');assert.equal(h.run('b.input.throttle'),0);});
+
+test('M4 selected scan car waits through a countdown and other cars stay latched',async()=>{const h=host();h.node('addSim').click();h.node('addSim').click();h.run("game.setControl(game.drivers[0],'bot')");h.node('scanCar').value='2';h.node('scanClear').checked=true;h.node('scan').click();h.tick(40);await settle();assert.equal(h.run('game.drivers.every(d=>d.car.speed===0)'),true);h.tick(3000);await settle();assert.equal(h.run('game.scanner?.id'),2);assert.equal(h.run('game.drivers[0].car.speed'),0);assert.ok(h.run('game.drivers[1].car.speed')>0);});

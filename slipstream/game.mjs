@@ -105,7 +105,8 @@ export class Game {
   startScan(driver = this.drivers.find(d => d.car.connected)) {
     if (!driver) throw new Error('Connect a car first');
     if (driver.car.safetyReason === 'Off track') throw new Error('Return the car to the track and recover it before scanning');
-    this.resume(); this.stopBattle();
+    if(this.pitReason) throw new Error('Pit stop: complete shared recovery before scanning');
+    this.stopAll(); this.halted=false; if(driver.car.safetyReason==='Host stopped')driver.car.recover(); this.stopBattle();
     this.scanStarted = this.clock(); this.scanLaps = 0; this.scanAnchor = undefined; this.scanLastPiece = undefined;
     this.mapper = new TrackMapper(this.pieces); this.scanner = driver; this.phase = 'scanning';
     this.track = null; for (const d of this.drivers) d.car.useTrack(null);
@@ -118,7 +119,7 @@ export class Game {
   #scanned(track) {
     const scanner = this.scanner;
     scanner.car.stop(); this.scanner = null;
-    this.useTrack(track);
+    this.useTrack(track); this.stopAll();
     // Wait for a real location code: closure is detected on leaving the anchor,
     // not entering it. Seeding index zero would invent a target position.
     this.log('Track mapped: ' + track.count + ' pieces, ' + (track.length / 1000).toFixed(2) + ' m');
