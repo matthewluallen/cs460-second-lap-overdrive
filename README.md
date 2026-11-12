@@ -44,6 +44,12 @@ confirmation. Neither result confirms or saves a car automatically. Advertisemen
 monitoring is experimental and may be unavailable; all physical behavior remains
 hardware-unverified.
 
+**Security status:** the authorization, replay, profile-authenticity and
+dependency weaknesses that this scenario originally shipped as exercises are
+repaired on this branch. [SECURITY.md](SECURITY.md) lists every change, how to
+verify it and what remains out of scope. The original flawed baseline is the
+commit recorded there.
+
 For the Node platform, use Node 22 or 24. Run this from the repo root,
 then open the private forwarded port in a separate tab in desktop Google Chrome,
 or open http://localhost:8000 locally:
@@ -53,9 +59,10 @@ npm ci --ignore-scripts
 npm start
 ```
 
-This installs deliberately old Express and Lodash runtime dependencies for the
-[dependency investigation](bench/DEPENDENCY-LAB.md). Express serves the bench and
-shared MOCK support API on `127.0.0.1:8000`; Lodash sorts and groups records.
+This installs one runtime dependency, a current Express release pinned to an
+exact version with lockfile integrity hashes. Express serves the bench and
+shared MOCK support API on `127.0.0.1:8000`. `npm audit` must report no known
+advisories; see the [dependency check](bench/DEPENDENCY-LAB.md).
 For the car activity without Node dependencies, use this static fallback instead:
 
 ```sh
@@ -83,7 +90,8 @@ store. Keep real kit evidence out of either worksheet store.
 On the evidence page, start in replay, then compare a live off-charger reading.
 Confirm the assigned physical car before enabling its light controls, and record the visible
 result separately from the write. Trace entries identify their source. The Python
-simulator requires Python 3.10+ and no extra packages:
+simulator requires Python 3.10+ and no extra packages (use `python3` where
+`python` is not installed, as on macOS):
 
 ```sh
 python -m lapreturn demo
@@ -99,6 +107,10 @@ The shell accepts one JSON object per line. State lasts until you exit. Example:
 {"op":"command","token":"pilot-red","team":"red","vehicle":"sim-red","action":"stop","value":0,"nonce":"r2"}
 ```
 
+A pilot token can only see and change its own team's vehicle. Repeating a
+request with the same nonce returns the first result without a second effect.
+Profile installation needs a publisher signature and is disabled unless
+`LAPRETURN_PUBLISHER_KEY` is set; `LAPRETURN_TOKENS` replaces the demo tokens.
 These public pilot tokens only address disposable local simulation state.
 The protocol and units are teaching abstractions, not an Anki wire protocol.
 Real driving requires an independently validated adapter and safety gate.
@@ -106,19 +118,19 @@ Real driving requires an independently validated adapter and safety gate.
 After the hardware activity, save your evidence and disconnect before the
 optional [worksheet authorization exercise](bench/CWE-LAB.md) or
 [simulator CWE investigations](bench/SIMULATOR-CWE-LAB.md). The simulator
-investigations cover authorization, repeated requests and profile integrity
-using disposable local state; their outputs are not car telemetry. Run the
-reproductions from the repo root:
+probes cover authorization, repeated requests and profile authenticity
+using disposable local state; their outputs are not car telemetry. Each probe
+replays the request the original baseline accepted and exits non-zero if the
+weakness returns. Run them from the repo root:
 
 ```sh
 python -m lapreturn.cwe_lab
 ```
 
-The separate [dependency investigation](bench/DEPENDENCY-LAB.md) provides
-`npm run dependency-lab` and source-pinned advisory review. Its fixed-input
-demonstrations use installed libraries without external requests or car control.
-`npm audit` failures are expected for this baseline; preserve them as evidence
-and make repairs on a separate student branch rather than using `npm audit fix`.
+The separate [dependency check](bench/DEPENDENCY-LAB.md) provides
+`npm run dependency-lab`. Its fixed-input checks confirm that the advisories the
+original baseline demonstrated no longer reproduce, without external requests
+or car control. `npm audit` is expected to pass; CI fails on any advisory.
 
 Start with docs/student-brief.txt and docs/protocol.txt. Review the supplied
 business materials and history as evidence, not as verified documentation.
@@ -131,6 +143,16 @@ Python. No server starts automatically. Choose the Node platform or the static
 fallback above; run only one on port 8000.
 Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTING.md).
 
+
+## Slipstream: drive, map and battle from the browser
+
+[`slipstream/`](slipstream/README.md) is a separate controller for real cars: several
+cars over Web Bluetooth, automatic track mapping drawn on the page, the original
+game's weapons and car models, computer opponents, and phone or laptop controllers
+that join by a per-car QR code. It is served only by `npm run slipstream`; `npm start`
+is unchanged. It is tested against simulated cars and has not yet been run against
+a physical car. [slipstream/ANALYSIS.md](slipstream/ANALYSIS.md) records the app
+analysis it is built on.
 
 ## Instructor-only motion research preview
 

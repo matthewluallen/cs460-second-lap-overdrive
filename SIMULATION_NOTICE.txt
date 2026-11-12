@@ -9,4 +9,6 @@ Only test your assigned local software, supplied artifacts and authorized kits.
 Do not contact real people, target third-party services or use real credentials.
 The Python simulator has no radio driver. The optional static server serves
 the bench UI; the local Chrome browser can contact ONE identified course car.
-No worksheet, remote command route, motor or firmware action controls hardware.
+No worksheet, remote command route, motor or firmware action controls hardware
+in the course bench (npm start). The separate Slipstream controller, started only
+with npm run slipstream, does send motion commands to cars its operator connects.

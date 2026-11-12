@@ -1,18 +1,36 @@
 import express from 'express';
-import lodash from 'lodash';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {Records} from '../bench/records.mjs';
+import {createRelay, newHostCode} from './slipstream-relay.mjs';
 
 const require=createRequire(import.meta.url);
-const versions=Object.freeze({
-  express:require('express/package.json').version,
-  lodash:require('lodash/package.json').version
-});
+const versions=Object.freeze({express:require('express/package.json').version});
 const benchDirectory=fileURLToPath(new URL('../bench/',import.meta.url));
 const driveDirectory=fileURLToPath(new URL('../instructor-drive/',import.meta.url));
+const slipstreamDirectory=fileURLToPath(new URL('../slipstream/',import.meta.url));
+const qrModule=require.resolve('qrcode-generator').replace(/qrcode\.js$/,'qrcode.mjs');
+// Browser assets of the Slipstream controller. Tests and tools are never served.
+const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|render|net|game|car|ble|sim|battle|track|protocol|trace)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
 export const MAX_BODY_BYTES=4096;
+
+// Sent on every response. Pages use one inline <style> block and same-origin
+// module scripts only; nothing may frame the bench or load third-party code.
+export const SECURITY_HEADERS=Object.freeze({
+  'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "+
+    "img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  'X-Content-Type-Options':'nosniff',
+  'X-Frame-Options':'DENY',
+  'Referrer-Policy':'no-referrer',
+  'Cross-Origin-Opener-Policy':'same-origin',
+  'Cross-Origin-Resource-Policy':'same-origin',
+  'Permissions-Policy':'bluetooth=(self), camera=(), microphone=(), geolocation=(), usb=(), serial=()'
+});
+// The instructor page needs only these. Tests, validation logs and anything
+// added to that folder later stay private unless listed here.
+const DRIVE_FILES=new Set(['/','/index.html','/ui.mjs','/controller.mjs','/scan-controller.mjs',
+  '/track.mjs','/transport.mjs','/protocol.mjs','/README.md','/IDENTIFICATION.md','/SOURCES.md','/VALIDATION.md']);
 
 // Deployment opt-in only: this is not authentication. Keep enabled servers on
 // an instructor-controlled localhost origin, never a student/public preview.
@@ -41,36 +59,50 @@ function route(action){
   };
 }
 
-export function createApp({instructorLiveDrive=false}={}){
+export function createApp({instructorLiveDrive=false,slipstream=false,hostCode=newHostCode()}={}){
   const app=express();
   const book=new Records(); // Shared by this app's clients; disposable on restart.
-  // Express 4.17.1 defaults to qs's extended parser. Keep that deliberately old
-  // dependency available to the isolated lesson, but do not route ordinary bench
-  // requests through its vulnerable nested-query parsing. Set before any .use().
+  // Flat key=value queries only; nested/bracket parsing is never needed here.
   app.set('query parser','simple');
   app.disable('x-powered-by');
+  app.use((req,res,next)=>{
+    res.set(SECURITY_HEADERS);
+    // Older browsers do not treat 'self' as covering WebSockets, so name this
+    // exact host for the relay socket. The Host value is checked before use.
+    const host=req.headers.host;
+    if(slipstream===true&&typeof host==='string'&&/^[A-Za-z0-9.-]{1,253}(?::[0-9]{1,5})?$/.test(host)){
+      res.set('Content-Security-Policy',SECURITY_HEADERS['Content-Security-Policy'].replace("connect-src 'self'","connect-src 'self' ws://"+host+" wss://"+host));
+    }
+    next();
+  });
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next();});
   app.use('/api',express.json({limit:MAX_BODY_BYTES,strict:true}));
+  // The live-car controller and its multiplayer relay exist only with --slipstream.
+  // The relay forwards phone inputs to the host browser; it never addresses a car.
+  if(slipstream===true){
+    const relay=createRelay({hostCode});
+    app.locals.slipstreamRelay=relay;app.locals.slipstreamHostCode=hostCode;
+    app.use('/api/slipstream',relay);
+  }
 
   app.get('/api/health',(req,res)=>res.json({
     kind:'cs460-support-server',source:'MOCK',versions
   }));
 
-  const visibleRecords=req=>lodash.orderBy(
-    book.list(textField(req.query.operator,'operator')),['id'],['asc']
-  );
+  const visibleRecords=req=>book.list(textField(req.query.operator,'operator'))
+    .sort((a,b)=>a.id-b.id);
   app.get('/api/support/records',route((req,res)=>{
     res.json({source:'MOCK',records:visibleRecords(req)});
   }));
   app.get('/api/support/summary',route((req,res)=>{
-    const grouped=lodash.groupBy(visibleRecords(req),'team');
-    const groups=lodash.orderBy(Object.entries(grouped).map(([team,rows])=>({
-      team,count:rows.length
-    })),['team'],['asc']);
+    const counts=new Map();
+    for(const row of visibleRecords(req))counts.set(row.team,(counts.get(row.team)??0)+1);
+    const groups=[...counts].map(([team,count])=>({team,count}))
+      .sort((a,b)=>a.team<b.team?-1:a.team>b.team?1:0);
     res.json({source:'MOCK',groups});
   }));
   app.get('/api/support/records/:id',route((req,res)=>{
-    // Intentional CWE-639 remains in Records.read; do not add team filtering here.
+    // Records.read enforces the team boundary and hides other teams' records.
     const record=book.read(textField(req.query.operator,'operator'),req.params.id);
     res.json({source:'MOCK',record});
   }));
@@ -79,7 +111,7 @@ export function createApp({instructorLiveDrive=false}={}){
     if(!body || typeof body!=='object' || Array.isArray(body)){
       throw new InputError('Request body must be a JSON object');
     }
-    // Intentional CWE-862 remains: a recognized operator may choose another team.
+    // Records.add refuses a workgroup other than the operator's own team.
     const record=book.add(textField(body.operator,'operator'),
       textField(body.workgroup,'workgroup'),textField(body.note,'note'));
     res.status(201).json({source:'MOCK',record});
@@ -94,12 +126,28 @@ export function createApp({instructorLiveDrive=false}={}){
   });
   if(instructorLiveDrive===true){
     app.get('/instructor-drive/config.json',(req,res)=>res.json({instructorLiveDrive:true}));
-    app.use('/instructor-drive',express.static(driveDirectory,{dotfiles:'deny',index:'index.html'}));
+    app.use('/instructor-drive',(req,res,next)=>{
+      if(!DRIVE_FILES.has(req.path))return res.status(404).json({error:'Not found'});
+      next();
+    },express.static(driveDirectory,{dotfiles:'deny',index:'index.html',redirect:false}));
   }
 
   // Only designated browser assets are public. No repository-root mount, proxy,
   // or motor API: the instructor page owns its selected browser GATT connection.
-  app.use(express.static(benchDirectory,{dotfiles:'deny',index:'index.html'}));
+  app.use('/slipstream',(req,res,next)=>{
+    res.set('Cache-Control','no-store');
+    if(slipstream!==true)return res.status(404).json({error:'Not found'});
+    if(req.path==='/vendor/qrcode.mjs')return res.type('text/javascript').sendFile(qrModule);
+    if(!SLIPSTREAM_FILE.test(req.path))return res.status(404).json({error:'Not found'});
+    next();
+  },express.static(slipstreamDirectory,{dotfiles:'deny',index:'index.html',redirect:false}));
+  app.get('/favicon.ico',(req,res)=>res.status(204).end());
+  // Test files are development artifacts, not browser assets.
+  app.use((req,res,next)=>{
+    if(/\.test\.mjs$/i.test(req.path))return res.status(404).json({error:'Not found'});
+    next();
+  });
+  app.use(express.static(benchDirectory,{dotfiles:'deny',index:'index.html',redirect:false}));
   app.use((req,res)=>res.status(404).json({error:'Not found'}));
   app.use((error,req,res,next)=>{
     if(res.headersSent)return next(error);
@@ -128,8 +176,22 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
     const port=parsePort(process.env.PORT);
     // HOST is intentionally not configurable. This teaching server is loopback-only.
     const instructorLiveDrive=instructorDriveEnabled(process.env.CS460_INSTRUCTOR_LIVE_DRIVE);
-    const server=createApp({instructorLiveDrive}).listen(port,'127.0.0.1',()=>{
+    const slipstream=process.argv.includes('--slipstream');
+    // The host code gates room creation. Set SLIPSTREAM_HOST_CODE to choose it.
+    const hostCode=process.env.SLIPSTREAM_HOST_CODE||newHostCode();
+    if(slipstream&&hostCode.length<8)throw new Error('SLIPSTREAM_HOST_CODE must be at least 8 characters');
+    const app=createApp({instructorLiveDrive,slipstream,hostCode});
+    const server=app.listen(port,'127.0.0.1',()=>{
+      // Bound slow or stalled clients on this single-process teaching server.
+      server.headersTimeout=10000;server.requestTimeout=15000;server.keepAliveTimeout=5000;
       console.log(`CS 460 mock support server: http://127.0.0.1:${port}`);
+      if(slipstream){
+        app.locals.slipstreamRelay.attach(server);
+        console.log(`Slipstream controller: http://127.0.0.1:${port}/slipstream/ (real cars move; supervise the track)`);
+        console.log(`Host code (needed to invite players): ${hostCode}`);
+        // Regular output also keeps a Codespace from idling out mid-session.
+        setInterval(()=>console.log(`[slipstream] ${new Date().toISOString()} rooms ${app.locals.slipstreamRelay.rooms.size}`),5*60*1000).unref();
+      }
       if(instructorLiveDrive)console.log('Instructor drive prototype enabled at /instructor-drive/; physical movement remains unverified.');
     });
     server.on('error',()=>{

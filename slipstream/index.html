@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slipstream control</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark"></span><h1>SLIPSTREAM <small>control</small></h1></div>
+  <span id="phase" class="chip">Garage</span>
+  <div class="actions">
+    <button id="scan" title="Drive one car round to map the track">Scan track</button>
+    <button id="loadMap" hidden>Use saved map</button>
+    <button id="battle" class="primary" disabled>Start battle</button>
+    <button id="stop" class="danger" title="Esc">STOP ALL</button>
+  </div>
+</header>
+<main>
+  <aside id="garage">
+    <h2>Garage</h2>
+    <div class="row">
+      <button id="connect" class="primary">Connect car</button>
+      <button id="addSim">Add simulated car</button>
+    </div>
+    <p id="bleNote" class="note"></p>
+    <label class="field">Practice layout (simulated cars)
+      <select id="layout"></select>
+    </label>
+    <div id="cars"></div>
+    <p class="note" id="empty">No cars yet. Connect a real car over Bluetooth, or add simulated cars to try everything without hardware.</p>
+  </aside>
+  <section id="stage">
+    <canvas id="map"></canvas>
+    <div id="keys" class="keys">
+      <span><b>Player 1</b> W S speed · A D lane · F fire · G support · R special · Q E switch weapon · X U-turn</span>
+      <span><b>Player 2</b> arrows · K fire · L support · O special · I P switch weapon · M U-turn</span>
+    </div>
+  </section>
+  <aside id="side">
+    <h2>Scoreboard</h2>
+    <table id="scores"><thead><tr><th>Car</th><th>Hits</th><th>Lost</th><th>Laps</th></tr></thead><tbody></tbody></table>
+    <h2>Speed limit</h2>
+    <label class="field"><span id="topLabel">Top speed 700 mm/s</span>
+      <input id="top" type="range" min="300" max="1200" step="50" value="700">
+    </label>
+    <h2>Remote players</h2>
+    <label class="field" id="codeField">Host code (printed where the server was started)
+      <input id="hostCode" type="text" autocomplete="off" spellcheck="false" placeholder="ABCDE-FGHJK">
+    </label>
+    <button id="invite">Show shared code</button>
+    <div id="room" hidden>
+      <canvas id="qr" width="220" height="220" aria-label="QR code to join"></canvas>
+      <p class="note">Any free car: scan this and you get the next car whose driver is <b>Phone</b>. For a specific car, use the <b>Code</b> button on that car's card.</p>
+      <input id="joinUrl" readonly aria-label="Join link">
+      <ul id="players"></ul>
+      <button id="closeRoom">Close room</button>
+    </div>
+    <p id="roomNote" class="note"></p>
+    <h2>Trace</h2>
+    <div class="row"><button id="record">Record</button><button id="saveTrace" disabled>Save trace</button></div>
+    <p class="note" id="traceNote">Records every byte to and from each car, for replay in tests.</p>
+    <h2>Log</h2>
+    <ol id="log"></ol>
+  </aside>
+</main>
+<script type="module" src="app.mjs"></script>
+</body>
+</html>

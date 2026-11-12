@@ -2,20 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 
-test('intentional dependency baseline pins upstream commits and archive integrity in the lockfile',async()=>{
+test('dependencies are exact registry releases with lockfile integrity and no removed packages',async()=>{
   const manifest=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
   const lock=JSON.parse(await readFile(new URL('../package-lock.json',import.meta.url),'utf8'));
-  const expected={
-    express:{version:'4.17.1',repository:'expressjs/express',commit:'e1b45ebd050b6f06aa38cda5aaf0c21708b0c71e'},
-    lodash:{version:'4.17.15',repository:'lodash/lodash',commit:'f9cd8f552b7c8dc4aaa6be48eb9adf026ce4cd30'}
-  };
-  assert.deepEqual(Object.keys(manifest.dependencies).sort(),Object.keys(expected).sort());
-  for(const [name,pin] of Object.entries(expected)){
-    const source='https://codeload.github.com/'+pin.repository+'/tar.gz/'+pin.commit;
-    assert.equal(manifest.dependencies[name],source);
-    assert.equal(lock.packages[''].dependencies[name],source);
-    assert.equal(lock.packages['node_modules/'+name].version,pin.version);
-    assert.equal(lock.packages['node_modules/'+name].resolved,source);
-    assert.match(lock.packages['node_modules/'+name].integrity,/^sha512-[A-Za-z0-9+/]+=*$/);
+  assert.deepEqual(Object.keys(manifest.dependencies).sort(),['express','qrcode-generator','ws']);
+  assert.match(manifest.dependencies.ws,/^\d+\.\d+\.\d+$/);
+  assert.match(manifest.dependencies['qrcode-generator'],/^\d+\.\d+\.\d+$/);
+  assert.equal(manifest.devDependencies,undefined);
+  // Exact version: no ranges, tags, git URLs or tarball URLs.
+  assert.match(manifest.dependencies.express,/^5\.\d+\.\d+$/);
+  assert.equal(lock.packages[''].dependencies.express,manifest.dependencies.express);
+  assert.equal(lock.packages['node_modules/express'].version,manifest.dependencies.express);
+  const installed=Object.entries(lock.packages).filter(([path])=>path);
+  assert.ok(installed.length>10);
+  for(const [path,entry] of installed){
+    assert.match(entry.resolved,/^https:\/\/registry\.npmjs\.org\//,path);
+    assert.match(entry.integrity,/^sha512-[A-Za-z0-9+/]+=*$/,path);
+    assert.notEqual(entry.hasInstallScript,true,path);
   }
+  for(const removed of ['lodash'])assert.equal(lock.packages['node_modules/'+removed],undefined,removed);
 });

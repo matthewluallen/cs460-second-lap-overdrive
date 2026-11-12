@@ -4,7 +4,7 @@ import {request} from 'node:http';
 import {once} from 'node:events';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {createApp,parsePort,MAX_BODY_BYTES} from './server.mjs';
+import {createApp,parsePort,MAX_BODY_BYTES,SECURITY_HEADERS} from './server.mjs';
 import {MAX_RECORDS} from '../bench/records.mjs';
 import {ServerRecords} from '../bench/server-records.mjs';
 
@@ -40,8 +40,34 @@ test('platform health identifies synthetic state and the actual pinned runtime v
   assert.equal(response.status,200);
   assert.match(response.headers['content-type'],/application\/json/);
   assert.equal(response.headers['cache-control'],'no-store');
-  assert.deepEqual(response.json(),{kind:'cs460-support-server',source:'MOCK',
-    versions:{express:'4.17.1',lodash:'4.17.15'}});
+  const health=response.json();
+  assert.deepEqual(Object.keys(health),['kind','source','versions']);
+  assert.equal(health.kind,'cs460-support-server');assert.equal(health.source,'MOCK');
+  assert.deepEqual(Object.keys(health.versions),['express']);
+  assert.match(health.versions.express,/^5\.\d+\.\d+$/);
+});
+
+test('platform sends restrictive security headers on pages, API, errors and 404s',async t=>{
+  const {call}=await start(t);
+  for(const [path,options] of [['/'],['/ui.mjs'],['/api/health'],['/missing'],['/favicon.ico'],
+    ['/api/support/records?operator=unknown'],['/api/support/records',{method:'POST',raw:'{'}]]){
+    const response=await call(path,options);
+    for(const [name,value] of Object.entries(SECURITY_HEADERS))
+      assert.equal(response.headers[name.toLowerCase()],value,path+' '+name);
+    assert.equal(response.headers['x-powered-by'],undefined,path);
+  }
+  const csp=SECURITY_HEADERS['Content-Security-Policy'];
+  assert.match(csp,/default-src 'none'/);assert.match(csp,/script-src 'self'(;|$)/);
+  assert.match(csp,/frame-ancestors 'none'/);
+  assert.ok(!/script-src[^;]*unsafe/.test(csp));
+});
+
+test('platform serves no test files and answers the favicon probe without a body',async t=>{
+  const {call}=await start(t);
+  for(const path of ['/ui.test.mjs','/records.test.mjs','/link.test.mjs','/UI.TEST.MJS'])
+    assert.equal((await call(path)).status,404,path);
+  const icon=await call('/favicon.ico');
+  assert.equal(icon.status,204);assert.equal(icon.text,'');
 });
 
 test('platform serves the ordinary bench and worksheet modules with usable MIME types',async t=>{
@@ -88,34 +114,41 @@ test('platform ordinary list/create/read works and returns sorted MOCK records',
   assert.deepEqual(listed.json().records.map(row=>row.id),[101,103]);
 });
 
-// These tests preserve deliberate reproductions. Passing does not mean secure access.
-test('platform deliberate CWE-639 baseline: red reads blue by changing the record key',async t=>{
+test('platform CWE-639 regression: red cannot read blue by changing the record key',async t=>{
   const {call}=await start(t);
   const list=await call('/api/support/records?operator=pilot-red');
   assert.ok(!list.json().records.some(row=>row.id===102));
   const read=await call('/api/support/records/102?operator=pilot-red');
-  assert.equal(read.status,200);
-  assert.equal(read.json().source,'MOCK');
-  assert.equal(read.json().record.team,'blue');
+  const missing=await call('/api/support/records/999?operator=pilot-red');
+  assert.equal(read.status,400);
+  assert.deepEqual(read.json(),{error:'No such record'});
+  assert.deepEqual(read.json(),missing.json(),'other-team and missing records are indistinguishable');
+  assert.ok(!read.text.includes('bench B'));
+  const owner=await call('/api/support/records/102?operator=pilot-blue');
+  assert.equal(owner.status,200);assert.equal(owner.json().record.team,'blue');
 });
 
-test('platform deliberate CWE-862 baseline: red creates a record in blue workgroup',async t=>{
+test('platform CWE-862 regression: red cannot create a record in another workgroup',async t=>{
   const {call}=await start(t);
-  const created=await call('/api/support/records',{method:'POST',body:{
-    operator:'pilot-red',workgroup:'blue',note:'Synthetic cross-team record'
-  }});
-  assert.equal(created.status,201);
-  assert.equal(created.json().record.team,'blue');
+  for(const workgroup of ['blue','green','gold']){
+    const created=await call('/api/support/records',{method:'POST',body:{
+      operator:'pilot-red',workgroup,note:'Synthetic cross-team record'
+    }});
+    assert.equal(created.status,400,workgroup);
+    assert.match(created.json().error,/only for their own workgroup/);
+  }
   const blue=await call('/api/support/records?operator=pilot-blue');
-  assert.deepEqual(blue.json().records.map(row=>row.id),[102,103]);
-  const red=await call('/api/support/records?operator=pilot-red');
-  assert.deepEqual(red.json().records.map(row=>row.id),[101]);
+  assert.deepEqual(blue.json().records.map(row=>row.id),[102]);
+  const own=await call('/api/support/records',{method:'POST',body:{
+    operator:'pilot-red',workgroup:'red',note:'Synthetic own-team record'
+  }});
+  assert.equal(own.json().record.id,103,'refused requests consume no IDs');
 });
 
-test('platform Lodash summary counts the selected operator visible shared records',async t=>{
+test('platform summary counts only the selected operator own-team records',async t=>{
   const {call}=await start(t);
   await call('/api/support/records',{method:'POST',body:{
-    operator:'pilot-red',workgroup:'blue',note:'Synthetic shared row'
+    operator:'pilot-blue',workgroup:'blue',note:'Synthetic shared row'
   }});
   const blue=await call('/api/support/summary?operator=pilot-blue');
   assert.deepEqual(blue.json(),{source:'MOCK',groups:[{team:'blue',count:2}]});
@@ -167,8 +200,7 @@ test('platform simple query parsing avoids nested input and rejects invalid oper
     assert.equal(response.status,400);
     assert.ok(response.json().error.length<=180);
   }
-  // Ordinary bracket keys stay literal under the simple parser. This is not
-  // proof that the pinned qs dependency is patched.
+  // Ordinary bracket keys stay literal under the simple parser.
   const result=await call('/api/support/records?operator=pilot-red&unused%5Bnested%5D=value');
   assert.equal(result.status,200);
   assert.deepEqual(result.json().records.map(row=>row.id),[101]);
@@ -187,13 +219,14 @@ test('platform app instances have independent disposable stores',async t=>{
   assert.deepEqual(secondRows.json().records.map(row=>row.id),[101]);
 });
 
-test('platform and actual browser adapter agree on ordinary and deliberately flawed MOCK operations',async t=>{
+test('platform and actual browser adapter agree on ordinary and refused MOCK operations',async t=>{
   const {server}=await start(t);
   const origin='http://127.0.0.1:'+server.address().port;
   const book=new ServerRecords((path,options)=>fetch(origin+path,options));
   assert.deepEqual((await book.list('pilot-red')).map(row=>row.id),[101]);
-  assert.equal((await book.read('pilot-red',102)).team,'blue');
-  const created=await book.add('pilot-red','blue','Synthetic adapter integration');
+  await assert.rejects(book.read('pilot-red',102),/No such record/);
+  await assert.rejects(book.add('pilot-red','blue','Synthetic adapter integration'),/only for their own workgroup/);
+  const created=await book.add('pilot-blue','blue','Synthetic adapter integration');
   assert.equal(created.id,103);
   assert.equal(created.team,'blue');
   assert.deepEqual(await book.summary('pilot-blue'),[{team:'blue',count:2}]);
@@ -211,14 +244,14 @@ test('platform full shared store preserves records and gives a server-specific r
   const before=await call('/api/support/records?operator=pilot-red');
   assert.equal(before.json().records.length,MAX_RECORDS-1);
   const overflow=await call('/api/support/records',{method:'POST',body:{
-    operator:'pilot-red',workgroup:'blue',note:'Cannot exceed session budget'
+    operator:'pilot-red',workgroup:'red',note:'Cannot exceed session budget'
   }});
   assert.equal(overflow.status,400);
   assert.match(overflow.json().error,/restart the local server to reset/);
   const after=await call('/api/support/records?operator=pilot-red');
   assert.deepEqual(after.json(),before.json());
-  const blue=await call('/api/support/records/102?operator=pilot-red');
-  assert.equal(blue.json().record.team,'blue','deliberate cross-team read remains available');
+  const blue=await call('/api/support/records/102?operator=pilot-blue');
+  assert.equal(blue.json().record.team,'blue','existing records survive a full store');
 });
 
 test('platform CLI port uses a strict loopback-server port range',()=>{
