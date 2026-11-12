@@ -317,7 +317,7 @@ function readControls(dt) {
     const s = SCHEMES[d.control], input = d.input;
     const slot = d.control === 'gamepad' ? padIndex++ : null;
     if (slot !== d.gamepadSlot) { d.gamepadSlot = slot; d.gamepadArmed = false; }
-    if (game.halted || d.car.safetyReason) { d.gamepadArmed = false; d.level = 0; input.throttle = 0; input.attack = input.support = input.special = false; if (d.pad) d.pad.throttle = 0; continue; }
+    if (game.halted || d.car.safetyReason) { d.armed = false; d.gamepadArmed = false; d.level = 0; input.throttle = 0; input.attack = input.support = input.special = false; if (d.pad) d.pad.throttle = 0; continue; }
     if (s) {
       d.level = Math.max(0, Math.min(1, (d.level ?? 0) + (held.has(s.up) ? 0.9 * dt : 0) - (held.has(s.down) ? 1.6 * dt : 0)));
       input.throttle = d.level; input.attack = held.has(s.attack); input.support = held.has(s.support); input.special = held.has(s.special);
@@ -329,17 +329,22 @@ function readControls(dt) {
       if (!d.gamepadArmed) {
         const neutral = (pad.buttons[7]?.value ?? 0) <= .02 && Math.abs(pad.axes[0] ?? 0) <= .12 && ![0,1,3].some(i => pad.buttons[i]?.pressed);
         input.throttle = 0; input.attack = input.support = input.special = false;
-        d.gamepadArmed = neutral; continue;
+        d.gamepadArmed = neutral; d.armed = neutral; continue;
       }
       input.throttle = pad.buttons[7]?.value ?? 0;
       input.lane = -(Math.abs(pad.axes[0]) > 0.12 ? pad.axes[0] : 0) * 67.5;
       input.attack = !!pad.buttons[0]?.pressed; input.support = !!pad.buttons[1]?.pressed; input.special = !!pad.buttons[3]?.pressed;
     } else if (d.control === 'phone') {
       const pad = d.pad, fresh = pad && performance.now() - pad.seen < 700;
+      if (!fresh) { d.armed = false; if(pad) pad.armed = false; }
       // Dead-man: a phone that stops sending (locked, out of range) stops its car.
       input.throttle = fresh ? pad.throttle : 0; input.attack = fresh && pad.attack; input.support = fresh && pad.support; input.special = fresh && pad.special;
       if (fresh) input.lane = -pad.steer * 67.5;
     } else if (d.control === 'none') { input.throttle = 0; input.attack = input.support = input.special = false; d.level = 0; }
+    if (d.control !== 'bot' && !d.armed) {
+      if (d.control !== 'phone' && input.throttle === 0 && !input.attack && !input.support && !input.special) d.armed = true;
+      input.throttle = 0; input.attack = input.support = input.special = false;
+    }
   }
 }
 
@@ -353,7 +358,7 @@ function seat(player, wantedId = player.car) {
   const free = d => d.control === 'phone' && !d.pad && d.car.connected;
   const driver = game.drivers.find(d => free(d) && d.id === wantedId) ?? (wantedId ? null : game.drivers.find(free));
   if (!driver) return;
-  driver.pad = {player, seen: 0, throttle: 0, steer: 0, attack: false, support: false, special: false};
+  driver.armed = false; driver.pad = {player, seen: 0, throttle: 0, steer: 0, attack: false, support: false, special: false};
   player.driver = driver; log(player.name + ' is driving ' + driver.car.name);
 }
 function onRelay(m) {
@@ -371,6 +376,11 @@ function onRelay(m) {
     else if (!p.driver && !p.manual) seat(p);
     const pad = p.driver?.pad; if (!pad) return;
     pad.seen = performance.now();
+    const neutral = Number(m.throttle) === 0 && (Number(m.steer)||0) === 0 && !m.attack && !m.support && !m.special && !m.uturn;
+    if (!p.driver.armed) {
+      if (neutral && !game.halted && !p.driver.car.safetyReason) p.driver.armed = true;
+      else { pad.throttle = 0; pad.attack = pad.support = pad.special = false; return; }
+    }
     pad.throttle = Math.max(0, Math.min(1, Number(m.throttle) || 0)); pad.steer = Math.max(-1, Math.min(1, Number(m.steer) || 0));
     pad.attack = m.attack === true; pad.support = m.support === true; pad.special = m.special === true;
     if (m.cycle === 'attack' || m.cycle === 'support' || m.cycle === 'special') game.battle?.cycle(p.driver.car, m.cycle);
@@ -422,6 +432,10 @@ async function drawQr(canvas, text) {
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (qr.isDark(y, x)) c.fillRect(off + x * cell, off + y * cell, cell, cell);
 }
 let opening = null;
+function relayStatus(status) {
+  $('roomNote').textContent = status === 'online' ? '' : 'Relay ' + status;
+  for (const d of game.drivers) if (d.control === 'phone') { d.armed = false; d.input.throttle = 0; if (d.pad) { d.pad.seen = -Infinity; d.pad.throttle = 0; } d.car.stop(); }
+}
 function openRoom() {
   if (room) return Promise.resolve(room);
   return opening ??= (async () => {
@@ -431,7 +445,7 @@ function openRoom() {
       const made = await api('/rooms', {method: 'POST', key: code});
       try { sessionStorage.setItem('slipstream.hostCode', code); } catch {}
       $('codeField').hidden = true;
-      room = {...made, link: channel({room: made.room, key: made.hostKey, role: 'host', onMessage: onRelay, onStatus: s => { $('roomNote').textContent = s === 'online' ? '' : 'Relay ' + s; }})};
+      room = {...made, link: channel({room: made.room, key: made.hostKey, role: 'host', onMessage: onRelay, onStatus: relayStatus})};
       const url = location.origin + '/slipstream/pad.html#r=' + made.room + '&j=' + made.joinKey;
       $('joinUrl').value = url; $('room').hidden = false; $('invite').hidden = true;
       await drawQr($('qr'), url);
@@ -459,7 +473,7 @@ function pushState(snapshot, now) {
     kills: roundRows.get(s.id)?.hits ?? s.kills, deaths: roundRows.get(s.id)?.losses ?? s.deaths, laps: roundRows.get(s.id)?.laps ?? s.laps,
     bays: Object.fromEntries(['attack', 'support', 'special'].map(b => [b, s[b] ? {label: WEAPON_LABEL[s[b].type], style: s[b].style, ready: s[b].ready, charge: +s[b].charge.toFixed(1)} : null]))});
   const byDriver = new Map(snapshot.map(s => [s.id, s])), mine = {};
-  for (const p of players.values()) if (p.driver) mine[p.id] = view(byDriver.get(p.driver.id));
+  for (const p of players.values()) if (p.driver) mine[p.id] = {...view(byDriver.get(p.driver.id)), needsNeutral: !p.driver.armed};
   const lobby = {phase: game.halted ? 'stopped' : game.phase, round: {title: countdown ? 'Get ready' : activeMission?.title ?? round.title, remainingMs: countdown ? Math.max(0, countdown.until - now) : round.remainingMs, status: countdown ? 'countdown' : round.status, mode: countdown?.mode ?? round.mode, goal: round.goal, teamLaps: round.teamLaps, objective: round.objective ?? ''}, cars: game.drivers.filter(d => d.control === 'phone').map(d => ({id: d.id, name: d.car.name, color: d.car.color, free: !d.pad}))};
   room.link.send({players: mine, lobby}).catch(() => {});
 }

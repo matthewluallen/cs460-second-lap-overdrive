@@ -45,7 +45,7 @@ export class Game {
     const f = this.battle?.get(driver.car); if (f) f.crew = crew;
   }
   setControl(driver, control) {
-    driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
+    driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
@@ -70,7 +70,7 @@ export class Game {
   }
   #stopDrivers(offTrack = null) {
     for (const d of this.drivers) {
-      d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
+      d.armed = false; d.gamepadArmed = false; d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
       if (d.pad) { d.pad.throttle = 0; d.pad.seen = 0; d.pad.attack = d.pad.support = d.pad.special = false; }
       d.car.safetyStop(d === offTrack ? 'Off track' : d.car.safetyReason || 'Host stopped');
     }

@@ -7,6 +7,7 @@ const params = new URLSearchParams(location.hash.slice(1));
 const room = params.get('r') || '', joinKey = params.get('s') || params.get('j') || '', seated = params.has('s');
 const KEY = 'slipstream.pad.' + room + '.' + joinKey.slice(0, 8);
 const state = {throttle: 0, steer: 0, attack: false, support: false, special: false};
+let lastStateAt = 0;
 let throttlePointer = null, releasePending = false, releaseCar = null;
 let online = false, driveReady = false, previousView = null, previousRoundStatus = null, tiltNeutral = null, tiltSample = null, tiltAngle = null;
 let haptics = false, lastBuzz = -Infinity;
@@ -61,10 +62,11 @@ function onMessage(m) {
   if (m.type === 'pending') { lockControls(); allowed = false; $('car').textContent = 'Waiting…'; $('status').textContent = 'Waiting for the host to let you in.'; return; }
   if (m.type === 'approved') { allowed = true; feedback('Approved. Wait for a car, then raise the throttle.', 'ready'); $('status').textContent = 'You are in.'; return; }
   if (m.type !== 'state') return;
+  lastStateAt = Date.now();
   const mine = m.me, lobby = m.lobby ?? {};
   hasCar = !!mine;
   if (releasePending && (!mine || mine.id !== releaseCar)) { releasePending = false; releaseCar = null; }
-  const ready = online && allowed && !releasePending && hasCar && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
+  const ready = online && allowed && !releasePending && hasCar && !mine.needsNeutral && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
   const changedCar = !!mine && mine.id !== previousView?.id;
   if (!ready || changedCar) resetInputs({keepSelection: !mine});
   if (changedCar) { setSteer(0); tiltNeutral = null; feedback('Car changed. Raise the throttle when ready.', 'ready'); }
@@ -127,6 +129,7 @@ function onMessage(m) {
 
 function send() {
   if (!me || !link || !allowed || !online) return;
+  if (Date.now() - lastStateAt > 1000) lockControls();
   const body = {...state, throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once, ...(releasePending ? {release:true} : {})};
   const text = JSON.stringify(body), now = Date.now();
   // Always refresh a few times a second so the host's dead-man timer stays happy.

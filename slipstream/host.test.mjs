@@ -142,6 +142,7 @@ for (const carCount of [1, 2, 3, 4]) for (const mode of carCount === 1 ? ['solo'
     h.tick(3000); await settle();
     assert.equal(h.run('session.status'), 'running');
     assert.equal(h.run('session.view().rows.length'), carCount);
+    h.tick(3001); await settle(); // Observe neutral controls after GO before applying throttle.
     // Fresh human input is applied only after GO, through the actual browser
     // throttle handler. Other drivers use the real Bot and battle systems.
     h.run(`for (const d of game.drivers) if (d.control === 'browser') {
@@ -258,4 +259,23 @@ test('gamepad stops require neutral controls and do not shift other car slots', 
   h.run('a.car.safetyReason=null;readControls(.04)');assert.equal(h.run('a.input.throttle'),0);
   h.run('pa.buttons[7].value=0;readControls(.04);pa.buttons[7].value=.7;readControls(.04)');assert.equal(h.run('a.input.throttle'),.7);
   h.run("game.setControl(a,'none');game.setControl(a,'gamepad');readControls(.04)");assert.equal(h.run('a.input.throttle'),0);
+});
+
+test('H1 host dead-man requires a fresh neutral phone packet before motion resumes', async () => {
+  const h=host();h.node('addSim').click();
+  h.run(`const d=game.drivers[0];game.setControl(d,'phone');const p={id:1,approved:true,name:'Phone',car:d.id};players.set(1,p);seat(p);
+    onRelay({type:'input',player:1,throttle:0,steer:0});onRelay({type:'input',player:1,throttle:1});`);
+  h.tick(40);await settle();assert.ok(h.run('d.car.speed')>0);
+  h.tick(1100);await settle();assert.equal(h.run('d.car.speed'),0);
+  h.run("onRelay({type:'input',player:1,throttle:1})");h.tick(1140);await settle();
+  assert.equal(h.run('d.car.speed'),0,'latched non-neutral phone input must not rearm');
+  h.run("onRelay({type:'input',player:1,throttle:0,steer:0});onRelay({type:'input',player:1,throttle:.5})");h.tick(1180);await settle();assert.ok(h.run('d.car.speed')>0);
+});
+
+test('H1 relay status changes disarm phone seats even with fresh cached throttle', async () => {
+  const h=host();h.node('addSim').click();
+  h.run(`const d=game.drivers[0];game.setControl(d,'phone');const p={id:1,approved:true,name:'Phone',car:d.id};players.set(1,p);seat(p);
+    onRelay({type:'input',player:1,throttle:0});onRelay({type:'input',player:1,throttle:1});readControls(.04);game.tick(.04);
+    relayStatus('offline');relayStatus('online');onRelay({type:'input',player:1,throttle:1});readControls(.04);game.tick(.04);`);
+  await settle();assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('d.armed'),false);
 });

@@ -222,3 +222,10 @@ checks that the probes fail if a flaw is reintroduced.
 
 Report a suspected weakness privately to the instructors rather than opening a
 public issue. Include the commit, the exact request and the observed result.
+
+## External review remediation
+
+- H1: host-side controller arming is cleared by stops, driver/seat changes,
+  phone dead-man expiry and relay status changes. A phone must provide a fresh
+  neutral packet before motion; the phone also clears controls when host state
+  goes stale. This is a software interlock, not a car-enforced host-loss timeout.
