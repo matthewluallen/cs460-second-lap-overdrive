@@ -249,3 +249,8 @@ public issue. Include the commit, the exact request and the observed result.
 - M4: scans require an identified scanner, a track-clear confirmation and a
   three-second countdown; other cars remain latched. Completed scans stop.
   Pit resume waits through the same countdown before rearming CPU drivers.
+- M12: exhausted host-code buckets return 429 before comparing credentials,
+  including correct credentials. Buckets use the actual socket address and are
+  bounded/expired; forwarded address headers are not trusted. Users behind one
+  reverse proxy may share a bucket. Successful authenticated creations refund
+  their token but cannot bypass an already exhausted bucket.

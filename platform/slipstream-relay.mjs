@@ -63,7 +63,7 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
   const rooms = new Map();
   const router = express.Router();
   const fail = (res, status, error) => res.status(status).json({error});
-  const badCodes = new Bucket(LIMITS.badCodesPerMinute / 60, now(), LIMITS.badCodesPerMinute);
+  const badCodes = new Map();
 
   function closeRoom(id) {
     const room = rooms.get(id);
@@ -146,11 +146,17 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
 
   router.post('/rooms', (req, res) => {
     sweep();
-    if (!same(bearer(req), hostCode)) {
-      // Guessing is rate-limited for everyone, so a wrong code is slow to brute-force.
-      if (!badCodes.take(now())) return fail(res, 429, 'Too many wrong host codes; wait a minute');
-      return fail(res, 403, 'Wrong host code');
+    const time=now(), address=req.socket.remoteAddress || 'unknown';
+    for (const [key,bucket] of badCodes) if (time-bucket.at>60000) badCodes.delete(key);
+    let bucket=badCodes.get(address);
+    if(!bucket){
+      if(badCodes.size>=4096)return fail(res,429,'Host-code limiter full; try later');
+      bucket=new Bucket(LIMITS.badCodesPerMinute/60,time,LIMITS.badCodesPerMinute);badCodes.set(address,bucket);
     }
+    // Socket address only: an untrusted forwarded header cannot reset this bucket.
+    if(!bucket.take(time))return fail(res,429,'Too many host-code attempts; wait a minute');
+    if (!same(bearer(req), hostCode)) return fail(res,403,'Wrong host code');
+    bucket.tokens = Math.min(bucket.size,bucket.tokens+1); // authenticated creation has its own room cap
     if (rooms.size >= LIMITS.rooms) return fail(res, 429, 'Too many rooms; try again later');
     const id = token(4), t = now();
     const room = {id, hostKey: token(24), joinKey: token(12), seats: new Map(), players: new Map(), host: null,

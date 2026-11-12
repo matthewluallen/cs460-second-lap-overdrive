@@ -99,7 +99,7 @@ test('opening a room needs the host code, and guessing it is rate-limited', asyn
   const guesses = [];
   for (let i = 0; i < LIMITS.badCodesPerMinute + 5; i++) guesses.push((await call('/api/slipstream/rooms', {method: 'POST', key: 'GUESS-' + i})).status);
   assert.ok(guesses.includes(429), 'guessing gets throttled'); assert.ok(!guesses.includes(201));
-  assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 201, 'the right code still works during a guessing run');
+  assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 429, 'M12 exhausted buckets refuse even the correct code before comparison');
   assert.throws(() => createApp({slipstream: true, hostCode: 'short'}), /at least 8/);
 });
 
