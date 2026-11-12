@@ -174,3 +174,9 @@ a safety bug: short 0x29 frames refreshed the track watchdog despite lacking the
 supported classic transition layout. The decoder now requires the full layout.
 480 Node tests pass. This repairs the watchdog gap, not MXT localization or Power
 Zone compatibility. Do not increase scan time or infer piece IDs from these bytes.
+
+The subsequent [MXT-focused Ghidra/JADX pass](slipstream/review/MXT-DECOMPILE-FOLLOWUP.md)
+re-exported initialization, transition and receive functions from the F&F library.
+It confirms the supported classic layout and an application startup sequence unlike
+our SDK path, but does not establish the missing-position root cause. No additional
+live commands were sent. Startup-inclusive recording is the next evidence gap.
