@@ -4,31 +4,37 @@
 // only confirm that the two agree with each other. A trace from a real car is
 // ground truth. Record one at the track, drop the file in fixtures/, and the test
 // suite replays it through the real decoder, mapper and localiser from then on.
-import {hex} from './protocol.mjs';
+import {hex, decode} from './protocol.mjs';
 
 export const TRACE_FORMAT = 'slipstream-trace-v1';
 const MAX_EVENTS = 200000;
 
 export class Recorder {
   constructor(clock = () => performance.now()) { this.clock = clock; this.active = false; this.reset(); }
-  reset() { this.cars = []; this.events = []; this.started = 0; this.dropped = 0; }
+  reset() { this.generation = (this.generation ?? 0) + 1; this.attached = new WeakSet(); this.cars = []; this.events = []; this.started = 0; this.dropped = 0; }
   start(drivers, note = '') {
     this.reset(); this.active = true; this.started = this.clock(); this.note = note; this.wall = new Date().toISOString();
     for (const driver of drivers) this.add(driver);
   }
   add(driver) {
     if (!this.active) return;
-    const index = this.cars.length, car = driver.car;
-    this.cars.push({name: car.name, model: car.model, simulated: !!car.simulated});
+    const index = this.cars.length, car = driver.car, generation = this.generation;
+    if (this.attached.has(car)) return;
+    this.attached.add(car);
+    const info = {name: car.name, model: car.model, simulated: !!car.simulated, firmware: car.version ?? null};
+    this.cars.push(info);
     car.tap = (direction, bytes) => {
-      if (!this.active) return;
+      if (!this.active || generation !== this.generation) return;
+      if (direction === 'rx') {
+        try { for (const message of decode(bytes)) if (message.type === 'version') info.firmware = message.version; } catch {}
+      }
       if (this.events.length >= MAX_EVENTS) { this.dropped++; return; }
       this.events.push([Math.round(this.clock() - this.started), index, direction, hex(bytes)]);
     };
   }
   stop() { this.active = false; return this.toJSON(); }
   toJSON() {
-    return {format: TRACE_FORMAT, recorded: this.wall, note: this.note, source: this.cars.every(c => c.simulated) ? 'simulator' : 'hardware',
+    return {format: TRACE_FORMAT, recorded: this.wall, note: this.note, source: this.cars.length === 0 ? 'unknown' : this.cars.every(c => c.simulated) ? 'simulator' : this.cars.some(c => c.simulated) ? 'mixed' : 'hardware',
       cars: this.cars, dropped: this.dropped, events: this.events};
   }
 }
@@ -39,7 +45,7 @@ export function validate(trace) {
   for (const event of trace.events) {
     if (!Array.isArray(event) || event.length !== 4) throw new Error('Malformed trace event');
     const [t, car, direction, bytes] = event;
-    if (!Number.isFinite(t) || t < last || !Number.isInteger(car) || car < 0 || car >= trace.cars.length ||
+    if (!Number.isFinite(t) || t < 0 || t < last || !Number.isInteger(car) || car < 0 || car >= trace.cars.length ||
       (direction !== 'rx' && direction !== 'tx') || typeof bytes !== 'string' || !/^([0-9a-f]{2})( [0-9a-f]{2})*$/.test(bytes)) throw new Error('Malformed trace event');
     last = t;
   }

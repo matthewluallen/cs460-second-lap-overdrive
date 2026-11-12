@@ -65,7 +65,13 @@ Selected real function addresses in this edition (not the standard app's address
 
 These selected serializers support the existing packet sizes; they do not prove
 physical left/right, steering sign, braking distance, or notification timing.
-Unknown packet handling remains conservative. Slipstream does **not** implement
+The follow-up decoder exposes `0x4f` and `0x53` as distinct diagnostic-only
+events with unsigned 32-bit code, final raw byte and original bytes. Both native
+packers reference format `ccic` at Ghidra address `00dce189` (image base
+`00010000`); size is seven bytes including the length byte. Short messages remain
+raw unknowns. Synthetic vectors test parsing, not physical semantics. The offline
+`tools/inspect_trace.mjs` report groups observations without feeding them into
+localization or weapon effects. Slipstream does **not** implement
 Power Zone game effects or claim those supercode messages are ordinary position
 notifications. A ping implementation alone would not solve host-loss stopping.
 

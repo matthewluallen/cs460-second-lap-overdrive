@@ -24,3 +24,28 @@ and replay path works; it proves nothing about real cars.
    leave it out until you have watched which way the car really moved.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
+
+## Inspect a capture before interpreting it
+
+```sh
+node slipstream/tools/inspect_trace.mjs path/to/recording.json
+```
+
+The offline report lists each car separately, firmware replies, seen piece IDs,
+message counts, malformed notifications, and supercode observations. `0x4f` and
+`0x53` remain distinct; their unsigned code and final raw byte are preserved.
+They do not identify a Power Zone location or enable attacks. The examples in
+tests are synthetic native-layout vectors, not real-car recordings.
+
+New recordings retain firmware known at capture start and later version replies.
+An absent version remains null; recording after initialization may miss a reply
+unless the host already knows it. Empty recordings are labeled `unknown`, mixed
+real/simulated sessions `mixed`, and all-real sessions `hardware`. Those labels
+are self-reported metadata, not proof of physical provenance. Old recordings
+without firmware fields still work. A restarted recording ignores old callbacks.
+
+For Fast & Furious, record an ordinary-piece baseline and a supervised Power Zone
+pass, noting the physical piece, travel direction and car/firmware in the trace
+note. Keep the observations separate from assumed gameplay semantics. Do not
+infer accurate zone geometry, stopping behavior or firmware compatibility merely
+from a successful decode. Keep raw traces private until their contents are reviewed.

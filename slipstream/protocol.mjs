@@ -11,7 +11,7 @@ export const ID = Object.freeze({
   CANCEL_LANE_CHANGE: 0x26, POSITION: 0x27, TRANSITION: 0x29, INTERSECTION: 0x2a,
   DELOCALIZED: 0x2b, SET_OFFSET: 0x2c, OFFSET_UPDATE: 0x2d, TURN: 0x32, LIGHTS_PATTERN: 0x33,
   OFFSET_ADJUST: 0x34, SPEED_UPDATE: 0x36, STATUS: 0x3f, LANE_CHANGE_UPDATE: 0x41, CONFIG: 0x45,
-  COLLISION: 0x4d, JUMP_RESULT: 0x4e, TRANSITION2: 0x51, CYCLE_OVERTIME: 0x86, SDK_MODE: 0x90
+  COLLISION: 0x4d, JUMP_RESULT: 0x4e, SUPERCODE: 0x4f, ZONE_SUPERCODE: 0x53, TRANSITION2: 0x51, CYCLE_OVERTIME: 0x86, SDK_MODE: 0x90
 });
 export const MAX_SPEED = 1400;                 // mm/s hard ceiling for anything this code sends
 export const LIGHT = Object.freeze({RED: 0, TAIL: 1, BLUE: 2, GREEN: 3, FRONTL: 4, FRONTR: 5});
@@ -123,6 +123,12 @@ function decodeOne(m) {
     case ID.SPEED_UPDATE: if (!has(7)) break; return {id, type: 'speed', desired: v.getInt16(2, true), accel: v.getInt16(4, true), actual: v.getInt16(6, true)};
     case ID.COLLISION: if (!has(3)) break; return {id, type: 'collision', a: m[2], b: m[3], wasSideOnCollision: !!m[2], wasFrontBackCollision: !!m[3]};
     case ID.JUMP_RESULT: if (!has(4)) break; return {id, type: 'jump', value: v.getInt16(2, true), result: m[4], launchSpeed: v.getInt16(2, true), jumpFailed: !!m[4]};
+    // Diagnostic only: Fast & Furious native constructors/GetBytes use a
+    // 7-byte frame (ccic). The final byte's gameplay meaning is not established.
+    case ID.SUPERCODE:
+    case ID.ZONE_SUPERCODE:
+      if (!has(6)) break;
+      return {id, type: id === ID.SUPERCODE ? 'supercode' : 'zoneSupercode', code: v.getUint32(2, true), rawTag: m[6], raw: hex(m)};
     case ID.CYCLE_OVERTIME: return {id, type: 'overtime'};
     case ID.OFFSET_UPDATE: if (!has(5) || !Number.isFinite(v.getFloat32(2, true))) break; return {id, type: 'offset', offset: v.getFloat32(2, true), laneChangeId: has(6) ? v.getUint8(6) : 0};
     case ID.STATUS: {

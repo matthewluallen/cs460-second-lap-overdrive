@@ -43,7 +43,7 @@ python3 -m lapreturn.cwe_lab     # expect three "flaw_reproduced": false, exit 0
 npm run dependency-lab           # expect "regressionCheckPassed": true
 ```
 
-Review-fix verification on 12 November 2026: **406 Node tests pass on Node
+Review-fix verification on 12 November 2026: **412 Node tests pass on Node
 22.23.5**, **38 Python tests pass on Python 3.14.7**, audit reports zero
 vulnerabilities, and the dependency/CWE probes pass. Host/phone browser walkthroughs
 covered approval, simulated driving, story completion, and portrait/landscape
@@ -88,7 +88,9 @@ Run the controller locally with `npm run slipstream` (prints a host code; opens
 
 Read [the Fast & Furious review](slipstream/review/FAST-FURIOUS-REVIEW.md) for the
 independent `com.anki.foxtrot` analysis, matching derived tables and transport code,
-and the native-analysis warnings. Power Zone effects remain unimplemented.
+and the native-analysis warnings. Power Zone effects remain unimplemented. Diagnostic-only supercode decoding and
+`slipstream/tools/inspect_trace.mjs` now prepare for real captures. Recordings retain
+firmware, distinguish mixed sessions, and reject callbacks from previous sessions.
 [Deployment instructions](slipstream/DEPLOYMENT.md) describe Codespaces hosting
 with a nearby Bluetooth laptop and phone clients. The optional Three.js studio
 uses original procedural graphics with a 2D fallback; desktop panels resize.
