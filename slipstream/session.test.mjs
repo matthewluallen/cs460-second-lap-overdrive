@@ -147,24 +147,25 @@ import {readFileSync} from 'node:fs';
 import {Game} from './game.mjs';
 import {SimWorld} from './sim.mjs';
 const fixtureData = name => JSON.parse(readFileSync(new URL('./data/' + name + '.json', import.meta.url)));
-test('purposeful CPU guidance completes every story with one or four cars at a 400 mm/s ceiling', async () => {
+test('CPU story algorithms complete with simulator-only 10-second telemetry allowance', async () => {
   const data = {pieces:fixtureData('pieces'),vehicles:fixtureData('vehicles'),weapons:fixtureData('weapons')};
   for (const layout of ['Capsule','Figure eight']) for (const count of [1,4]) for (const mission of STORY_MISSIONS) {
     let now = 0;
-    const game = new Game({...data,clock:()=>now}), world = new SimWorld(game.pieces,layout);
+    const game = new Game({...data,clock:()=>now,safety:{trackGapMs:10000}}), world = new SimWorld(game.pieces,layout);
     game.useTrack(world.track);game.topSpeed=400;
     for(let i=0;i<count;i++) { const d=game.addCar(world.addCar(),{simulated:true,control:'bot'});game.setControl(d,'bot'); }
     const snapshot=()=>game.snapshot(now).map(row=>{
       const d=game.drivers.find(driver=>driver.id===row.id), p=d.car.localizer.estimate(now);
       return {...row,lateral:p?.lateral,speedCeiling:400,circuitProgress:p?.located?world.track.distance(p.index,p.progress,p.direction)/world.track.length:undefined,circuitDirection:p?.direction};
     });
+    game.armComputers();
     const s=new RoundSession();s.start('team',snapshot(),now,{mission:mission.id});
     while(s.status==='running') {
       for(const d of game.drivers) d.objectiveInput=s.guidance(d.id);
       world.step(.02);now+=20;game.tick(.02,now);await 0;s.update(snapshot(),now);
     }
     const result=s.view();
-    assert.equal(result.reason,'goal',layout+' / '+count+' cars / '+mission.id+' / '+result.teamTasks+' tasks');
+    assert.equal(result.reason,'goal',layout+' / '+count+' cars / '+mission.id+' / '+result.teamTasks+' tasks / '+game.pitReason);
     assert.ok(now<mission.durationMs);
     assert.ok(result.rows.every(row=>row.task.phase==='complete'));
     await Promise.all(game.drivers.map(d=>d.car.close()));
@@ -176,6 +177,7 @@ test('precision guidance beats full throttle through the actual simulator and lo
   const world=new SimWorld(game.pieces,'Capsule');game.useTrack(world.track);game.topSpeed=400;
   for(let i=0;i<2;i++){const d=game.addCar(world.addCar(),{simulated:true,control:'bot'});game.setControl(d,'bot');}
   const snapshot=()=>game.snapshot(now).map(row=>{const p=game.drivers.find(d=>d.id===row.id).car.localizer.estimate(now);return {...row,lateral:p?.lateral,speedCeiling:400,circuitProgress:p?.located?world.track.distance(p.index,p.progress,p.direction)/world.track.length:undefined,circuitDirection:p?.direction};});
+  game.armComputers();
   const s=new RoundSession();s.start('precision',snapshot(),0);
   while(s.status==='running'){
     for(const [i,d] of game.drivers.entries()){d.objectiveInput=s.guidance(d.id);if(i===1)d.objectiveInput.throttle=1;}

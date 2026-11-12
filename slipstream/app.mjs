@@ -95,7 +95,7 @@ function addCard(driver) {
   seatLink.onfocus = () => seatLink.select();
   card.style.setProperty('--c', `rgb(${driver.car.color.map(v => Math.round(v * 255)).join()})`);
   model.onchange = () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car changed'); game.setModel(driver, Number(model.value)); driver.car.name = game.modelName(driver.car.model); name.textContent = driver.id + ' · ' + driver.car.name; };
-  control.onchange = () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
+  control.onchange = () => { control.blur?.(); if (session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
   remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
   $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow, task});
@@ -118,7 +118,7 @@ $('addSim').onclick = () => {
   addCard(driver); log('Added simulated ' + driver.car.name);
 };
 if (!bluetoothAvailable()) { $('bleNote').textContent = 'Bluetooth is not available in this browser. Use desktop Chrome or Edge on HTTPS or localhost. Simulated cars still work.'; $('bleNote').classList.add('bad'); $('connect').disabled = true; }
-else $('bleNote').textContent = 'Real cars move as soon as they have a driver. Keep the track clear and someone next to it.';
+else $('bleNote').textContent = 'Select drivers, then explicitly start. Keep the track clear and someone next to it.';
 $('connect').onclick = async event => {
   try {
     if (game.drivers.length >= 4) throw new Error('The garage holds four cars. Disconnect one first.');
@@ -142,7 +142,7 @@ $('scan').onclick = () => {
 };
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
-$('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); session.reset(); activeMission = null; game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); } catch (error) { log(error.message); } };
+$('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); } catch (error) { log(error.message); } };
 $('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s'; };
 game.onTrack = track => { if (!game.drivers.every(d => d.car.simulated)) try { localStorage.setItem(SAVED, JSON.stringify(track.toJSON())); } catch {} };
 let saved = null; try { saved = JSON.parse(localStorage.getItem(SAVED)); } catch {}
@@ -196,6 +196,7 @@ function beginRound() {
     if (game.track.inferredCount) throw new Error('Rescan the circuit: ' + game.track.inferredCount + ' sections were inferred. Clean the codes and use a lower scan speed.');
     const active = game.drivers.filter(d => d.car.connected && d.control !== 'none');
     const mode = $('mode').value;
+    if ((experience === 'story' || mode === 'precision') && game.track.pieces.some(p=>p.kind==='intersection')) throw new Error('Slow intersection missions are unverified with the 2-second telemetry watchdog. Choose a layout without intersections.');
     if (active.length < ROUND_MODES[mode].minCars) throw new Error('Choose a driver for at least ' + ROUND_MODES[mode].minCars + ' car(s) in the pit crew.');
     if (mode === 'battle' && active.length > 1 && active[0].crew && active.every(d => d.crew === active[0].crew)) throw new Error('Everyone is allied. Choose another crew for a rival, or play Crew mission together.');
     if (active.some(d => d.car.safetyReason && d.car.safetyReason !== 'Host stopped')) throw new Error('Recover the off-track car or disconnect it before starting.');
@@ -215,7 +216,7 @@ function tickRound(now) {
       try {
         requireVisible();
         if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
-        game.resume(); if (ready.mode === 'battle') game.startBattle();
+        game.resume(); game.armComputers(); if (ready.kind === 'free') { log('Free drive armed after countdown'); return; } if (ready.mode === 'battle') game.startBattle();
         const opts = ready.mission ? {mission: ready.mission.id, goal: ready.mission.goalPerCar * ready.ids.length, durationMs: ready.mission.durationMs} : {};
         activeMission = ready.mission; activeExperience = experience;
         session.start(ready.mode, scoringSnapshot(now).filter(s => ready.ids.includes(s.id)), now, opts);

@@ -106,12 +106,12 @@ test('off-track latch survives ordinary resume and blocks a fresh round', async 
 test('repeated STOP never resumes motion; recovery requires the distinct Resume action', async () => {
   const h = host(); h.node('addSim').click();
   h.run(`const d = game.drivers[0]; game.useTrack(world.track); game.setControl(d, 'bot');`);
-  h.tick(40); await settle(); assert.ok(h.run('d.car.speed') > 0);
-  for (const time of [80, 120, 160]) {
+  h.node('resume').click();h.tick(3000);h.tick(3040);await settle();assert.ok(h.run('d.car.speed') > 0);
+  for (const time of [3080, 3120, 3160]) {
     h.node('stop').click(); h.tick(time); await settle();
     assert.equal(h.run('game.halted'), true); assert.equal(h.run('d.car.speed'), 0);
   }
-  h.node('resume').click(); h.tick(200); await settle();
+  h.node('resume').click(); h.tick(3200);await settle();assert.equal(h.run('d.car.speed'),0);h.tick(6160);h.tick(6200);await settle();
   assert.equal(h.run('game.halted'), false); assert.ok(h.run('d.car.speed') > 0);
 });
 
@@ -279,3 +279,12 @@ test('H1 relay status changes disarm phone seats even with fresh cached throttle
     relayStatus('offline');relayStatus('online');onRelay({type:'input',player:1,throttle:1});readControls(.04);game.tick(.04);`);
   await settle();assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('d.armed'),false);
 });
+
+test('H3 selecting Computer never starts motion and releases dropdown focus', async () => {
+  const h=host();h.node('addSim').click();
+  h.run(`const d=game.drivers[0];game.useTrack(world.track);const control=cards.get(d).control;let blurred=false;control.blur=()=>{blurred=true};control.value='bot';control.onchange();`);
+  h.tick(40);await settle();assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('blurred'),true);
+  h.node('battle').click();h.tick(1000);assert.equal(h.run('d.car.speed'),0);h.tick(3040);h.tick(3080);await settle();assert.ok(h.run('d.car.speed')>0);
+});
+
+test('H2 slow intersection missions are blocked without relaxing the default watchdog',()=>{const h=host();h.node('addSim').click();h.run("world.setLayout('Figure eight');game.useTrack(world.track);game.setControl(game.drivers[0],'bot');chooseExperience('story');beginRound();");assert.equal(h.run('countdown'),null);assert.match(h.node('roundHelp').textContent,/Slow intersection/);assert.equal(h.run('game.safety.trackGapMs'),2000);});

@@ -233,3 +233,8 @@ public issue. Include the commit, the exact request and the observed result.
   defaults); scans have 45 s and three anchor-pass budgets. Continued track
   telemetry after a 1 s stop grace triggers a repeated STOP and named pit alarm.
   These conservative software defaults are configurable, not hardware-calibrated.
+- H3: selecting CPU control no longer arms motion; explicit Start round or
+  Free drive completes a three-second countdown first. Driver selection releases
+  keyboard focus. Slow Story/Precision intersection rounds are blocked under the
+  unchanged two-second watchdog; algorithm-only tests label their longer simulator
+  allowance explicitly (owner-approved compatibility policy).

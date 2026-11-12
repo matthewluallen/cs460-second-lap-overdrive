@@ -47,13 +47,14 @@ export class Game {
     const f = this.battle?.get(driver.car); if (f) f.crew = crew;
   }
   setControl(driver, control) {
-    driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
+    driver.cpuArmed = false; driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
     if (message.type === 'closed') { this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
     if (this.phase === 'scanning' && driver === this.scanner) {
       if (message.type === 'position') {
+        if (message.pieceId === 34 && this.scanAnchor !== 34) { this.scanAnchor = 34; this.scanLaps = 0; this.scanLastPiece = undefined; }
         this.scanAnchor ??= message.pieceId;
         if (message.pieceId === this.scanAnchor && this.scanLastPiece !== undefined && this.scanLastPiece !== this.scanAnchor) this.scanLaps++;
         this.scanLastPiece = message.pieceId;
@@ -78,7 +79,7 @@ export class Game {
   }
   #stopDrivers(offTrack = null) {
     for (const d of this.drivers) {
-      d.armed = false; d.gamepadArmed = false; d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
+      d.cpuArmed = false; d.armed = false; d.gamepadArmed = false; d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
       if (d.pad) { d.pad.throttle = 0; d.pad.seen = 0; d.pad.attack = d.pad.support = d.pad.special = false; }
       d.car.safetyStop(d === offTrack ? 'Off track' : d.car.safetyReason || 'Host stopped');
     }
@@ -133,11 +134,12 @@ export class Game {
     if (!track.closed) throw new Error('Saved track does not close');
     this.useTrack(track);
   }
+  armComputers() { for (const d of this.drivers) if (d.control === 'bot') { d.input = emptyInput(); d.cpuArmed = true; d.armed = true; } }
   // --- battle ----------------------------------------------------------------
   startBattle() {
     if (!this.track) throw new Error('Map the track first');
     if (this.track.inferredCount) throw new Error('Rescan: some track sections were inferred, not identified');
-    this.resume(); this.battle.start();
+    this.resume(); this.armComputers(); this.battle.start();
     for (const d of this.drivers) this.battle.get(d.car).participating = d.control !== 'none';
     this.phase = 'battle';
     for (const d of this.drivers) if (d.control === 'bot') d.bot = new Bot(d.car, this.battle);
@@ -182,6 +184,7 @@ export class Game {
       const car = d.car;
       if (!car.connected || (this.phase === 'scanning' && d === this.scanner)) continue;
       if (car.safetyReason) { d.input = emptyInput(); continue; }
+      if (d.control === 'bot' && !d.cpuArmed) { d.input = emptyInput(); car.setSpeed(0); continue; }
       if (d.bot && this.track) {
         d.bot.drive(now, d.input);
         // Session objectives guide CPU throttle/lane only. They cannot bypass
