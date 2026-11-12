@@ -12,13 +12,13 @@ not connect to the cars, and phones do not need Web Bluetooth. Human and compute
 drivers share the same host control loop. The laptop can also be a human player.
 Use Chrome or Edge with Web Bluetooth support on that laptop. Keep its host tab
 visible, its lid open, and sleep disabled for the supervised session. Remote
-latency affects phone inputs; rendering and the control loop run separately.
+latency affects phone inputs; rendering and the control loop share the host browser main thread.
 
 ## GitHub Codespaces
 
 1. Open this branch in a Codespace using the supplied `.devcontainer` configuration.
    It installs the locked Node dependencies without install scripts.
-2. Run `PORT=3000 npm run slipstream` in the Codespace terminal. Keep the terminal's
+2. Run `PORT=3000 npm run slipstream:live` in the Codespace terminal. Keep the terminal's
    host code private to the operator. It authorizes room creation.
 3. Open the forwarded port 3000 URL, appending `/slipstream/`, on the nearby laptop.
    Use the browser-facing **HTTPS** URL, normally
@@ -29,8 +29,10 @@ latency affects phone inputs; rendering and the control loop run separately.
    assigning them to cars. Each car's Code button provides its phone join link.
 5. Open those links on the phones. Forwarded ports are private by default;
    GitHub's authentication/organization rules still apply before the app loads.
-   Choose the class's permitted port visibility in GitHub if needed. This repository
-   does not publish the port or change access settings. Do not put GitHub tokens
+   For a public QR session, explicitly set port **3000** to **Public** in Ports.
+   The `slipstream:live` command excludes the course bench, mock APIs and instructor
+   drive routes; use it for this setup. Keep the forwarding protocol **HTTP**;
+   the external browser URL remains **HTTPS**. Do not put GitHub tokens
    in join links. App join credentials do not bypass GitHub's access gate.
 
 Codespace stop/rebuild or server restart destroys in-memory rooms. Create a fresh

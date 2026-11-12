@@ -262,3 +262,14 @@ public issue. Include the commit, the exact request and the observed result.
   cancelling a scan now latches host STOP. Both had failing regressions before
   repair. A 42-case fault matrix checks telemetry silence, relay outage and delayed
   off-track reports across one to four cars; it does not establish physical stops.
+
+## Public live-session mode
+
+`PORT=3000 npm run slipstream:live` enables `--slipstream-only`: an early route
+allowlist serves only Slipstream assets/relay, favicon and a root redirect. Bench,
+mock support APIs, health details and instructor-drive routes return 404 even if
+the instructor flag is also enabled. This addresses M13 for this deployment mode;
+the older mixed teaching mode must remain private. Public forwarding is an explicit
+operator action. Room creation still requires the host code; joining still requires
+join credentials and host approval. Never place the host code in a public URL.
+Regression: `public live session exposes only Slipstream pages and authenticated relay`.

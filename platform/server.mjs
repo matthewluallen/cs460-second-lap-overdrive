@@ -60,7 +60,7 @@ function route(action){
   };
 }
 
-export function createApp({instructorLiveDrive=false,slipstream=false,hostCode=newHostCode()}={}){
+export function createApp({instructorLiveDrive=false,slipstream=false,slipstreamOnly=false,hostCode=newHostCode()}={}){
   const app=express();
   const book=new Records(); // Shared by this app's clients; disposable on restart.
   // Flat key=value queries only; nested/bracket parsing is never needed here.
@@ -76,6 +76,15 @@ export function createApp({instructorLiveDrive=false,slipstream=false,hostCode=n
     }
     next();
   });
+  // Public live sessions exclude every teaching/bench route before parsing requests.
+  if(slipstreamOnly){
+    if(!slipstream)throw new Error('Slipstream-only mode requires Slipstream');
+    app.use((req,res,next)=>{
+      if(req.path==='/')return res.redirect('/slipstream/');
+      if(req.path==='/favicon.ico'||req.path==='/slipstream'||req.path.startsWith('/slipstream/')||req.path.startsWith('/api/slipstream/'))return next();
+      return res.status(404).json({error:'Not found'});
+    });
+  }
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next();});
   app.use('/api',express.json({limit:MAX_BODY_BYTES,strict:true}));
   // The live-car controller and its multiplayer relay exist only with --slipstream.
@@ -183,11 +192,12 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
     const port=parsePort(process.env.PORT);
     // Loopback remains the default. Container binding is an explicit Slipstream-only opt-in.
     const instructorLiveDrive=instructorDriveEnabled(process.env.CS460_INSTRUCTOR_LIVE_DRIVE);
-    const slipstream=process.argv.includes('--slipstream');
+    const slipstreamOnly=process.argv.includes('--slipstream-only');
+    const slipstream=slipstreamOnly||process.argv.includes('--slipstream');
     // The host code gates room creation. Set SLIPSTREAM_HOST_CODE to choose it.
     const hostCode=process.env.SLIPSTREAM_HOST_CODE||newHostCode();
     if(slipstream&&hostCode.length<8)throw new Error('SLIPSTREAM_HOST_CODE must be at least 8 characters');
-    const app=createApp({instructorLiveDrive,slipstream,hostCode});
+    const app=createApp({instructorLiveDrive,slipstream,slipstreamOnly,hostCode});
     const bindAddress=serverBindAddress({slipstream,container:process.argv.includes('--container')});
     const server=app.listen(port,bindAddress,()=>{
       // Bound slow or stalled clients on this single-process teaching server.

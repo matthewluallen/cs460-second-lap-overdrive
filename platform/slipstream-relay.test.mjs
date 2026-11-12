@@ -298,3 +298,15 @@ test('container binding requires explicit Slipstream opt-in', () => {
   assert.throws(() => serverBindAddress({container:true}));
   assert.equal(serverBindAddress({slipstream:true,container:true}), '0.0.0.0');
 });
+
+test('public live session exposes only Slipstream pages and authenticated relay', async t => {
+ const {origin,call,room}=await start(t,{slipstream:true,slipstreamOnly:true,hostCode:CODE,instructorLiveDrive:true});
+ for(const path of ['/api/support/records?operator=red','/api/health','/index.html','/app.mjs','/instructor-drive/','/api/slipstream-other']) {
+  assert.equal((await fetch(origin+path)).status,404,path);
+ }
+ assert.equal((await fetch(origin+'/slipstream/')).status,200);
+ assert.equal((await fetch(origin+'/slipstream/pad.html')).status,200);
+ assert.equal((await fetch(origin+'/',{redirect:'manual'})).status,302);
+ assert.equal((await call('/api/slipstream/rooms',{method:'POST'})).status,403);
+ assert.ok((await room()).hostKey);
+});

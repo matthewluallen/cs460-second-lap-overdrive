@@ -154,3 +154,8 @@ The 2-second telemetry default remains. Story/Precision intersection rounds are
 blocked pending validation; longer Story algorithm-test timing is simulator-only.
 No hardware validation or complete-system formal proof is claimed. M13 and
 car-enforced host-loss stopping remain open. See the response before deployment.
+
+Public hardware trials now use `PORT=3000 npm run slipstream:live`, which excludes
+the teaching APIs and bench pages (M13 deployment isolation). The user explicitly
+authorized public Codespaces forwarding for QR controllers. Latest local Node run:
+479 tests passed. See `slipstream/DEPLOYMENT.md`; hardware limits remain unchanged.

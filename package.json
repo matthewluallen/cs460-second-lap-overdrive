@@ -12,7 +12,8 @@
     "test:platform": "node --test platform/*.test.mjs",
     "dependency-lab": "node platform/dependency-lab.mjs",
     "audit": "npm audit --audit-level=low",
-    "slipstream": "node platform/server.mjs --slipstream"
+    "slipstream": "node platform/server.mjs --slipstream",
+    "slipstream:live": "node platform/server.mjs --slipstream-only"
   },
   "dependencies": {
     "express": "5.3.0",

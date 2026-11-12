@@ -83,7 +83,7 @@ computer drivers; only phone players drop out, and their cars stop.
 1. Run the server in a Codespace and open the forwarded HTTPS address on the host
    laptop. Tilt sensors and Bluetooth both need HTTPS. The server prints a **host
    code** when it starts.
-2. In the Ports panel set port 8000 to **Public**, or each phone must be signed in to
+2. Start with `PORT=3000 npm run slipstream:live`. In the Ports panel set port 3000 to **Public**, or each phone must be signed in to
    an account permitted to access the forwarded port. Keep the host code private.
    Configure the Codespace idle timeout explicitly; periodic server output is not
    a guarantee that the environment stays awake.
