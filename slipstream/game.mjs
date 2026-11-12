@@ -51,7 +51,7 @@ export class Game {
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
-    if (message.type === 'closed') { this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
+    if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
     if (this.phase === 'scanning' && driver === this.scanner) {
       if (message.type === 'position') {
         if (message.pieceId === 34 && this.scanAnchor !== 34) { this.scanAnchor = 34; this.scanLaps = 0; this.scanLastPiece = undefined; }

@@ -56,19 +56,25 @@ export class Car {
     } finally { clearTimeout(timer); }
   }
   async #failSafe(error) {
+    const wasMoving = this.speed > 0;
     this.faulted = true; this.safetyReason = 'Connection fault'; this.speed = 0; this.pending.clear();
     // A rejected, settled command may leave a perfectly live radio and a moving
     // car. Try STOP once before releasing the link; never retry motion.
     if (!error.writeTimedOut) {
       try { await this.#write(encode.speed(0, 2500)); } catch {}
     }
-    this.#finishClose(error);
+    this.#finishClose(error, wasMoving);
   }
-  #finishClose(error) {
+  #finishClose(error, wasMoving = false) {
     const wasConnected = this.connected;
     this.connected = false; this.pending.clear(); this.unsubscribe?.();
     try { this.transport.close(); } catch {}
-    if (wasConnected && error) for (const fn of this.listeners) fn({type: 'closed', reason: error.message ?? 'disconnected'}, this);
+    if (wasConnected && error) for (const fn of this.listeners) fn({type: 'closed', wasMoving, reason: error.message ?? 'disconnected'}, this);
+  }
+  connectionLost(reason = 'Bluetooth link lost') {
+    if (!this.connected) return;
+    const wasMoving=this.speed>0;this.faulted=true;this.safetyReason='Connection fault';this.speed=0;
+    this.#finishClose(new Error(reason),wasMoving);
   }
   #receive(bytes) {
     this.tap?.('rx', bytes);

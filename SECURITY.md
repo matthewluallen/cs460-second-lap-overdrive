@@ -243,3 +243,6 @@ public issue. Include the commit, the exact request and the observed result.
 - M2: gamepad drivers claim a stable browser pad slot/identity by pressing a
   button, then returning to neutral. Another driver changing controls cannot
   transfer that binding. Blur disarms gamepads; non-standard mappings are blocked.
+- M3: unexpected Bluetooth loss or write faults while commanded to move open
+  a named shared pit. Disconnected/faulted cars cannot be recovered in place;
+  remove and reconnect them. This does not prove that the lost car physically stops.

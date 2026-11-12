@@ -13,3 +13,6 @@ test('H2 continued telemetry after STOP raises an alarm and resends STOP',async(
 test('H2 scan cannot run past its wall-clock budget',()=>{const r=rig();r.game.startScan();for(let t=0;t<=46000;t+=500){r.at(t);r.position();}assert.equal(r.game.halted,true);assert.notEqual(r.game.phase,'scanning');assert.match(r.game.pitReason,/scan.*budget/i);});
 
 test('H2 scan lap budget stops repeated anchor passes without closure',()=>{const r=rig();r.game.startScan();r.position(36);for(let i=0;i<3;i++){r.position(39);r.position(36);}assert.equal(r.game.halted,true);assert.match(r.game.pitReason,/lap budget/);});
+
+test('M3 moving connection fault opens a named shared pit',async()=>{const r=rig();r.d.input.throttle=1;r.at(0);await r.d.car.pumpPromise;r.d.car.transport.write=async()=>{throw new Error('radio lost');};r.d.car.refreshBattery();await r.d.car.pumpPromise;assert.equal(r.game.halted,true);assert.match(r.game.pitReason,/connection|link/i);assert.equal(r.game.pitReady,false);});
+test('M3 unexpected transport link loss on a moving car opens the pit',()=>{const r=rig();r.d.input.throttle=1;r.at(0);r.d.car.connectionLost();assert.equal(r.game.halted,true);assert.match(r.game.pitReason,/Groundshock.*Connection lost/);assert.equal(r.d.car.connected,false);});

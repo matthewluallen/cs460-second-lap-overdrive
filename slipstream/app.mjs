@@ -129,7 +129,7 @@ $('connect').onclick = async event => {
     const model = link.model && vehicles.models[String(link.model)] ? link.model : 8;
     if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
     const driver = game.addCar(link, {model, name: vehicles.models[String(model)].name, control: 'none'});
-    link.onClose(() => { log(driver.car.name + ' lost its Bluetooth link'); driver.car.connected = false; });
+    link.onClose(() => driver.car.connectionLost());
     addCard(driver);
     log('Connected ' + driver.car.name + (link.model ? '' : ' (model not reported: choose it in the list)'));
   } catch (error) { if (error.name !== 'NotFoundError') log('Connect failed: ' + error.message); }
@@ -514,7 +514,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? driver.gamepadWarning || 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
     const objective = session.view().rows.find(row => row.id === driver.id)?.task;
     ui.task.hidden = !objective; ui.task.textContent = objective?.cue ?? '';
-    ui.recover.hidden = !s.safetyReason || s.safetyReason === 'Host stopped';
+    ui.recover.hidden = !s.connected || !s.safetyReason || s.safetyReason === 'Host stopped';
     ui.browserControls.hidden = driver.control !== 'browser';
     ui.fireRow.hidden = game.phase !== 'battle';
     ui.throttle.value = Math.round((driver.level ?? 0) * 100); ui.throttle.disabled = game.halted || !!s.safetyReason;
