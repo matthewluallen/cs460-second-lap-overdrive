@@ -1,9 +1,12 @@
 # The original Android app: what Slipstream is built on
 
-The original author recorded this analysis on 12 November 2026 while rebuilding
-browser control. The APK/OBB, disassembly, timings and hashes below were not
-independently reproduced in the subsequent code review. Treat them as reported
-findings until the original artifacts and commands are available for verification.
+The original analysis was recorded on 12 November 2026. A subsequent independent
+pass downloaded the same vendor-hosted APK/OBBs, reproduced all three data tables,
+ran JADX and a saved full Ghidra analysis, exported control and broader subsystem
+functions, and cross-checked compiled SDK vectors. See
+[the independent review](review/INDEPENDENT-REVIEW.md) for exact coverage,
+addresses, warnings and limitations. This corroborates selected protocol and
+configuration facts; it is not hardware validation or whole-program equivalence.
 Slipstream is independent of the named third-party products.
 
 ## What was examined
@@ -65,7 +68,7 @@ Classes that matter for control:
    This project decodes four of them: speed update `0x36`, status `0x3f`, collision
    `0x4d` and jump result `0x4e`.
 3. **`0x2b` means "car off road"**, not just "delocalised" as the SDK names it.
-4. **The app does not use SDK mode.** It uploads the whole road network to each car
+4. **The inspected initialization path configures a road network.** It uploads the whole road network to each car
    (`SetRoadPieceInfoC/X`, `SetRoadNetworkInfo/Meta`, ids `0x46`–`0x49`) and the
    car then drives itself between commands. This project uses SDK mode (`0x90`)
    instead, which is documented, simpler, and leaves steering decisions to the host.
@@ -89,7 +92,8 @@ Classes that matter for control:
 ## Message ids
 
 "Bytes on the wire" includes the leading size byte. Sizes come from each class's
-`GetBytes`. `0x90` (SDK mode) is absent because the app never sends it.
+`GetBytes`. `0x90` (SDK mode) is absent from this recovered catalogue; that alone
+does not prove no app path can send it.
 
 | Id | App class | Bytes on the wire | In public SDK | Used here |
 |---|---|---|---|---|

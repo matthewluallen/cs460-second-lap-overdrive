@@ -5,7 +5,7 @@ export const ROUND_MODES = Object.freeze({
   precision: Object.freeze({title: 'Precision run', description: 'Match each gate’s lane and speed band. Deliberate driving earns points; full throttle does not.', durationMs: 90000, minCars: 1}),
   race: Object.freeze({title: 'Lap sprint', description: 'Most complete laps wins. A tie is a shared finish.', durationMs: 120000, minCars: 2}),
   team: Object.freeze({title: 'Crew mission', description: 'Every driver contributes. Complete the shared lap goal together.', durationMs: 120000, minCars: 1}),
-  battle: Object.freeze({title: 'Battle rush', description: 'Score 100 points per knockout and 25 per complete lap.', durationMs: 120000, minCars: 2})
+  battle: Object.freeze({title: 'Battle rush', description: 'Score 100 points per knockout and 25 per crew assist or complete lap.', durationMs: 120000, minCars: 2})
 });
 // Original story briefs. Every driver scans, carries and delivers their own packets.
 // Goals never grant higher motor limits.
@@ -51,8 +51,8 @@ export class RoundSession {
     this.goal = story ? drivers.length * story.goalPerCar * 3 : mode === 'team' ? Math.round(bounded(goal, 1, 100, drivers.length * 3)) : null;
     for (const row of drivers) this.roster.set(row.id, {
       id: row.id, name: row.name, control: row.control, computer: row.control === 'bot', connected: true,
-      laps: 0, hits: 0, losses: 0, score: 0, bestLapMs: null, lastLapMs: null,
-      baseKills: count(row.kills), baseDeaths: count(row.deaths), distance: 0,
+      laps: 0, hits: 0, assists: 0, losses: 0, score: 0, bestLapMs: null, lastLapMs: null,
+      baseAssists: count(row.assists), baseKills: count(row.kills), baseDeaths: count(row.deaths), distance: 0,
       previous: position(row) ? row.circuitProgress : null,
       direction: position(row) ? row.circuitDirection : null, lapStarted: 0,
       speedLimit: bounded(speedLimit ?? row.speedCeiling, 100, 1400, 700), gateIndex: null,
@@ -80,7 +80,9 @@ export class RoundSession {
       const previous = racer.previous, previousDirection = racer.direction;
       let movement = null;
       // A model/battle reset never turns negative counters into points.
-      const kills = count(row.kills), deaths = count(row.deaths);
+      const kills = count(row.kills), deaths = count(row.deaths), assists = count(row.assists);
+      if (assists < racer.baseAssists) racer.baseAssists = assists;
+      racer.assists += Math.max(0, assists - racer.baseAssists); racer.baseAssists = assists;
       if (kills < racer.baseKills) racer.baseKills = kills;
       if (deaths < racer.baseDeaths) racer.baseDeaths = deaths;
       racer.hits += Math.max(0, kills - racer.baseKills);
@@ -110,7 +112,7 @@ export class RoundSession {
         racer.previous = row.circuitProgress; racer.direction = row.circuitDirection;
       }
       if (this.mode === 'precision' || this.mission) this.#tasks(racer, row, previous, movement, dt, previousDirection);
-      racer.score = this.mode === 'precision' || this.mission ? racer.taskPoints : this.mode === 'battle' ? racer.hits * 100 + racer.laps * 25 : racer.laps * 100;
+      racer.score = this.mode === 'precision' || this.mission ? racer.taskPoints : this.mode === 'battle' ? racer.hits * 100 + (racer.laps + racer.assists) * 25 : racer.laps * 100;
     }
     if (this.mode === 'team' && (this.mission ? [...this.roster.values()].every(row => row.taskPhase === 'complete') : [...this.roster.values()].reduce((sum, row) => sum + row.laps, 0) >= this.goal)) return this.finish(now, 'goal');
     if (![...this.roster.values()].some(row => row.connected)) return this.finish(now, 'disconnected');
@@ -196,8 +198,8 @@ export class RoundSession {
   }
   view() {
     const rows = [...this.roster.values()].map(racer => {
-      const {id, name, control, computer, connected, laps, hits, losses, score, bestLapMs, lastLapMs, gates, misses, tasksCompleted} = racer;
-      return {id, name, control, computer, connected, laps, hits, losses, score, bestLapMs, lastLapMs, gates, misses, tasksCompleted, task: this.#task(racer)};
+      const {id, name, control, computer, connected, laps, hits, assists, losses, score, bestLapMs, lastLapMs, gates, misses, tasksCompleted} = racer;
+      return {id, name, control, computer, connected, laps, hits, assists, losses, score, bestLapMs, lastLapMs, gates, misses, tasksCompleted, task: this.#task(racer)};
     });
     rows.sort((a, b) => this.mode === 'solo'
       ? (a.bestLapMs ?? Infinity) - (b.bestLapMs ?? Infinity) || b.laps - a.laps || a.id - b.id

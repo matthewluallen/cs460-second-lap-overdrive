@@ -241,3 +241,25 @@ Tests: `node --test slipstream/*.test.mjs platform/slipstream-relay.test.mjs`.
 Select **Precision run** in Arcade or Competition to match four virtual gates’ lane and speed bands. Each car’s next target appears in its card, on its phone, and as a numbered map marker. Full throttle alone earns no gate points.
 
 Story missions require every car to scan, carry and deliver its own packets. One car does the sequence alone; up to four human/computer drivers contribute independently. CPUs follow the task requirements and wait when finished. Phone score feedback is optional, with visible task cues on every device.
+
+
+### Circuit planning and crews
+
+Open **Build a circuit** to add known section codes in driving order, reverse
+curves, undo a section, or copy the current map. The preview reports whether the
+ends meet. **Try this circuit** loads a closed design into the simulator with
+cars stopped. For physical cars, construct the layout and scan it; the drawing
+cannot establish real geometry, bridge clearance or jump feasibility. Sections
+inferred from wheel travel remain provisional and cannot start a scored round.
+
+Choose **Battle alliance** on each car: Independent, Sun or Moon. Teammates cannot
+hit each other; helping disable the same opponent earns 25 assist points. Target
+numbers and crew/assist feedback appear on host and phone. Alliances work with
+human or CPU drivers, browser or phone controls. Two allied cars can play a Crew
+mission; Battle rush needs an opposing racer. Changing crews ends the round.
+Positions older than two seconds wait for new codes before targeting/scoring;
+this conservative software rule still needs physical timing validation.
+
+See [independent verification and its limits](review/INDEPENDENT-REVIEW.md),
+[reverse-engineering tools](review/REA-REVIEW.md), and the coordinated-game design
+ideas in [DESIGN.md](DESIGN.md). Tests do not establish real host-loss stopping.

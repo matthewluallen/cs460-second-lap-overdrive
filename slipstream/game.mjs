@@ -1,6 +1,6 @@
 // Game orchestration with no DOM: drivers, scanning, battle and the control loop.
 import {Car, LANE_STEP} from './car.mjs';
-import {Pieces, Track, TrackMapper, traversal} from './track.mjs';
+import {Pieces, Track, TrackMapper, traversal, trackFromPlan} from './track.mjs';
 import {Battle, Bot, loadout} from './battle.mjs';
 
 export const MAX_CARS = 4;
@@ -36,7 +36,13 @@ export class Game {
   }
   setModel(driver, model) {
     driver.car.model = model;
-    if (this.battle) { this.battle.remove(driver.car); this.battle.add(driver.car); }
+    if (this.battle) { this.battle.remove(driver.car); this.battle.add(driver.car).crew = driver.crew ?? ''; }
+  }
+  setCrew(driver, crew) {
+    if (!['', 'sun', 'moon'].includes(crew)) throw new Error('Unknown crew');
+    if (this.battle?.active) throw new Error('Finish the round before changing crews');
+    driver.crew = crew;
+    const f = this.battle?.get(driver.car); if (f) f.crew = crew;
   }
   setControl(driver, control) {
     driver.control = control; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
@@ -98,26 +104,28 @@ export class Game {
     const scanner = this.scanner;
     scanner.car.stop(); this.scanner = null;
     this.useTrack(track);
-    // The scanning car has just re-entered the first piece, so its place is known.
-    scanner.car.localizer.seed(0, 1, this.clock());
+    // Wait for a real location code: closure is detected on leaving the anchor,
+    // not entering it. Seeding index zero would invent a target position.
     this.log('Track mapped: ' + track.count + ' pieces, ' + (track.length / 1000).toFixed(2) + ' m');
   }
   useTrack(track) {
     this.track = track; this.phase = 'ready';
     this.battle = new Battle({weapons: this.weapons, vehicles: this.vehicles, track, clock: this.clock});
-    for (const d of this.drivers) { d.car.useTrack(track); this.battle.add(d.car); if (d.control === 'bot') d.bot = new Bot(d.car, this.battle); }
+    for (const d of this.drivers) { d.car.useTrack(track); this.battle.add(d.car).crew = d.crew ?? ''; if (d.control === 'bot') d.bot = new Bot(d.car, this.battle); }
     this.onTrack?.(track);
   }
   loadTrack(saved) {
-    const sequence = saved.map(p => ({...traversal(this.pieces, p.id, !!p.reverse, p.id < 0 ? {kind: p.kind, turn: p.turn, length: p.length} : {})}));
-    const track = new Track(sequence);
+    const track = trackFromPlan(this.pieces, saved);
     if (!track.closed) throw new Error('Saved track does not close');
     this.useTrack(track);
   }
   // --- battle ----------------------------------------------------------------
   startBattle() {
     if (!this.track) throw new Error('Map the track first');
-    this.resume(); this.battle.start(); this.phase = 'battle';
+    if (this.track.inferredCount) throw new Error('Rescan: some track sections were inferred, not identified');
+    this.resume(); this.battle.start();
+    for (const d of this.drivers) this.battle.get(d.car).participating = d.control !== 'none';
+    this.phase = 'battle';
     for (const d of this.drivers) if (d.control === 'bot') d.bot = new Bot(d.car, this.battle);
     this.log('Battle started');
   }
@@ -178,7 +186,7 @@ export class Game {
       const f = this.battle?.get(d.car), max = this.vehicles.energy.max_energy, battleNow = this.battle?.time?.(now) ?? now;
       const bay = name => { const id = f?.item(name), w = id && this.weapons[id]; return w ? {id, type: w.type, style: w.interaction_style, ready: (f.ready[name] ?? 0) <= battleNow, charge: f.charge[name] ?? 0} : null; };
       return {id: d.id, name: d.car.name, model: d.car.model, color: d.car.color, control: d.control, connected: d.car.connected, safetyReason: d.car.safetyReason,
-        speed: d.car.liveSpeed, target: d.car.speed, millivolts: d.car.millivolts, located: !!d.car.localizer?.located, laps: d.car.localizer?.laps ?? 0,
+        speed: d.car.liveSpeed, target: d.car.speed, millivolts: d.car.millivolts, targets: (this.battle?.associations(d.car, now) ?? []).map(car => this.drivers.find(other => other.car === car)?.id).filter(id => id !== undefined), crew: d.crew ?? '', assists: f?.assists ?? 0, located: !!d.car.localizer?.estimate(now)?.located, laps: d.car.localizer?.laps ?? 0,
         energy: f ? f.energy / max : 1, disabled: f ? f.disabledUntil > battleNow : false, kills: f?.kills ?? 0, deaths: f?.deaths ?? 0,
         shield: f ? f.shield > 0 : false, attack: bay('attack'), support: bay('support'), special: bay('special')};
     });

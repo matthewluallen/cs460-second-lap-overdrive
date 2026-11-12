@@ -96,10 +96,10 @@ function decodeOne(m) {
   const has = n => size >= n;
   switch (id) {
     case ID.PING_REPLY: return {id, type: 'ping'};
-    case ID.VERSION_REPLY: return {id, type: 'version', version: has(5) ? v.getUint32(2, true) : v.getUint16(2, true)};
+    case ID.VERSION_REPLY: if (!has(3)) break; return {id, type: 'version', version: has(5) ? v.getUint32(2, true) : v.getUint16(2, true)};
     case ID.BATTERY_REPLY: if (!has(3)) break; return {id, type: 'battery', millivolts: v.getUint16(2, true)};
     case ID.POSITION: {
-      if (!has(10)) break;
+      if (!has(10) || !Number.isFinite(v.getFloat32(4, true))) break;
       const flags = v.getUint8(10);
       return {id, type: 'position', locationId: v.getUint8(2), pieceId: v.getUint8(3),
         offset: v.getFloat32(4, true), speed: v.getUint16(8, true), flags,
@@ -107,24 +107,24 @@ function decodeOne(m) {
         laneChangeId: has(12) ? v.getUint8(12) : 0, desiredSpeed: has(16) ? v.getUint16(15, true) : null};
     }
     case ID.TRANSITION: {
-      if (!has(7)) break;
+      if (!has(7) || !Number.isFinite(v.getFloat32(4, true))) break;
       return {id, type: 'transition', pieceIndex: v.getInt8(2), previousPieceIndex: v.getInt8(3),
         offset: v.getFloat32(4, true),
         uphill: has(15) ? v.getUint8(14) : 0, downhill: has(15) ? v.getUint8(15) : 0,
         leftCm: has(17) ? v.getUint8(16) : null, rightCm: has(17) ? v.getUint8(17) : null};
     }
     case ID.INTERSECTION: {
-      if (!has(8)) break;
+      if (!has(8) || !Number.isFinite(v.getFloat32(3, true))) break;
       return {id, type: 'intersection', pieceIndex: v.getInt8(2), offset: v.getFloat32(3, true),
         code: v.getUint8(7), exiting: v.getUint8(8) !== 0};
     }
     case ID.DELOCALIZED: return {id, type: 'delocalized'};      // the app calls this CarOffRoad
     // The next four are not in the public SDK; ids and sizes are from the app (ANALYSIS.md).
     case ID.SPEED_UPDATE: if (!has(7)) break; return {id, type: 'speed', desired: v.getInt16(2, true), accel: v.getInt16(4, true), actual: v.getInt16(6, true)};
-    case ID.COLLISION: if (!has(3)) break; return {id, type: 'collision', a: m[2], b: m[3]};
-    case ID.JUMP_RESULT: if (!has(4)) break; return {id, type: 'jump', value: v.getInt16(2, true), result: m[4]};
+    case ID.COLLISION: if (!has(3)) break; return {id, type: 'collision', a: m[2], b: m[3], wasSideOnCollision: !!m[2], wasFrontBackCollision: !!m[3]};
+    case ID.JUMP_RESULT: if (!has(4)) break; return {id, type: 'jump', value: v.getInt16(2, true), result: m[4], launchSpeed: v.getInt16(2, true), jumpFailed: !!m[4]};
     case ID.CYCLE_OVERTIME: return {id, type: 'overtime'};
-    case ID.OFFSET_UPDATE: if (!has(5)) break; return {id, type: 'offset', offset: v.getFloat32(2, true), laneChangeId: has(6) ? v.getUint8(6) : 0};
+    case ID.OFFSET_UPDATE: if (!has(5) || !Number.isFinite(v.getFloat32(2, true))) break; return {id, type: 'offset', offset: v.getFloat32(2, true), laneChangeId: has(6) ? v.getUint8(6) : 0};
     case ID.STATUS: {
       if (!has(5)) break;
       return {id, type: 'status', onTrack: m[2] !== 0, onCharger: m[3] !== 0, lowBattery: m[4] !== 0, charged: m[5] !== 0};

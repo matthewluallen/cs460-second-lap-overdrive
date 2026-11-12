@@ -6,6 +6,7 @@
 // always positive to the LEFT of the direction of travel.
 
 export const CURVE_RADIUS = 280, LANE_LIMIT = 68;
+export const POSITION_MAX_AGE_MS = 2000;
 const TAU = Math.PI * 2;
 const norm = a => { a %= TAU; if (a > Math.PI) a -= TAU; if (a < -Math.PI) a += TAU; return a; };
 
@@ -30,7 +31,7 @@ export function traversal(pieces, id, reverse, hint = {}) {
     const turn = hint.turn ?? (reverse ? -1 : 1);
     return {id, kind, reverse, turn, length: def?.length ?? CURVE_RADIUS * Math.PI / 2, radius: def?.radius ?? CURVE_RADIUS};
   }
-  return {id, kind, reverse, turn: 0, length: def?.length ?? hint.length ?? 560};
+  return {id, kind, reverse, turn: 0, length: def?.length ?? hint.length ?? 560, ...(!def ? {inferred: true} : {})};
 }
 
 // Lay pieces end to end. Returns poses and whether the loop closes on itself.
@@ -72,6 +73,7 @@ export class Track {
   constructor(sequence) {
     Object.assign(this, layout(sequence));
     this.count = this.pieces.length;
+    this.inferredCount = this.pieces.filter(p => p.inferred).length;
   }
   // Path length of a piece in a given lane (inside of a curve is shorter).
   laneLength(index, lateral = 0) {
@@ -89,7 +91,7 @@ export class Track {
     const p = this.pieces[index];
     return p.start.distance + (direction >= 0 ? progress : 1 - progress) * p.length;
   }
-  toJSON() { return this.pieces.map(({id, kind, reverse, turn, length, radius}) => ({id, kind, reverse, turn, length, radius})); }
+  toJSON() { return this.pieces.map(({id, kind, reverse, turn, length, radius, inferred}) => ({id, kind, reverse, turn, length, radius, ...(inferred ? {inferred: true} : {})})); }
 }
 
 // Builds the piece sequence from one car's position and transition messages.
@@ -120,7 +122,7 @@ export class TrackMapper {
   }
   #commit(transition) {
     let piece;
-    if (this.current) piece = traversal(this.piecesTable, this.current.id, this.current.reverse);
+    if (this.current && this.piecesTable.get(this.current.id)) piece = traversal(this.piecesTable, this.current.id, this.current.reverse);
     else {
       // No code was read (fast lane change, dirty track): infer shape from the wheels.
       const l = transition?.leftCm ?? null, r = transition?.rightCm ?? null;
@@ -133,7 +135,7 @@ export class TrackMapper {
     if (this.anchor < 0) {
       // Anchor on the start piece so every map begins at the same place.
       if (kind === 'start' || kind === 'finish') { this.sequence = [piece]; this.anchor = 0; }
-      else { this.sequence.push(piece); if (this.sequence.length > this.maxPieces) this.#tryUnanchored(); }
+      else { this.sequence.push(piece); this.#tryUnanchored(); }
       return;
     }
     const first = this.sequence[0];
@@ -149,14 +151,14 @@ export class TrackMapper {
   // Tracks without a start piece: accept the shortest repeating closed loop.
   #tryUnanchored() {
     const s = this.sequence;
-    for (let n = 4; n <= s.length / 2; n++) {
+    for (let n = 4; n <= Math.min(this.maxPieces, s.length / 2); n++) {
       const lap = s.slice(s.length - n), before = s.slice(s.length - 2 * n, s.length - n);
       if (lap.every((p, i) => p.id === before[i].id && p.reverse === before[i].reverse)) {
         const candidate = new Track(lap);
         if (candidate.closed) { this.track = candidate; return; }
       }
     }
-    this.sequence = s.slice(-this.maxPieces);
+    this.sequence = s.slice(-2 * this.maxPieces);
   }
 }
 
@@ -175,6 +177,8 @@ export class Localizer {
   #step(c) { const n = this.track.count; return {index: (c.index + c.direction + n) % n, direction: c.direction}; }
   feed(message, now) {
     if (message.type === 'position') {
+      const spot = this.piecesTable.locate(message.pieceId, message.locationId, message.reverse);
+      if (!spot || !Number.isFinite(message.speed)) { this.located = false; this.candidates = null; return; }
       if (this.candidates && this.seenCode && this.lastId !== message.pieceId) this.#advance();
       this.lastId = message.pieceId;
       const matches = this.#candidatesFor(message.pieceId, message.reverse);
@@ -191,7 +195,6 @@ export class Localizer {
         else this.candidates = matches;      // lost: re-localise from this piece
       }
       this.seenCode = true;
-      const spot = this.piecesTable.locate(message.pieceId, message.locationId, message.reverse);
       if (spot) { this.progress = spot.progress; this.lateral = spot.lateral; }
       this.speed = message.speed; this.stamp = now;
       this.#settle();
@@ -204,7 +207,7 @@ export class Localizer {
       const before = this.candidates[0];
       this.candidates = this.candidates.map(c => this.#step(c));
       const after = this.candidates[0];
-      if (this.located && this.candidates.length === 1) {
+      if (this.located && this.seenCode && this.candidates.length === 1) {
         const wrapped = before.direction > 0 ? after.index < before.index : after.index > before.index;
         if (wrapped) { this.laps++; this.onLap?.(this.laps); }
       }
@@ -222,7 +225,7 @@ export class Localizer {
     if (this.index < 0) return null;
     const length = this.track.laneLength(this.index, this.direction * this.lateral);
     const progress = Math.min(0.999, this.progress + Math.max(0, now - this.stamp) / 1000 * this.speed / length);
-    return {index: this.index, direction: this.direction, progress, lateral: this.lateral, located: this.located};
+    return {index: this.index, direction: this.direction, progress, lateral: this.lateral, located: this.located && now >= this.stamp && now - this.stamp <= POSITION_MAX_AGE_MS};
   }
   pose(now) {
     const e = this.estimate(now);
@@ -243,4 +246,15 @@ export function gapAhead(trackLength, fromOdometer, toOdometer) {
   if (gap < -trackLength / 2) gap += trackLength;
   if (gap > trackLength / 2) gap -= trackLength;
   return gap;
+}
+
+// Validate a user-authored plan without accepting arbitrary geometry for known IDs.
+export function trackFromPlan(pieces, plan) {
+  if (!Array.isArray(plan) || !plan.length || plan.length > 64) throw new Error('Choose 1–64 track sections');
+  return new Track(plan.map(p => {
+    if (!p || !Number.isInteger(p.id) || typeof p.reverse !== 'boolean') throw new Error('Invalid track section');
+    if (pieces.get(p.id)) return traversal(pieces, p.id, p.reverse);
+    if (p.id !== -1 || !['curve', 'straight'].includes(p.kind) || !Number.isFinite(p.length) || p.length < 60 || p.length > 2000 || (p.kind === 'curve' && ![-1, 1].includes(p.turn))) throw new Error('Unrecognized track section: rescan this piece');
+    return {...traversal(pieces, -1, p.reverse, p), inferred: true};
+  }));
 }

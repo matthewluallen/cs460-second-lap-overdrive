@@ -186,3 +186,10 @@ test('precision guidance beats full throttle through the actual simulator and lo
   assert.equal(fast.score,0,'the full-throttle baseline fails the speed bands');
   await Promise.all(game.drivers.map(d=>d.car.close()));
 });
+
+test('battle awards a crew assist once and excludes pre-round assists', () => {
+  const s = new RoundSession(); s.start('battle', [car(1, {assists: 2}), car(2)], 0);
+  s.update([car(1, {assists: 3}), car(2)], 1000);
+  assert.equal(s.view().rows[0].assists, 1); assert.equal(s.view().rows[0].score, 25);
+  s.update([car(1, {assists: 3}), car(2)], 2000); assert.equal(s.view().rows[0].score, 25);
+});

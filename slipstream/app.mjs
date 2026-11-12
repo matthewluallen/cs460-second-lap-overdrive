@@ -1,6 +1,7 @@
 // Host page: owns the Bluetooth links, runs the game loop, draws the map and
 // relays phone players. Nothing here trusts text from a car or a phone as HTML.
 import {Game} from './game.mjs';
+import {trackFromPlan} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
 import {chooseCar, bluetoothAvailable} from './ble.mjs';
 import {Renderer} from './render.mjs';
@@ -41,6 +42,10 @@ function addCard(driver) {
   for (const [id, m] of MODELS) model.append(new Option(m.name + (m.truck ? ' (truck)' : ''), id));
   for (const [id, label] of CONTROLS) control.append(new Option(label, id));
   model.value = String(driver.car.model); control.value = driver.control;
+  const crew = el('select', {title: 'Battle crew'});
+  crew.setAttribute('aria-label', 'Battle alliance');
+  for (const [id, label] of [['', 'Independent racer'], ['sun', 'Sun crew'], ['moon', 'Moon crew']]) crew.append(new Option(label, id));
+  crew.onchange = () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Crew changed'); game.setCrew(driver, crew.value); refresh(); };
   const task = el('p', {className: 'driver-task', hidden: true});
   const name = el('span', {className: 'name', textContent: driver.id + ' · ' + driver.car.name});
   const tag = el('span', {className: 'tag', textContent: driver.car.simulated ? 'sim' : 'live'});
@@ -74,7 +79,7 @@ function addCard(driver) {
   const left = el('span'), right = el('span'), weaponsBox = el('div', {className: 'weapons'});
   const card = el('div', {className: 'car'},
     el('div', {className: 'top'}, name, tag, code, remove),
-    el('div', {className: 'grid'}, model, control),
+    el('div', {className: 'grid'}, model, control), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
     el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, seatBox);
   code.onclick = async () => {
@@ -187,9 +192,11 @@ function beginRound() {
     if (session.status === 'running' || session.status === 'paused' || countdown) return;
     if (game.pitReason) throw new Error('Complete the shared pit recovery before starting.');
     if (!game.track) throw new Error('Map the circuit first, or try the two-car simulation.');
+    if (game.track.inferredCount) throw new Error('Rescan the circuit: ' + game.track.inferredCount + ' sections were inferred. Clean the codes and use a lower scan speed.');
     const active = game.drivers.filter(d => d.car.connected && d.control !== 'none');
     const mode = $('mode').value;
     if (active.length < ROUND_MODES[mode].minCars) throw new Error('Choose a driver for at least ' + ROUND_MODES[mode].minCars + ' car(s) in the pit crew.');
+    if (mode === 'battle' && active.length > 1 && active[0].crew && active.every(d => d.crew === active[0].crew)) throw new Error('Everyone is allied. Choose another crew for a rival, or play Crew mission together.');
     if (active.some(d => d.car.safetyReason && d.car.safetyReason !== 'Host stopped')) throw new Error('Recover the off-track car or disconnect it before starting.');
     if (active.some(d => d.control === 'phone' && !d.pad)) throw new Error('Approve a phone driver or choose another control before starting.');
     game.stopAll(); held.clear(); session.reset(); sessionResultShown = false; recordEligible = true;
@@ -232,7 +239,7 @@ function renderRound() {
   $('pitResume').textContent = view.status === 'paused' ? 'Track clear · Continue round' : 'Track clear · Rearm controls';
   $('roundLabel').textContent = game.pitReason ? 'SHARED PIT · CLOCK PAUSED' : countdown ? 'TRACK CLEAR · GET READY' : running ? activeExperience.toUpperCase() + ' · ROUND LIVE' : view.status === 'finished' ? 'ROUND COMPLETE' : 'READY WHEN YOU ARE';
   $('roundTitle').textContent = view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
-  $('roundGoal').textContent = view.objective || (view.goal ? view.teamLaps + ' / ' + view.goal + ' shared laps · every driver contributes' : view.mode === 'battle' ? '100 points per virtual knockout · 25 per lap' : view.mode === 'solo' ? 'Complete a full circuit. Find your fastest clean rhythm.' : 'Complete laps. Keep your eyes on the physical track.');
+  $('roundGoal').textContent = view.objective || (view.goal ? view.teamLaps + ' / ' + view.goal + ' shared laps · every driver contributes' : view.mode === 'battle' ? '100 per knockout · 25 per assist or lap' : view.mode === 'solo' ? 'Complete a full circuit. Find your fastest clean rhythm.' : 'Complete laps. Keep your eyes on the physical track.');
   $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
   $('roundState').textContent = countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
   $('countdown').hidden = !countdown; $('countdown').textContent = countdown ? $('roundClock').textContent : '';
@@ -438,7 +445,7 @@ function pushState(snapshot, now) {
   if (!room || now - lastState < 200) return;
   lastState = now;
   const round = session.view(), roundRows = new Map(round.rows.map(row => [row.id, row]));
-  const view = s => ({name: s.name, color: s.color, energy: +s.energy.toFixed(2), speed: Math.round(s.speed), disabled: s.disabled, shield: s.shield, connected: s.connected, safetyReason: s.safetyReason,
+  const view = s => ({id: s.id, crew: s.crew, assists: s.assists, targets: s.targets, name: s.name, color: s.color, energy: +s.energy.toFixed(2), speed: Math.round(s.speed), disabled: s.disabled, shield: s.shield, connected: s.connected, safetyReason: s.safetyReason,
     task: roundRows.get(s.id)?.task?.cue ?? '', score: roundRows.get(s.id)?.score ?? 0,
     kills: roundRows.get(s.id)?.hits ?? s.kills, deaths: roundRows.get(s.id)?.losses ?? s.deaths, laps: roundRows.get(s.id)?.laps ?? s.laps,
     bays: Object.fromEntries(['attack', 'support', 'special'].map(b => [b, s[b] ? {label: WEAPON_LABEL[s[b].type], style: s[b].style, ready: s[b].ready, charge: +s[b].charge.toFixed(1)} : null]))});
@@ -480,7 +487,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.browserControls.hidden = driver.control !== 'browser';
     ui.fireRow.hidden = game.phase !== 'battle';
     ui.throttle.value = Math.round((driver.level ?? 0) * 100); ui.throttle.disabled = game.halted || !!s.safetyReason;
-    ui.right.textContent = (s.millivolts ? (s.millivolts / 1000).toFixed(2) + ' V · ' : '') + (s.located ? 'on map' : game.track ? 'locating' : 'no map');
+    ui.right.textContent = (s.millivolts ? (s.millivolts / 1000).toFixed(2) + ' V · ' : '') + (s.located ? 'on map' : game.track ? 'locating' : 'no map') + (s.crew ? ' · ' + s.crew + ' · ' + s.assists + ' assists' : '') + (s.targets?.length ? ' · Target ' + s.targets.join(', ') : '');
     if (ui.control.value !== driver.control) ui.control.value = driver.control;
     const chips = ['attack', 'support', 'special'].filter(b => s[b]).map(b => {
       const chip = el('span', {className: 'weapon' + (s[b].ready ? ' ready' : '')});
@@ -539,3 +546,31 @@ $('saveTrace').onclick = () => {
 };
 refresh();
 log('Ready. ' + Object.keys(pieces).length + ' track pieces, ' + MODELS.length + ' car models, ' + Object.keys(weapons).length + ' weapons loaded.');
+
+// Build a design at rest. A drawing cannot establish what is on the physical floor.
+let draftPlan = [];
+const draftRenderer = new Renderer($('planMap'));
+for (const [id, piece] of Object.entries(pieces)) $('planPiece').append(new Option(piece.kind + ' · code ' + id, id));
+function drawPlan() {
+  let track = null;
+  try { if (draftPlan.length) track = trackFromPlan(game.pieces, draftPlan); } catch (e) { $('planStatus').textContent = e.message; }
+  $('planList').textContent = draftPlan.map(p => p.id + (p.reverse ? ' ←' : ' →')).join(' · ') || 'Add sections in driving order.';
+  $('planStatus').textContent = track ? track.count + ' sections · ' + (track.length / 1000).toFixed(2) + ' m · ' + (track.closed ? 'Ends meet. Check crossings and bridge clearance.' : Math.round(track.gap) + ' mm gap; ends must meet and face the same way.') : 'Choose a section and its direction.';
+  $('planUse').disabled = !track?.closed;
+  draftRenderer.draw({track, cars: [], mines: [], now: performance.now()});
+}
+$('planAdd').onclick = () => { if (draftPlan.length >= 64) return; draftPlan.push({id: Number($('planPiece').value), reverse: $('planDirection').value === 'reverse'}); drawPlan(); };
+$('planUndo').onclick = () => { draftPlan.pop(); drawPlan(); };
+$('planCopy').onclick = () => { if (game.track) draftPlan = game.track.toJSON(); drawPlan(); };
+$('planUse').onclick = () => {
+  try {
+    const track = trackFromPlan(game.pieces, draftPlan);
+    if (!track.closed) throw new Error('Close the circuit first');
+    halt('Circuit design changed');
+    if (game.drivers.some(d => !d.car.simulated)) { log('Build this design with the cars stopped, then scan the physical circuit. A drawing does not verify the floor layout.'); return; }
+    world.track = track; world.layoutName = 'Custom design';
+    world.cars.forEach((car, i) => { car.index = 0; car.progress = .05 + i * .05; car.direction = 1; car.speed = car.targetSpeed = 0; });
+    game.useTrack(track); refresh(); log('Custom circuit ready in the simulator.');
+  } catch (error) { log(error.message); }
+};
+$('planBuilder').ontoggle = drawPlan;

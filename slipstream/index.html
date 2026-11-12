@@ -31,6 +31,14 @@
     <label class="field">Practice layout (simulated cars)
       <select id="layout"></select>
     </label>
+    <details id="planBuilder" class="side-block"><summary>Build a circuit</summary>
+      <p class="note">Plan in driving order. Test your design in the simulator; build and scan it before using real cars. Start (34) and finish (33) are two coded sections of one physical piece.</p>
+      <label class="field">Section<select id="planPiece"></select></label>
+      <label class="field">Direction<select id="planDirection"><option value="forward">Forward · curves left</option><option value="reverse">Reverse · curves right</option></select></label>
+      <div class="row"><button id="planAdd">Add section</button><button id="planUndo">Undo</button><button id="planCopy">Copy current map</button></div>
+      <canvas id="planMap" aria-label="Circuit design preview"></canvas><p id="planList" class="note"></p><p id="planStatus" class="note" aria-live="polite"></p>
+      <button id="planUse" disabled>Try this circuit</button>
+    </details>
     <div id="cars"></div>
     <p class="note" id="empty">No cars yet. Connect a real car over Bluetooth, or add simulated cars to try everything without hardware.</p>
   </aside>

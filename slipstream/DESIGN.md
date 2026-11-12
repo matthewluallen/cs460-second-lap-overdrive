@@ -201,3 +201,39 @@ before Thursday, bring one design hypothesis, and use the one-hour in-person cla
 for a supervised playtest and comparison. Home tasks should not depend on owning
 cars. Hardware claims, Bluetooth behavior, four-car reliability, sensor direction,
 and phone vibration still require device-specific validation.
+
+## Coordinated cars and real-world driving concepts
+
+The following are design analogies, not integrations, endorsements, or equivalence to road vehicles. No Waymo, Tesla, comma.ai, Disney, Pixar, PlayStation or Nintendo employees participated in this review. The advisory uses interaction-design perspectives rather than claiming those organizations' authority.
+
+| Reference concept | Slipstream interpretation | Evidence boundary |
+|---|---|---|
+| Waymo: explicit operating conditions and readiness evidence | Define the circuit, supported pieces, speed ceiling, observer and recovery procedure before play; retain scenario traces | Waymo describes readiness within a defined operational design domain. Our optical-track simulator does not provide its perception or safety case. [Waymo methodology](https://www.waymo.com/research/waymos-safety-methodologies-and-safety-readiness/) |
+| Tesla FSD (Supervised): clear human responsibility and takeover | Always-visible STOP ALL; changing driver or crew ends the round; no surprise rearming after a pit stop | Tesla explicitly requires supervision. A toy's STOP request still depends on a functioning host/link. [Tesla support](https://www.tesla.com/support/fsd) |
+| comma.ai/openpilot: bounded commands and preserved safety controls | Apply the speed ceiling after every bot, phone and weapon effect; replay logs; never reward disabling recovery or supervision | openpilot's safety documentation describes driver override and constrained actuation. We do not implement its automotive safety layer. [openpilot safety](https://docs.comma.ai/concepts/safety/) |
+
+### Playable now
+
+Cars can be independent, Sun crew or Moon crew. The host assigns alliances before play; human/browser/phone/CPU ownership remains independent of crew. Same-crew cars cannot target or damage each other. If two allies damage the same opponent within three seconds of active play, the helper earns an assist when the opponent is disabled. A knockout is 100 points, an assist 25, and a lap 25. Target IDs are shown on host/phone; identical vehicle models remain distinct identities. CPU drivers seek opponents rather than allies. All-allied battle grids are directed toward a shared mission or a rival crew.
+
+This is host-mediated virtual association. The physical cars do not form a peer-to-peer attack network. Targeting follows distance along the mapped route and lane separation, so a figure-eight crossing is not automatically a hit. Ambiguous/stale positions do not authorize an attack. Phone haptics remain optional with visual equivalents; assist feedback reuses the rate-limited score cue. Browser vibration support is detected at runtime.
+
+| Available cars | Recommended experience | Why it works |
+|---|---|---|
+| 1 | Precision gates, personal best, solo scan/carry/deliver | Skill and mastery do not require another physical car; avoid pretending there is a physical opponent |
+| 2 | Independent duel, shared story mission, human versus CPU | Immediate choice between rivalry and cooperation; two allied cars need a cooperative mode |
+| 3 | Two-person crew versus a CPU rival, or all-player mission | Helpers receive credit; rotate the outnumbered role between short rounds |
+| 4 | Two crews of two, mixed human/CPU; shared mission | Clear sides and individual contributions without increasing physical speed |
+
+Crew scores remain individual standings with assist rewards; aggregate team victory and team balancing are future work, not implied by the alliance selector.
+
+### Next experiments, after position and stopping measurements
+
+1. **Pace partner:** a CPU sets a predictable speed; score a generous following-distance window. Reward smoothness, not close drafting. Suspend coordination when either position becomes uncertain. Never treat a virtual gap as a collision-avoidance guarantee.
+2. **Relay delivery:** each car carries one leg, handing off a virtual parcel in a wide marked zone. A one-car version visits all zones. With two/four cars the game rewards each role, not the fastest participant doing all the work.
+3. **Intersection courtesy:** reserve a crossing zone, take turns, and reward yielding. Begin in simulation; real crossings need measured clearance and stopping margins. The 2D builder cannot infer bridge height.
+4. **Scout and courier:** one player identifies uncertain sections while another completes deliveries on confirmed sections. Evidence from different cars should retain source identity and disagreement, never silently vote an unknown piece into certainty.
+5. **Synchronized checkpoint:** a crew crosses separate gates within a generous time window. Use light/phone cues and shared celebration; no need for near-contact driving or extra speed.
+6. **Energy escort:** a support player earns credit for accompanying a courier through a zone. Any energy transfer is virtual, with explicit range and cooldown; do not imply charging or vehicle-to-vehicle power transfer.
+
+The strongest experience should keep eyes on the physical track, make each action legible, and make recovery part of the shared ritual. Short rounds, readable roles, assist recognition, restrained haptics and a celebratory rematch are more useful than adding currencies, grind, or constant phone prompts. Track building adds a creative loop: plan → simulate → construct → scan → compare. Show measured and inferred sections differently; never label an inferred circuit verified.

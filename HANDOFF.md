@@ -43,7 +43,7 @@ python3 -m lapreturn.cwe_lab     # expect three "flaw_reproduced": false, exit 0
 npm run dependency-lab           # expect "regressionCheckPassed": true
 ```
 
-Review-fix verification on 12 November 2026: **395 Node tests pass on Node
+Review-fix verification on 12 November 2026: **405 Node tests pass on Node
 22.23.5**, **38 Python tests pass on Python 3.14.7**, audit reports zero
 vulnerabilities, and the dependency/CWE probes pass. Host/phone browser walkthroughs
 covered approval, simulated driving, story completion, and portrait/landscape
@@ -76,11 +76,23 @@ Run the controller locally with `npm run slipstream` (prints a host code; opens
   structured gameplay configuration. They are not numeric-only tables. The
   extractor does not bundle app binaries, artwork, or audio. Source permissions
   and distribution terms remain unresolved; no legal clearance is asserted.
-  The original APK/OBB and firmware analysis was not independently reproduced in
-  this review. Reported high entropy is not conclusive evidence of encryption.
+  APK/OBB identities, extraction, Java transport paths and selected broader native
+  paths have now been independently reproduced; firmware execution remains
+  unverified. See `slipstream/review/INDEPENDENT-REVIEW.md` for analysis warnings.
+  Reported high entropy is not conclusive evidence of encryption.
 - **The course exercises were removed.** The deliberate flaws the class was built on
   no longer reproduce; use `course-vulnerable-baseline` at
   `ab809451fc99564474b2b83baca0f63b78c24034` for those exercises.
+
+## Broader review and coordination build
+
+Read **[the independent review](slipstream/review/INDEPENDENT-REVIEW.md)** and
+**[REA assessment](slipstream/review/REA-REVIEW.md)**. The new pass repairs batch
+parser failures, stale/unknown targeting, parked-car targeting, shield ordering,
+and long startless mapping. Circuit planning, crew alliances, target IDs and
+assist rewards are available. `verification.test.mjs` exhaustively checks 22,620
+bounded association states; it is not a formal proof of the complete system.
+Smart-car analogies and further coordinated-play designs are in `DESIGN.md`.
 
 ## Review follow-up
 

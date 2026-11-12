@@ -28,6 +28,7 @@ export function loadout(vehicles, model) {
 class Fighter {
   constructor(car, bays, maxEnergy) {
     this.car = car; this.bays = bays; this.selected = {attack: 0, support: 0, special: 0};
+    this.crew = ''; this.participating = true; this.assists = 0; this.contributors = new Map();
     this.energy = maxEnergy; this.held = {attack: false, support: false, special: false};
     this.was = {attack: false, support: false, special: false};
     this.ready = {}; this.charge = {}; this.kills = 0; this.deaths = 0; this.disabledUntil = 0;
@@ -46,7 +47,12 @@ export class Battle {
     const fighter = new Fighter(car, bays, this.config.max_energy);
     this.fighters.set(car, fighter); return fighter;
   }
-  remove(car) { this.fighters.delete(car); }
+  remove(car) {
+    const fighter = this.fighters.get(car);
+    this.fighters.delete(car); this.mines = this.mines.filter(m => m.owner !== fighter);
+    for (const f of this.fighters.values()) { f.contributors.delete(fighter); f.slow.delete(fighter); }
+  }
+  allies(a, b) { return !!a?.crew && a.crew === b?.crew; }
   get(car) { return this.fighters.get(car); }
   press(car, bay, down) { if (this.pausedAt !== null) return; const f = this.fighters.get(car); if (f) f.held[bay] = !!down; }
   cycle(car, bay) { if (this.pausedAt !== null) return; const f = this.fighters.get(car); if (f && (f.bays[bay]?.length ?? 0) > 1) { f.selected[bay]++; f.charge[bay] = 0; } }
@@ -85,27 +91,40 @@ export class Battle {
   // Cars this weapon can hit right now, nearest first.
   targets(fighter, weapon, spots) {
     const me = spots.get(fighter);
-    if (!me || !weapon.targeter || weapon.targeter.type === 'self') return [];
+    if (!fighter.participating || !fighter.car.connected || !me || !weapon.targeter || weapon.targeter.type === 'self') return [];
     const hits = [];
     for (const [other, spot] of spots) {
-      if (other === fighter || !spot || other.disabledUntil > this.clock()) continue;
+      if (other === fighter || !other.participating || !other.car.connected || this.allies(fighter, other) || !spot || other.disabledUntil > this.clock()) continue;
       const rel = this.#relative(me, spot);
       if (this.#inRange(weapon.targeter, rel)) hits.push({fighter: other, distance: Math.hypot(rel.gap, rel.side)});
     }
     hits.sort((a, b) => a.distance - b.distance);
     return weapon.targeter.single_target ? hits.slice(0, 1) : hits;
   }
+  associations(car, now = this.clock()) {
+    const f = this.get(car), w = f && this.weapons[f.item('attack')];
+    if (!f || !w || !this.active || this.pausedAt !== null) return [];
+    const spots = new Map([...this.fighters.values()].map(other => [other, other.car.connected ? this.#spot(other.car, now) : null]));
+    return this.targets(f, w, spots).map(hit => hit.fighter.car);
+  }
   damage(target, amount, source, now, kind = 'hit') {
     if (this.pausedAt !== null) return;
-    if (target.disabledUntil > now || amount <= 0) return;
+    if (!target.participating || !target.car.connected || (source && (!source.participating || !source.car.connected || this.allies(source, target))) || target.disabledUntil > now || amount <= 0) return;
     if (target.shield > 0) { amount *= 1 - target.shield; this.#event({type: 'blocked', car: target.car}); }
     if (amount <= 0) return;
+    if (source && source !== target) target.contributors.set(source, now);
     target.energy -= amount; target.hitUntil = now + 350;
     this.#event({type: kind, car: target.car, by: source?.car, amount});
     if (target.energy <= 0) {
       target.energy = 0; target.deaths++; target.disabledUntil = now + this.config.recover_time_s * 1000 + 800;
       target.held = {attack: false, support: false, special: false}; target.slow.clear(); target.boostUntil = 0;
-      if (source && source !== target) source.kills++;
+      if (source && source !== target) {
+        source.kills++;
+        for (const [helper, at] of target.contributors) if (helper !== source && now - at <= 3000 && helper.participating && this.fighters.get(helper.car) === helper && this.allies(helper, source)) {
+          helper.assists++; this.#event({type: 'assist', car: helper.car, by: source.car, target: target.car});
+        }
+      }
+      target.contributors.clear();
       this.#event({type: 'disabled', car: target.car, by: source?.car});
     }
   }
@@ -115,14 +134,25 @@ export class Battle {
     if (!this.active || this.pausedAt !== null) return;
     const spots = new Map();
     for (const f of this.fighters.values()) spots.set(f, f.car.connected ? this.#spot(f.car, now) : null);
+    // Resolve every held shield before any attack, independent of join order.
     for (const f of this.fighters.values()) {
-      f.shield = 0; f.braking = false; for (const [key, s] of f.slow) if (s.until <= now) f.slow.delete(key);
+      f.shield = 0;
+      if (!f.participating || !f.car.connected || f.disabledUntil > now) continue;
+      for (const bay of ['attack', 'support', 'special']) {
+        const w = this.weapons[f.item(bay)];
+        if (w?.type === 'shield') this.#use(f, bay, w, dt, now, spots);
+      }
+    }
+    for (const f of this.fighters.values()) {
+      if (!f.participating || !f.car.connected) continue;
+      f.braking = false; for (const [key, s] of f.slow) if (s.until <= now) f.slow.delete(key);
       if (f.disabledUntil > now) continue;
       if (f.disabledUntil && f.disabledUntil <= now) { f.disabledUntil = 0; f.energy = this.config.max_energy; this.#event({type: 'recovered', car: f.car}); }
       let using = false;
       for (const bay of ['attack', 'support', 'special']) {
         const id = f.item(bay), weapon = id && this.weapons[id];
-        if (weapon) using = this.#use(f, bay, weapon, dt, now, spots) || using;
+        if (weapon?.type === 'shield') using = f.shield > 0 || using;
+        else if (weapon) using = this.#use(f, bay, weapon, dt, now, spots) || using;
         f.was[bay] = f.held[bay];
       }
       if (!using) f.energy = Math.min(this.config.max_energy, f.energy + this.config.energy_recharge_rate * dt);
@@ -269,7 +299,7 @@ export class Battle {
       const radius = mine.weapon.targeter?.radius ?? 0.15;
       let hit = false;
       for (const [f, spot] of spots) {
-        if (!spot || f === mine.owner || f.disabledUntil > now) continue;
+        if (!spot || f === mine.owner || !f.participating || this.allies(f, mine.owner) || f.disabledUntil > now) continue;
         let gap = Math.abs(spot.distance - mine.distance) % L; gap = Math.min(gap, L - gap);
         const distance = Math.hypot(gap / 1000, (spot.lateral - mine.lateral) / 1000);
         if (distance > radius + CAR_HALF_WIDTH) continue;
@@ -327,6 +357,7 @@ export class Battle {
       for (const field of deadlines) if (f[field] > 0) f[field] += elapsed;
       for (const bay of Object.keys(f.ready)) if (f.ready[bay] > 0) f.ready[bay] += elapsed;
       for (const effect of f.slow.values()) effect.until += elapsed;
+      for (const [helper, at] of f.contributors) f.contributors.set(helper, at + elapsed);
     }
     for (const mine of this.mines) { mine.armedAt += elapsed; mine.expires += elapsed; }
     this.pausedAt = null;
@@ -335,7 +366,7 @@ export class Battle {
   start() {
     this.active = true; this.pausedAt = null; this.mines = []; this.events = [];
     for (const f of this.fighters.values()) {
-      f.energy = this.config.max_energy; f.kills = f.deaths = 0; f.slow.clear(); f.ready = {}; f.charge = {};
+      f.energy = this.config.max_energy; f.kills = f.deaths = f.assists = 0; f.contributors.clear(); f.slow.clear(); f.ready = {}; f.charge = {};
       f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.shield = 0; f.braking = false;
       for (const key of ['disabledUntil', 'boostUntil', 'rageUntil', 'wiggleUntil', 'wiggleNext', 'hitUntil', 'firingUntil']) f[key] = 0;
     }
@@ -357,7 +388,7 @@ export class Bot {
     const me = this.car.localizer?.estimate(now);
     let ahead = null, behind = null;
     for (const other of this.battle.fighters.values()) {
-      if (other === f || other.disabledUntil > now) continue;
+      if (other === f || !other.participating || this.battle.allies(f, other) || other.disabledUntil > now) continue;
       const rel = this.battle.relativeCars?.(this.car, other.car, now);
       if (!rel) continue;
       if (rel.gap > 0 && (!ahead || rel.gap < ahead.gap)) ahead = {...rel, other};

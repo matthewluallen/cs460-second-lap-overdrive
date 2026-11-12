@@ -66,9 +66,10 @@ function onMessage(m) {
   if (!ready) resetInputs({keepSelection: !mine});
   driveReady = ready;
   $('throttle').setAttribute('aria-disabled', String(!ready));
-  if (mine && previousView && previousView.name === mine.name) {
+  if (mine && previousView && previousView.id === mine.id) {
     if (mine.disabled && !previousView.disabled) feedback('Car disabled. Throttle reset.', 'disabled');
     else if (!mine.disabled && previousView.disabled) feedback('Recovered. Raise the throttle when ready.', 'recovered');
+    else if (mine.assists > previousView.assists) feedback('Crew assist!', 'score');
     else if (mine.kills > previousView.kills) feedback('Knockout scored!', 'score');
     else if (Number.isFinite(mine.score) && Number.isFinite(previousView.score) && mine.score > previousView.score) feedback('+' + (mine.score - previousView.score) + ' points!', 'score');
     else if (mine.laps > previousView.laps) feedback('Lap ' + mine.laps + ' complete!', 'lap');
@@ -95,10 +96,12 @@ function onMessage(m) {
   if (mine) {
     const [r, g, b] = mine.color.map(v => Math.round(v * 255));
     document.documentElement.style.setProperty('--car', `rgb(${r},${g},${b})`);
-    $('car').textContent = mine.name;
+    $('car').textContent = (mine.id ? mine.id + ' · ' : '') + mine.name + (mine.crew ? ' · ' + mine.crew + ' crew' : '');
     $('energy').style.width = Math.round(mine.energy * 100) + '%'; $('energy').className = mine.energy < 0.33 ? 'low' : mine.energy < 0.66 ? 'mid' : '';
     $('status').textContent = round?.status === 'paused' ? 'Shared pit stop. All cars stopped; wait for the host.' : mine.connected === false ? 'Car disconnected. Ask the host to reconnect.' : mine.safetyReason === 'Host stopped' ? 'Cars stopped. Wait for GO or host Free drive.' : mine.safetyReason ? 'Safety stop: ' + mine.safetyReason : ({battle: 'Battle', ready: round?.status === 'running' ? 'Round live' : 'Free drive', scanning: 'Host is mapping the track', garage: 'Waiting for the track map', stopped: 'Host pressed STOP'})[lobby.phase] + ' · ' + mine.speed + ' mm/s';
     $('hits').textContent = Number.isFinite(mine.score) ? 'Score ' + mine.score + ' · Laps ' + mine.laps : 'Hits ' + mine.kills + ' · Lost ' + mine.deaths + ' · Laps ' + mine.laps;
+    if (mine.assists) $('hits').textContent += ' · Assists ' + mine.assists;
+    if (mine.targets?.length) $('hits').textContent += ' · Target ' + mine.targets.join(', ');
     for (const bay of ['attack', 'support', 'special']) {
       const info = mine.bays[bay], button = $(bay);
       button.hidden = !info && bay === 'special';

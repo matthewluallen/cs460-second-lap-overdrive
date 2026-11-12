@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Game} from './game.mjs';
+import {trackFromPlan} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
 import {Recorder} from './trace.mjs';
 import {WEAPON_LABEL} from './battle.mjs';
@@ -36,7 +37,7 @@ function host() {
   const document = {hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
-  const context = vm.createContext({console, Date, URL, Blob, Game, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
+  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, Game: class extends Game { constructor(options) { super({...options, clock: () => now}); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
     fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage,
     performance: {now: () => now}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },

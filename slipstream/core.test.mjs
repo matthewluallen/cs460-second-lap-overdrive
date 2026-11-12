@@ -163,8 +163,8 @@ test('every weapon type in the app data is implemented and labelled', () => {
 async function duel(attackerModel, targetModel, {gap = 0.25, bay = 'attack', select = 0, hold = 3, sameLane = true} = {}) {
   const r = rig('Grand circuit');
   r.game.useTrack(buildTrack(P, LAYOUTS['Grand circuit']));
-  const a = r.add({model: attackerModel}, {index: 6, progress: 0.2, lateral: 22.5});
-  const t = r.add({model: targetModel}, {index: 6, progress: 0.2 + gap * 1000 / 560, lateral: sameLane ? 22.5 : -58.5});
+  const a = r.add({model: attackerModel, control: 'browser'}, {index: 6, progress: 0.2, lateral: 22.5});
+  const t = r.add({model: targetModel, control: 'browser'}, {index: 6, progress: 0.2 + gap * 1000 / 560, lateral: sameLane ? 22.5 : -58.5});
   r.game.startBattle();
   a.input.throttle = t.input.throttle = 0.6;
   await r.run(1.2);
@@ -268,7 +268,9 @@ test('a full bot battle runs on every layout without losing cars, and stop halts
     for (const d of game.drivers) game.setControl(d, 'bot');
     game.startBattle(); await run(60);
     const snap = game.snapshot();
-    assert.ok(snap.every(s => s.located), name + ': all cars localised');
+    assert.ok(game.drivers.every(d => d.car.localizer.located), name + ': all cars have a unique piece hypothesis');
+    // A disabled car may have no fresh codes; it must not be advertised as targetable.
+    assert.ok(snap.every(s => s.located === !!game.drivers.find(d => d.id === s.id).car.localizer.estimate(game.clock()).located));
     assert.ok(snap.reduce((n, s) => n + s.kills, 0) >= 1, name + ': somebody scored');
     assert.ok(world.cars.every(c => c.speed <= MAX_SPEED + 1));
     game.stopAll(); await run(2);

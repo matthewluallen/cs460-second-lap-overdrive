@@ -80,3 +80,9 @@ aside{padding:1.2rem;background:#111824}h2{color:#c3cddd;font-size:.7rem;letter-
 @media(max-width:650px){.challenge-panel{margin:.2rem 1rem;grid-template-columns:1fr 1fr;gap:.35rem .5rem}.challenge-panel .experience-tabs{grid-column:1/-1}.challenge-panel .field{grid-column:1/-1}.challenge-panel>h2{display:none}.challenge-panel #roundHelp{font-size:.64rem}#stage{min-height:740px;height:auto}#map{height:280px;flex:none}.stage-heading h2{font-size:1rem}}
 
 .pit-panel{margin:.5rem 1.5rem;padding:1rem;border:2px solid #f3bd6b;border-radius:12px;background:#302619;color:#fff1d7}.pit-panel p{font-size:.8rem;line-height:1.5}.driver-task{padding:.6rem;border-left:3px solid var(--c);background:#213028;color:#e0f7d4;font-size:.78rem;line-height:1.5}
+
+#planMap { width: 100%; height: 220px; border-radius: 12px; }
+#planList { overflow-wrap: anywhere; }
+#planBuilder summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
+
+@media (min-width:651px) and (max-width:1050px) { #garage { overflow: auto; min-height: 0; } }
