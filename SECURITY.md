@@ -148,8 +148,11 @@ Neither exists under `npm start`; the option must be the boolean set by the
   Free drive and round start are separate explicit actions.
 - **Host control wins:** selecting Parked or a local controller revokes that
   phone's car assignment. Its next input cannot reclaim the car automatically.
-- **Off-track events latch a stop.** Returning the car to the track and pressing
-  Recover clears the off-track latch; ordinary throttle or round start cannot.
+- **Off-track events latch a shared stop.** Every car receives a stop request;
+  the round and battle timers pause. Recover each affected car only after confirming
+  physical stillness, then explicitly acknowledge track clearance. Ordinary throttle,
+  Free drive or round start cannot bypass the pit. Paused collisions do not score,
+  and charged weapons are cancelled.
 - **Transport faults:** writes and cleanup have deadlines. A rejected write gets
   a bounded best-effort zero-speed command before transport closure; an unresolved
   write is closed without racing a second GATT operation. Physical stop is not

@@ -13,7 +13,7 @@ export class Car {
     this.writeTimeoutMs = writeTimeoutMs; this.closing = false; this.faulted = false; this.safetyReason = null;
     this.connected = true; this.pending = new Map(); this.pumping = false;
     this.listeners = new Set(); this.localizer = null;
-    this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0;
+    this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
     this.millivolts = null; this.version = null; this.status = {};
@@ -132,6 +132,9 @@ export class Car {
   }
   uturn() { if (this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
   stop() {
+    // A pending lane request may be discarded below, or the car may be moved
+    // during recovery. The next steering target must reach the vehicle.
+    this.forceLane = true;
     for (const key of ['speed', 'lane', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
     this.pending = new Map([['speed', encode.speed(0, 2500)], ...this.pending]);

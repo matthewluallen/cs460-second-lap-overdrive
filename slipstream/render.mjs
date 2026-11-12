@@ -59,7 +59,7 @@ export class Renderer {
     }
   }
   addEffect(effect) { if (this.reducedMotion) return; this.effects.push({...effect, born: performance.now()}); if (this.effects.length > 160) this.effects.shift(); }
-  draw({track, partial, cars, mines, now, banner}) {
+  draw({track, partial, cars, mines, now, banner, objectives = []}) {
     this.resize();
     const c = this.ctx, {width, height} = this.canvas;
     c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, width, height);
@@ -72,6 +72,15 @@ export class Renderer {
       const spot = this.#spot(track, mine.distance, mine.lateral), [x, y] = this.xy(spot), armed = now >= mine.armedAt;
       c.beginPath(); c.arc(x, y, 14 * s, 0, 7); c.fillStyle = armed ? '#ff4d6d' : '#7a2433'; c.fill();
       c.beginPath(); c.arc(x, y, (22 + 8 * Math.sin(now / 120)) * s, 0, 7); c.strokeStyle = 'rgba(255,77,109,.5)'; c.lineWidth = 2 * s; c.stroke();
+    }
+    // Numbered virtual checkpoints keep the next task visible on the map.
+    if (track) for (const objective of objectives) {
+      if (!Number.isFinite(objective.progress)) continue;
+      const [x, y] = this.xy(this.#spot(track, objective.progress * track.length, 0));
+      c.beginPath(); c.arc(x, y, 12 * this.ratio, 0, Math.PI * 2);
+      c.fillStyle = '#213e37'; c.fill(); c.strokeStyle = '#c1f594'; c.lineWidth = 2 * this.ratio; c.stroke();
+      c.font = `700 ${11 * this.ratio}px system-ui`; c.textAlign = 'center'; c.fillStyle = '#fff';
+      c.fillText(objective.label, x, y + 4 * this.ratio);
     }
     for (const car of cars) {
       if (!car.pose) continue;

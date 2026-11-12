@@ -12,7 +12,7 @@ export class Game {
     this.pieces = new Pieces(pieces); this.weapons = weapons; this.vehicles = vehicles;
     this.clock = clock; this.log = log;
     this.drivers = []; this.track = null; this.battle = null; this.mapper = null; this.scanner = null;
-    this.phase = 'garage'; this.halted = false; this.topSpeed = 700; this.scanSpeed = 450; this.nextId = 1;
+    this.phase = 'garage'; this.halted = false; this.pitReason = null; this.topSpeed = 700; this.scanSpeed = 450; this.nextId = 1;
   }
   modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
   addCar(transport, {name, model = 8, simulated = false, control = 'none'} = {}) {
@@ -48,25 +48,49 @@ export class Game {
       const track = this.mapper.feed(message);
       if (track) this.#scanned(track);
     }
-    if (message.type === 'collision' && this.battle?.active) {
+    if (message.type === 'collision' && !this.halted && this.battle?.active) {
       const f = this.battle.get(driver.car);
       if (f) this.battle.damage(f, 1, null, this.clock(), 'crash');
     }
     if (message.type === 'delocalized') {
-      if (this.scanner === driver) this.cancelScan();
-      driver.input = emptyInput(); driver.level = 0;
-      driver.car.safetyStop('Off track');
-      this.log(driver.car.name + ' left the track: return it to the track, then recover it');
+      // Someone must reach onto the shared circuit to recover this car. Halt
+      // every driver, preserving battle state so a paused round can continue.
+      this.battle?.pause?.(this.clock());
+      this.pitReason = driver.car.name + ' left the track';
+      this.cancelScan(); this.halted = true;
+      this.#stopDrivers(driver);
+      this.log(this.pitReason + ': all cars stopped. Recover the car, then confirm the track is clear');
     }
   }
+  #stopDrivers(offTrack = null) {
+    for (const d of this.drivers) {
+      d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
+      if (d.pad) { d.pad.throttle = 0; d.pad.seen = 0; d.pad.attack = d.pad.support = d.pad.special = false; }
+      d.car.safetyStop(d === offTrack ? 'Off track' : d.car.safetyReason || 'Host stopped');
+    }
+  }
+  get pitReady() { return !!this.pitReason && !this.drivers.some(d => d.car.safetyReason === 'Off track'); }
+  resumeFromPit() {
+    if (!this.pitReason) return false;
+    if (!this.pitReady) throw new Error('Return every off-track car to the circuit and recover it before clearing the pit stop');
+    this.#stopDrivers();
+    const pausedMs = this.battle?.resume?.(this.clock()) ?? 0;
+    for (const d of this.drivers) if (d.bot) for (const field of ['nextLane', 'mineAt']) if (d.bot[field] > 0) d.bot[field] += pausedMs;
+    this.pitReason = null;
+    this.resume();
+    return true;
+  }
+
   // --- track -----------------------------------------------------------------
   startScan(driver = this.drivers.find(d => d.car.connected)) {
     if (!driver) throw new Error('Connect a car first');
     if (driver.car.safetyReason === 'Off track') throw new Error('Return the car to the track and recover it before scanning');
-    this.stopBattle(); this.resume();
+    this.resume(); this.stopBattle();
     this.mapper = new TrackMapper(this.pieces); this.scanner = driver; this.phase = 'scanning';
     this.track = null; for (const d of this.drivers) d.car.useTrack(null);
-    driver.car.steerTo(0); driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed));
+    // Scan on a printed lane: intersections have strips at ±18/±54 mm,
+    // so the geometric center has no localization codes to identify them.
+    driver.car.steerTo(LANE_STEP); driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed));
     this.log('Scanning with ' + driver.car.name + ': drive one or two laps');
   }
   cancelScan() { if (this.phase !== 'scanning') return; this.scanner?.car.stop(); this.scanner = null; this.phase = this.track ? 'ready' : 'garage'; }
@@ -93,7 +117,7 @@ export class Game {
   // --- battle ----------------------------------------------------------------
   startBattle() {
     if (!this.track) throw new Error('Map the track first');
-    this.battle.start(); this.phase = 'battle'; this.resume();
+    this.resume(); this.battle.start(); this.phase = 'battle';
     for (const d of this.drivers) if (d.control === 'bot') d.bot = new Bot(d.car, this.battle);
     this.log('Battle started');
   }
@@ -102,10 +126,12 @@ export class Game {
     this.cancelScan(); this.stopBattle();
     // Stays halted until resume(), a new scan or a new battle: no input can restart a car.
     this.halted = true;
-    for (const d of this.drivers) { d.input = emptyInput(); d.level = 0; d.car.safetyStop(d.car.safetyReason || 'Host stopped'); }
+    this.#stopDrivers();
     this.log('All cars stopped');
   }
   resume() {
+    if (this.pitReason) throw new Error('Pit stop: recover every off-track car, then confirm the track is clear');
+    if (this.drivers.some(d => d.car.safetyReason === 'Off track')) throw new Error('Recover every off-track car before resuming');
     this.halted = false;
     for (const d of this.drivers) if (d.car.safetyReason === 'Host stopped') d.car.recover();
   }
@@ -124,7 +150,15 @@ export class Game {
       const car = d.car;
       if (!car.connected || (this.phase === 'scanning' && d === this.scanner)) continue;
       if (car.safetyReason) { d.input = emptyInput(); continue; }
-      if (d.bot && this.track) d.bot.drive(now, d.input);
+      if (d.bot && this.track) {
+        d.bot.drive(now, d.input);
+        // Session objectives guide CPU throttle/lane only. They cannot bypass
+        // safety latches, weapon rules, or the operator's final speed ceiling.
+        if (d.objectiveInput) {
+          if (Number.isFinite(d.objectiveInput.throttle)) d.input.throttle = Math.max(0, Math.min(1, d.objectiveInput.throttle));
+          if (Number.isFinite(d.objectiveInput.lane)) d.input.lane = Math.max(-68, Math.min(68, d.objectiveInput.lane));
+        }
+      }
       const input = d.input, truck = this.vehicles.models[String(car.model)]?.truck;
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);
       const limited = this.battle ? this.battle.limit(car, wanted, now) : {speed: wanted, accel: 1000};
@@ -141,11 +175,11 @@ export class Game {
   }
   snapshot(now = this.clock()) {
     return this.drivers.map(d => {
-      const f = this.battle?.get(d.car), max = this.vehicles.energy.max_energy;
-      const bay = name => { const id = f?.item(name), w = id && this.weapons[id]; return w ? {id, type: w.type, style: w.interaction_style, ready: (f.ready[name] ?? 0) <= now, charge: f.charge[name] ?? 0} : null; };
+      const f = this.battle?.get(d.car), max = this.vehicles.energy.max_energy, battleNow = this.battle?.time?.(now) ?? now;
+      const bay = name => { const id = f?.item(name), w = id && this.weapons[id]; return w ? {id, type: w.type, style: w.interaction_style, ready: (f.ready[name] ?? 0) <= battleNow, charge: f.charge[name] ?? 0} : null; };
       return {id: d.id, name: d.car.name, model: d.car.model, color: d.car.color, control: d.control, connected: d.car.connected, safetyReason: d.car.safetyReason,
         speed: d.car.liveSpeed, target: d.car.speed, millivolts: d.car.millivolts, located: !!d.car.localizer?.located, laps: d.car.localizer?.laps ?? 0,
-        energy: f ? f.energy / max : 1, disabled: f ? f.disabledUntil > now : false, kills: f?.kills ?? 0, deaths: f?.deaths ?? 0,
+        energy: f ? f.energy / max : 1, disabled: f ? f.disabledUntil > battleNow : false, kills: f?.kills ?? 0, deaths: f?.deaths ?? 0,
         shield: f ? f.shield > 0 : false, attack: bay('attack'), support: bay('support'), special: bay('special')};
     });
   }

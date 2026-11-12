@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {Car} from './car.mjs';
+import {Car, LANE_STEP} from './car.mjs';
 import {Game, MAX_CARS} from './game.mjs';
 import {ID} from './protocol.mjs';
+import {Pieces} from './track.mjs';
+import {SimWorld} from './sim.mjs';
 const data = name => JSON.parse(readFileSync(new URL('./data/' + name + '.json', import.meta.url)));
 const game = () => new Game({pieces: data('pieces'), weapons: data('weapons'), vehicles: data('vehicles')});
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -50,18 +52,21 @@ test('off-track notification stops and latches one car through resume and furthe
   const g = game(), r = radio(), d = g.addCar(r);
   await settle(); d.input.throttle = 1; g.tick(.04); await settle();
   r.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
-  g.resume(); d.input.throttle = 1; g.tick(.04); d.car.uturn(); d.car.steerTo(50); await settle();
+  assert.throws(() => g.resume(), /Pit stop/); d.input.throttle = 1; g.tick(.04); d.car.uturn(); d.car.steerTo(50); await settle();
   assert.equal(d.car.safetyReason, 'Off track'); assert.equal(d.car.speed, 0);
   assert.deepEqual(speeds(r).slice(-2), [700, 0]);
   assert.equal(r.sent.some(b => b[1] === ID.TURN || b[1] === ID.CHANGE_LANE), false);
   assert.equal(g.snapshot()[0].safetyReason, 'Off track');
   assert.equal(g.recoverCar(d), true); assert.equal(d.input.throttle, 0);
+  assert.equal(g.resumeFromPit(), true);
   d.input.throttle = .5; g.tick(.04); await settle(); assert.equal(speeds(r).at(-1), 350);
 });
 
 test('off-track scanner cancels scan and cannot start another without recovery', async () => {
   const g = game(), r = radio(), d = g.addCar(r); await settle();
   g.topSpeed = 300; g.startScan(); await settle(); assert.equal(speeds(r).at(-1), 300);
+  assert.equal(d.car.targetLateral, LANE_STEP);
+  assert.ok(Object.values(data('pieces')['10'].locs).some(([, lateral]) => Math.abs(lateral - d.car.targetLateral) <= 5.5), 'scan lane must reach an intersection code strip; the centerline cannot');
   r.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
   assert.equal(g.phase, 'garage'); assert.equal(g.scanner, null);
   assert.throws(() => g.startScan(), /recover/); assert.equal(d.car.speed, 0);
@@ -99,4 +104,110 @@ test('one physical Bluetooth identity cannot receive conflicting driver commands
   await g.removeCar(g.drivers[0]);
   assert.doesNotThrow(() => g.addCar(duplicate), 'explicit disconnect permits a fresh connection');
   await settle(); await g.removeCar(g.drivers[0]);
+});
+
+
+test('one off-track event stops the shared circuit until recovery AND explicit track-clear', async () => {
+  const g = game(), radios = [radio(), radio(), radio(), radio()];
+  const drivers = radios.map(r => g.addCar(r)); await settle();
+  for (const d of drivers) d.input.throttle = .8;
+  g.tick(.04); await settle(); assert.ok(drivers.every(d => d.car.speed > 0));
+  radios[1].notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
+  assert.equal(g.halted, true); assert.match(g.pitReason, /left the track/); assert.equal(g.pitReady, false);
+  assert.ok(drivers.every(d => d.car.speed === 0)); assert.ok(radios.every(r => speeds(r).at(-1) === 0));
+  assert.equal(drivers[1].car.safetyReason, 'Off track');
+  assert.throws(() => g.resume(), /Pit stop/); assert.throws(() => g.resumeFromPit(), /recover/);
+  assert.throws(() => g.startScan(drivers[0]), /Pit stop/);
+  assert.equal(g.halted, true);
+  for (const d of drivers) { d.input.throttle = 1; d.car.uturn(); }
+  g.tick(.04); await settle(); assert.ok(drivers.every(d => d.car.speed === 0));
+  assert.equal(g.recoverCar(drivers[1]), true); assert.equal(g.pitReady, true);
+  assert.equal(g.halted, true); assert.throws(() => g.resume(), /Pit stop/);
+  g.tick(.04); await settle(); assert.ok(drivers.every(d => d.car.speed === 0));
+  assert.equal(g.resumeFromPit(), true); assert.equal(g.pitReason, null); assert.equal(g.halted, false);
+  // Track-clear releases the latch, but must not resurrect a held human input.
+  g.tick(.04); await settle(); assert.ok(drivers.every(d => d.car.speed === 0));
+  drivers[0].input.throttle = .5; g.tick(.04); await settle(); assert.equal(drivers[0].car.speed, 350);
+});
+
+test('shared pit preserves battle state and waits for every affected car', async () => {
+  const g = game(), a = radio(), b = radio(), da = g.addCar(a), db = g.addCar(b); await settle();
+  const battle = {active: true, stops: 0, stop() { this.stops++; }};
+  g.battle = battle; g.phase = 'battle';
+  a.notify(Uint8Array.of(1, ID.DELOCALIZED)); b.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
+  assert.equal(g.battle, battle); assert.equal(battle.active, true); assert.equal(battle.stops, 0); assert.equal(g.phase, 'battle');
+  g.recoverCar(da); assert.equal(g.pitReady, false); assert.throws(() => g.resumeFromPit(), /recover/);
+  g.recoverCar(db); assert.equal(g.pitReady, true); assert.equal(g.halted, true);
+  g.resumeFromPit(); assert.equal(g.battle, battle); assert.equal(g.halted, false);
+});
+
+test('CPU objective guidance respects safety and the final speed ceiling', async () => {
+  const g = game(), r = radio(), d = g.addCar(r); await settle();
+  g.track = {}; d.bot = {drive(now, input) { input.throttle = .1; input.lane = -20; }};
+  d.objectiveInput = {throttle: 10, lane: 1000}; g.topSpeed = 300;
+  g.tick(.04); await settle(); assert.equal(d.car.speed, 300); assert.equal(d.car.targetLateral, 68);
+  g.stopAll(); assert.equal(d.objectiveInput, null);
+  d.objectiveInput = {throttle: 1, lane: -68}; g.tick(.04); await settle(); assert.equal(d.car.speed, 0);
+});
+
+test('shared pit freezes battle recovery, cooldowns, mines and timed effects across a long repair', async () => {
+  let now = 1000;
+  const g = new Game({pieces: data('pieces'), weapons: data('weapons'), vehicles: data('vehicles'), clock: () => now});
+  const r = radio(), d = g.addCar(r); await settle();
+  g.useTrack({length: 5000}); g.startBattle();
+  const battle = g.battle, f = battle.get(d.car);
+  const fields = ['disabledUntil', 'boostUntil', 'rageUntil', 'wiggleUntil', 'wiggleNext', 'hitUntil', 'firingUntil'];
+  for (let i = 0; i < fields.length; i++) f[fields[i]] = now + 2000 + i * 100;
+  f.energy = 4; f.ready.attack = now + 4000; f.slow.set('gravity', {until: now + 3000, factor: .25});
+  battle.mines.push({owner: f, distance: 0, lateral: 0, armedAt: now + 600, expires: now + 30000, weapon: {}});
+  d.bot = {nextLane: now + 1500, mineAt: now + 2500};
+  r.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
+  assert.equal(battle.pausedAt, 1000); assert.equal(g.snapshot()[0].disabled, true);
+  now = 6000; r.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
+  assert.equal(battle.pausedAt, 1000, 'another off-track message must not restart the pause clock');
+  now = 101000;
+  battle.update(100, now); battle.damage(f, 99, null, now);
+  r.notify(Uint8Array.of(3, ID.COLLISION, 1, 0));
+  assert.equal(f.energy, 4); assert.equal(f.deaths, 0); assert.equal(g.snapshot()[0].disabled, true);
+  assert.equal(battle.limit(d.car, 700, now).speed, 0);
+  g.recoverCar(d); g.resumeFromPit();
+  assert.equal(battle.pausedAt, null);
+  for (let i = 0; i < fields.length; i++) assert.equal(f[fields[i]] - now, 2000 + i * 100, fields[i]);
+  assert.equal(f.ready.attack - now, 4000); assert.equal(f.slow.get('gravity').until - now, 3000);
+  assert.equal(battle.mines[0].armedAt - now, 600); assert.equal(battle.mines[0].expires - now, 30000);
+  assert.equal(d.bot.nextLane - now, 1500); assert.equal(d.bot.mineAt - now, 2500);
+  assert.equal(battle.limit(d.car, 700, now).speed, 0, 'disabled recovery retains its pre-pit remaining duration');
+});
+
+test('pit clears charged and held weapons so neutral recovery cannot release a stored shot', async () => {
+  let now = 1000;
+  const weapons = data('weapons');
+  const chargedId = Object.keys(weapons).find(id => weapons[id].type === 'shooting_vehicle_item' && weapons[id].interaction_style === 'charge');
+  assert.ok(chargedId);
+  const g = new Game({pieces: data('pieces'), weapons, vehicles: data('vehicles'), clock: () => now});
+  const r = radio(), d = g.addCar(r); await settle(); g.useTrack({length: 5000}); g.startBattle();
+  const battle = g.battle, f = battle.add(d.car, {attack: [chargedId], support: [], special: []});
+  battle.press(d.car, 'attack', true); battle.update(.5, now);
+  assert.ok(f.charge.attack > .15); assert.equal(f.was.attack, true);
+  r.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
+  assert.equal(Object.values(f.held).some(Boolean), false); assert.equal(Object.values(f.was).some(Boolean), false);
+  assert.equal(Object.keys(f.charge).length, 0);
+  battle.press(d.car, 'attack', true); assert.equal(f.held.attack, false, 'paused controls cannot re-arm a weapon');
+  now += 30000; g.recoverCar(d); g.resumeFromPit(); battle.update(.04, now);
+  assert.equal(battle.drain().some(e => ['shot', 'burst', 'beam'].includes(e.type)), false);
+  assert.equal(f.ready.attack, undefined, 'no firing cooldown should have been created by pit recovery');
+});
+
+
+test('the first center-lane request reaches a car that physically starts off center', async () => {
+  const pieces = new Pieces(data('pieces')), world = new SimWorld(pieces, 'Capsule');
+  const sim = world.addCar({lateral: -22.5}), car = new Car(sim, {pieces});
+  await car.start(); await settle();
+  car.steerTo(0); await settle();
+  assert.equal(sim.targetLateral, 0); assert.equal(sim.written.filter(bytes => bytes[1] === ID.CHANGE_LANE).length, 1);
+  world.step(.05); world.step(.05); assert.equal(sim.lateral, 0);
+  car.steerTo(0); await settle(); assert.equal(sim.written.filter(bytes => bytes[1] === ID.CHANGE_LANE).length, 1, 'unchanged target is still coalesced after delivery');
+  car.safetyStop('Host stopped'); await settle(); car.recover();
+  sim.lateral = -22.5; sim.targetLateral = -22.5;
+  car.steerTo(0); await settle(); assert.equal(sim.targetLateral, 0, 'recovery resends a target even if its numeric value is unchanged');
 });

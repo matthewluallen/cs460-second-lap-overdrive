@@ -1,6 +1,6 @@
 import express from 'express';
 import {createRequire} from 'node:module';
-import {resolve} from 'node:path';
+import {resolve, dirname, basename} from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {Records} from '../bench/records.mjs';
 import {createRelay, newHostCode} from './slipstream-relay.mjs';
@@ -137,7 +137,7 @@ export function createApp({instructorLiveDrive=false,slipstream=false,hostCode=n
   app.use('/slipstream',(req,res,next)=>{
     res.set('Cache-Control','no-store');
     if(slipstream!==true)return res.status(404).json({error:'Not found'});
-    if(req.path==='/vendor/qrcode.mjs')return res.type('text/javascript').sendFile(qrModule);
+    if(req.path==='/vendor/qrcode.mjs')return res.type('text/javascript').sendFile(basename(qrModule), {root: dirname(qrModule), dotfiles: 'deny'});
     if(!SLIPSTREAM_FILE.test(req.path))return res.status(404).json({error:'Not found'});
     next();
   },express.static(slipstreamDirectory,{dotfiles:'deny',index:'index.html',redirect:false}));

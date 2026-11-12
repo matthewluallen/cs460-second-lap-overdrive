@@ -117,8 +117,7 @@ need measurement; this is not a verified maximum physical stopping time.
 Gamepad: right trigger throttle, left stick lane, A fire, B support, Y special.
 **Esc** or **STOP ALL** always stops and latches the cars; STOP never becomes a
 resume button. **Free drive** is a separate explicit action. Starting a new round
-uses its own countdown. If a car reports off-track, put it back on the track and
-press its **Recover** button before explicitly resuming. A connection fault needs
+uses its own countdown. An off-track report requests a stop for **every car** and pauses the round. Confirm all cars are physically still before recovery, press each affected car’s **Recover** button, then use **Track clear · Continue round**. Battle timers pause too; charged weapons are cancelled. A connection fault needs
 a fresh connection. Hiding the host tab halts real cars even if they were stopped
 at the moment the tab became hidden.
 
@@ -236,3 +235,9 @@ Tests: `node --test slipstream/*.test.mjs platform/slipstream-relay.test.mjs`.
 - Tilt direction depends on how the phone is held; use **Flip tilt**. Tilt has not
   been tried on a physical iPhone or Android phone.
 - Four simultaneous Bluetooth links from one laptop have not been tried on hardware.
+
+## Precision and cooperative tasks
+
+Select **Precision run** in Arcade or Competition to match four virtual gates’ lane and speed bands. Each car’s next target appears in its card, on its phone, and as a numbered map marker. Full throttle alone earns no gate points.
+
+Story missions require every car to scan, carry and deliver its own packets. One car does the sequence alone; up to four human/computer drivers contribute independently. CPUs follow the task requirements and wait when finished. Phone score feedback is optional, with visible task cues on every device.

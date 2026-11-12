@@ -109,3 +109,37 @@ test('accessible throttle responds to arrows, Home and End only when driving is 
   key('Home'); assert.equal(p.run('state.throttle'), 0);
   p.callbacks.onStatus('offline'); key('End'); assert.equal(p.run('state.throttle'), 0);
 });
+
+
+test('phone shows each driver task and shared objective, and celebrates score gains once', async () => {
+  const p = pad(); await p.ready();
+  const taskState = score => ({...p.state, me: {...p.state.me, score, task: 'Hold the center lane'}, lobby: {phase: 'ready', round: {title: 'Precision run', status: 'running', mode: 'precision', objective: 'Complete three clean tasks', remainingMs: 60000}}});
+  p.callbacks.onMessage(taskState(0));
+  assert.equal(p.node('missionGoal').textContent, 'Your task: Hold the center lane · Complete three clean tasks');
+  assert.match(p.node('hits').textContent, /Score 0/);
+  p.run('haptics = true; lastBuzz = -Infinity');
+  p.callbacks.onMessage(taskState(50));
+  assert.equal(p.node('feedback').textContent, '+50 points!');
+  assert.match(p.node('hits').textContent, /Score 50/);
+  assert.equal(p.buzzes.length, 1);
+  p.callbacks.onMessage(taskState(50)); assert.equal(p.buzzes.length, 1, 'repeated state does not repeat the cue');
+});
+
+test('shared pit pause clears inputs, explains recovery, and never restores throttle', async () => {
+  const p = pad(); await p.ready(); p.run('setThrottle(1); state.attack = true');
+  const paused = {...p.state, lobby: {phase: 'ready', round: {title: 'Crew mission', status: 'paused', mode: 'team', objective: 'Complete tasks together', remainingMs: 60000}}};
+  p.callbacks.onMessage(paused);
+  assert.equal(p.run('state.throttle'), 0); assert.equal(p.run('state.attack'), false);
+  assert.match(p.node('missionGoal').textContent, /Shared pit stop.*clear the track/);
+  assert.match(p.node('status').textContent, /All cars stopped/);
+  assert.match(p.node('feedback').textContent, /Shared pit stop/);
+  p.callbacks.onMessage({...paused, lobby: {...paused.lobby, round: {...paused.lobby.round, status: 'running'}}});
+  assert.equal(p.run('state.throttle'), 0);
+});
+
+test('spending weapon energy alone is not presented as a damage event', async () => {
+  const p = pad(); await p.ready();
+  p.node('feedback').textContent = 'Ready'; p.run('haptics = true; lastBuzz = -Infinity');
+  p.callbacks.onMessage({...p.state, me: {...p.state.me, energy: 0.5}});
+  assert.equal(p.node('feedback').textContent, 'Ready'); assert.equal(p.buzzes.length, 0);
+});

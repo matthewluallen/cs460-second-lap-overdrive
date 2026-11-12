@@ -40,7 +40,7 @@ class Fighter {
 export class Battle {
   constructor({weapons, vehicles, track, clock = () => performance.now()}) {
     this.weapons = weapons; this.vehicles = vehicles; this.track = track; this.clock = clock;
-    this.config = vehicles.energy; this.fighters = new Map(); this.mines = []; this.events = []; this.active = false;
+    this.config = vehicles.energy; this.fighters = new Map(); this.mines = []; this.events = []; this.active = false; this.pausedAt = null;
   }
   add(car, bays = loadout(this.vehicles, car.model)) {
     const fighter = new Fighter(car, bays, this.config.max_energy);
@@ -48,8 +48,8 @@ export class Battle {
   }
   remove(car) { this.fighters.delete(car); }
   get(car) { return this.fighters.get(car); }
-  press(car, bay, down) { const f = this.fighters.get(car); if (f) f.held[bay] = !!down; }
-  cycle(car, bay) { const f = this.fighters.get(car); if (f && (f.bays[bay]?.length ?? 0) > 1) { f.selected[bay]++; f.charge[bay] = 0; } }
+  press(car, bay, down) { if (this.pausedAt !== null) return; const f = this.fighters.get(car); if (f) f.held[bay] = !!down; }
+  cycle(car, bay) { if (this.pausedAt !== null) return; const f = this.fighters.get(car); if (f && (f.bays[bay]?.length ?? 0) > 1) { f.selected[bay]++; f.charge[bay] = 0; } }
   #event(e) { this.events.push({...e, at: this.clock()}); if (this.events.length > 200) this.events.shift(); }
   drain() { const e = this.events; this.events = []; return e; }
 
@@ -96,6 +96,7 @@ export class Battle {
     return weapon.targeter.single_target ? hits.slice(0, 1) : hits;
   }
   damage(target, amount, source, now, kind = 'hit') {
+    if (this.pausedAt !== null) return;
     if (target.disabledUntil > now || amount <= 0) return;
     if (target.shield > 0) { amount *= 1 - target.shield; this.#event({type: 'blocked', car: target.car}); }
     if (amount <= 0) return;
@@ -111,7 +112,7 @@ export class Battle {
   #spend(fighter, amount) { if (fighter.energy < amount) return false; fighter.energy -= amount; return true; }
 
   update(dt, now = this.clock()) {
-    if (!this.active) return;
+    if (!this.active || this.pausedAt !== null) return;
     const spots = new Map();
     for (const f of this.fighters.values()) spots.set(f, f.car.connected ? this.#spot(f.car, now) : null);
     for (const f of this.fighters.values()) {
@@ -282,6 +283,7 @@ export class Battle {
   }
   // What the driver asked for, after every active effect. Returns {speed, accel}.
   limit(car, wanted, now = this.clock()) {
+    if (this.pausedAt !== null) return {speed: 0, accel: 2500};
     const f = this.fighters.get(car);
     if (!f || !this.active) return {speed: wanted, accel: 1000};
     if (f.disabledUntil > now) return {speed: 0, accel: 2500};
@@ -305,8 +307,43 @@ export class Battle {
       if (health < 0.33) car.setLights(1, 0, 0); else car.setLights(r, g, b);
     }
   }
-  start() { this.active = true; this.mines = []; for (const f of this.fighters.values()) { f.energy = this.config.max_energy; f.kills = f.deaths = 0; f.disabledUntil = 0; f.slow.clear(); f.ready = {}; f.charge = {}; } }
-  stop() { this.active = false; this.mines = []; for (const f of this.fighters.values()) { f.held = {attack: false, support: false, special: false}; f.car.setLights(...f.car.color); } }
+  // Freeze battle time during shared physical recovery. Releasing a weapon at
+  // the pit must never release a previously charged shot when play resumes.
+  time(now = this.clock()) { return this.pausedAt ?? now; }
+  pause(now = this.clock()) {
+    if (!this.active || this.pausedAt !== null) return;
+    this.pausedAt = now; this.events = [];
+    for (const f of this.fighters.values()) {
+      f.held = {attack: false, support: false, special: false};
+      f.was = {attack: false, support: false, special: false}; f.charge = {};
+      f.shield = 0; f.braking = false;
+    }
+  }
+  resume(now = this.clock()) {
+    if (this.pausedAt === null) return 0;
+    const elapsed = Math.max(0, now - this.pausedAt);
+    const deadlines = ['disabledUntil', 'boostUntil', 'rageUntil', 'wiggleUntil', 'wiggleNext', 'hitUntil', 'firingUntil'];
+    for (const f of this.fighters.values()) {
+      for (const field of deadlines) if (f[field] > 0) f[field] += elapsed;
+      for (const bay of Object.keys(f.ready)) if (f.ready[bay] > 0) f.ready[bay] += elapsed;
+      for (const effect of f.slow.values()) effect.until += elapsed;
+    }
+    for (const mine of this.mines) { mine.armedAt += elapsed; mine.expires += elapsed; }
+    this.pausedAt = null;
+    return elapsed;
+  }
+  start() {
+    this.active = true; this.pausedAt = null; this.mines = []; this.events = [];
+    for (const f of this.fighters.values()) {
+      f.energy = this.config.max_energy; f.kills = f.deaths = 0; f.slow.clear(); f.ready = {}; f.charge = {};
+      f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.shield = 0; f.braking = false;
+      for (const key of ['disabledUntil', 'boostUntil', 'rageUntil', 'wiggleUntil', 'wiggleNext', 'hitUntil', 'firingUntil']) f[key] = 0;
+    }
+  }
+  stop() {
+    this.active = false; this.pausedAt = null; this.mines = []; this.events = [];
+    for (const f of this.fighters.values()) { f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.charge = {}; f.car.setLights(...f.car.color); }
+  }
   scores() { return [...this.fighters.values()].map(f => ({name: f.car.name, kills: f.kills, deaths: f.deaths, laps: f.car.localizer?.laps ?? 0})).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths); }
 }
 

@@ -43,12 +43,18 @@ python3 -m lapreturn.cwe_lab     # expect three "flaw_reproduced": false, exit 0
 npm run dependency-lab           # expect "regressionCheckPassed": true
 ```
 
-Review-fix verification on 12 November 2026: **373 Node tests pass on Node
+Review-fix verification on 12 November 2026: **395 Node tests pass on Node
 22.23.5**, **38 Python tests pass on Python 3.14.7**, audit reports zero
 vulnerabilities, and the dependency/CWE probes pass. Host/phone browser walkthroughs
 covered approval, simulated driving, story completion, and portrait/landscape
 layouts. The Node suite includes all supported mode/car-count combinations with
-mixed human/computer inputs. These are software checks, not hardware validation.
+mixed human/computer inputs. The follow-up build adds shared pit recovery with
+frozen round/battle timers, precision lane/speed gates, independent scan/carry/deliver
+tasks for every story participant, purposeful CPU guidance, and phone task/score
+feedback. Simulator tests complete all three missions with one and four cars on
+Capsule and Figure eight at 400 mm/s; precision guidance earns points where a
+full-throttle baseline earns none. Browser review covers the task HUD and shared
+pit/recovery flow. These are software checks, not hardware validation.
 Run the controller locally with `npm run slipstream` (prints a host code; opens
 `/slipstream/`). Plain `npm start` serves the hardened course bench without Slipstream.
 

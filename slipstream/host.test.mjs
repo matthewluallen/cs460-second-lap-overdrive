@@ -179,3 +179,53 @@ test('Free drive clears finished round state before sending the phone dashboard'
   assert.notEqual(h.run('dashboard.lobby.phase'), 'stopped');
   assert.equal(h.node('results').hidden, true);
 });
+
+test('shared pit pauses a round, preserves its clock and requires explicit clear after recovery', async () => {
+  const h = host(); h.node('demo').click(); h.node('battle').click(); h.tick(3000); await settle();
+  h.tick(4000); await settle();
+  h.run(`for (const notify of game.drivers[0].sim.listeners) notify(Uint8Array.of(1, 0x2b));`);
+  h.tick(4040); await settle();
+  assert.equal(h.run('session.status'), 'paused');
+  const remaining = h.run('session.view().remainingMs');
+  assert.equal(h.run('game.drivers.every(d => d.car.speed === 0)'), true);
+  h.node('pitResume').click(); assert.equal(h.run('game.halted'), true);
+  h.run('cards.get(game.drivers[0]).recover.onclick()');
+  h.tick(20000); await settle();
+  assert.equal(h.run('session.view().remainingMs'), remaining);
+  assert.equal(h.run('game.halted'), true);
+  h.node('resume').click(); assert.equal(h.run('game.halted'), true);
+  h.node('pitResume').click();
+  assert.equal(h.run('session.status'), 'running');
+  assert.equal(h.run('game.halted'), false);
+  assert.equal(h.run('game.drivers[0].level'), 0);
+  h.tick(20040); await settle();
+  assert.equal(h.run('session.view().remainingMs'), remaining - 40);
+});
+
+for (const carCount of [1, 2, 3, 4]) test(`${carCount}-car precision gives purposeful CPUs points and stops at the deadline`, async () => {
+  const h = host();
+  for (let i = 0; i < carCount; i++) h.node('addSim').click();
+  h.run(`game.useTrack(world.track); for (const d of game.drivers) {
+    game.setControl(d, 'bot'); d.car.localizer.seed(d.sim.index, d.sim.direction, 0);
+    d.car.localizer.progress = d.sim.progress; d.car.localizer.lateral = d.sim.lateral;
+  }`);
+  h.node('mode').value = 'precision'; h.node('battle').click(); h.tick(3000); await settle();
+  for (let t = 3040; t <= 93000; t += 40) { h.tick(t); await settle(); }
+  const rows = JSON.parse(h.run('JSON.stringify(session.view().rows)'));
+  assert.ok(rows.every(r => r.score > 0), JSON.stringify(rows));
+  assert.equal(h.run('game.halted'), true);
+  assert.equal(h.run('world.cars.every(c => c.targetSpeed === 0)'), true);
+});
+
+test('four phone task dashboards fit the relay message limit', async () => {
+  const h = host();
+  for (let i = 0; i < 4; i++) h.node('addSim').click();
+  h.run(`game.useTrack(world.track); for (const d of game.drivers) {
+    game.setControl(d, 'phone'); const p = {id:d.id, name:'Driver', approved:true, car:d.id}; players.set(p.id,p); seat(p);
+  } room = {link:{send: async value => { window.lastDashboard = value; }}};
+  session.start('team', scoringSnapshot(0), 0, {mission:'dawn-patrol'}); pushState(game.snapshot(200), 200);`);
+  const payload = JSON.parse(h.run('JSON.stringify(window.lastDashboard)'));
+  assert.equal(Object.keys(payload.players).length, 4);
+  assert.ok(Object.values(payload.players).every(p => p.task.includes('Scan')));
+  assert.ok(Buffer.byteLength(JSON.stringify({t:'state', ...payload})) < 3500);
+});

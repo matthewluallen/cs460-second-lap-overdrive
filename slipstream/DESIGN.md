@@ -96,13 +96,29 @@ integration; the module never writes to a Bluetooth transport.
 
 The three original story briefs are exported as `STORY_MISSIONS`:
 
-1. **The Signal Run:** restore contact; one lap per active car, 90 seconds.
-2. **Beacon Network:** power a shared beacon; two laps per active car, 120 seconds.
-3. **Dawn Patrol:** complete the final delivery; three laps per active car, 150 seconds.
+1. **The Signal Run:** restore contact; one scan/carry/deliver sequence per active car, 90 seconds.
+2. **Beacon Network:** power a shared beacon; two delivery sequences per active car, 120 seconds.
+3. **Dawn Patrol:** complete the final delivery; three delivery sequences per active car, 150 seconds.
 
-These first missions use the same cooperative lap mechanic with different goals
-and framing. They do not yet include branching stories, virtual checkpoints, a
-campaign save, or different mechanical objectives. Do not market them as such.
+Each driver scans a virtual beacon in the center lane at a measured low speed,
+carries the packet steadily in a side lane, then returns to the center to deliver
+at the dock. One car performs the sequence alone; two to four cars must each
+complete their own contribution. A CPU cannot finish for an idle human. Missions
+share this sequence with increasing delivery counts; branching stories and a
+saved campaign remain future work.
+
+Precision run adds four recurring virtual gates with alternating lane and speed
+bands. Its computer drivers follow the same measured requirements as humans.
+Simulator regressions compare deliberate guidance with full-throttle driving;
+only deliberate guidance earns gate points. The speed ceiling is locked during
+rounds so task bands cannot become unreachable through a mid-round change.
+
+Every off-track report opens a shared pit: all cars receive stop requests, the
+round clock pauses, and battle timers freeze. The host recovers each affected
+car, checks physical stillness and track clearance, then explicitly continues.
+Recovery clears incomplete lap/task progress, held inputs and charged attacks.
+A stop request is not proof of physical braking. The host-loss watchdog still
+requires hardware investigation.
 
 ## Phone controls and haptics
 

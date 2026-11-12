@@ -45,6 +45,7 @@
     <p id="roundHelp" class="note">Human, computer, or a mix. Up to four cars.</p>
     <button id="endRound" hidden>Finish round &amp; stop</button>
     </section>
+    <section id="pitPanel" class="pit-panel" hidden aria-live="polite"><strong>Shared pit stop</strong><p id="pitMessage"></p><button id="pitResume" class="primary">Track clear · Continue round</button></section>
     <canvas id="map" aria-label="Live circuit map and car positions"></canvas>
     <div id="roundHud" class="round-hud"><div><span id="roundLabel" class="eyebrow">READY WHEN YOU ARE</span><strong id="roundTitle">Choose your kind of fun</strong><span id="roundGoal">Add cars, map the circuit, then start a round.</span></div><div class="clock"><strong id="roundClock">—</strong><span id="roundState">Free drive</span></div></div>
     <div id="countdown" class="countdown" hidden role="status" aria-live="assertive"></div>
@@ -57,7 +58,7 @@
   <aside id="side">
 
     <section class="side-block"><h2>On the grid</h2>
-    <table id="scores"><thead><tr><th>Car</th><th title="Virtual knockouts">KOs</th><th>Lost</th><th>Laps</th></tr></thead><tbody></tbody></table>
+    <table id="scores"><thead><tr><th>Car</th><th id="scoreCol" title="Virtual knockouts">KOs</th><th id="detailCol">Lost</th><th>Laps</th></tr></thead><tbody></tbody></table>
     <h2>Speed limit</h2>
     <label class="field"><span id="topLabel">Speed ceiling 400 mm/s</span>
       <input id="top" type="range" min="300" max="1200" step="50" value="400">
