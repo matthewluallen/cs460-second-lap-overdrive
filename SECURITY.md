@@ -240,3 +240,6 @@ public issue. Include the commit, the exact request and the observed result.
   allowance explicitly (owner-approved compatibility policy).
 - M1: relay reconnection cannot auto-seat a player who left or was locally
   revoked; a later explicit car selection is required.
+- M2: gamepad drivers claim a stable browser pad slot/identity by pressing a
+  button, then returning to neutral. Another driver changing controls cannot
+  transfer that binding. Blur disarms gamepads; non-standard mappings are blocked.

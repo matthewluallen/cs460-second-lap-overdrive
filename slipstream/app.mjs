@@ -309,30 +309,37 @@ addEventListener('keydown', event => {
   }
 });
 addEventListener('keyup', event => held.delete(event.code));
-addEventListener('blur', () => { held.clear(); for (const d of game.drivers) if (SCHEMES[d.control] || d.control === 'browser') { d.level = 0; d.input.throttle = 0; d.input.attack = d.input.support = d.input.special = false; d.car.stop(); } });
+addEventListener('blur', () => { held.clear(); for (const d of game.drivers) if (SCHEMES[d.control] || d.control === 'browser' || d.control === 'gamepad') { d.armed = false; d.gamepadArmed = false; d.level = 0; d.input.throttle = 0; d.input.attack = d.input.support = d.input.special = false; d.car.stop(); } });
 
 function readControls(dt) {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()] : [];
-  let padIndex = 0;
+
   for (const d of game.drivers) {
     const s = SCHEMES[d.control], input = d.input;
-    const slot = d.control === 'gamepad' ? padIndex++ : null;
-    if (slot !== d.gamepadSlot) { d.gamepadSlot = slot; d.gamepadArmed = false; }
+
     if (game.halted || d.car.safetyReason) { d.armed = false; d.gamepadArmed = false; d.level = 0; input.throttle = 0; input.attack = input.support = input.special = false; if (d.pad) d.pad.throttle = 0; continue; }
     if (s) {
       d.level = Math.max(0, Math.min(1, (d.level ?? 0) + (held.has(s.up) ? 0.9 * dt : 0) - (held.has(s.down) ? 1.6 * dt : 0)));
       input.throttle = d.level; input.attack = held.has(s.attack); input.support = held.has(s.support); input.special = held.has(s.special);
     } else if (d.control === 'browser') { input.throttle = d.level ?? 0;
     } else if (d.control === 'gamepad') {
-      const pad = pads[slot];
-      if (!pad || pad.connected === false) { d.gamepadArmed = false; input.throttle = 0; input.attack = input.support = input.special = false; continue; }
+      if (!d.gamepadBinding) {
+        const slot=pads.findIndex((p,i)=>p && p.connected!==false && !game.drivers.some(other=>other!==d && other.gamepadBinding?.slot===i) && p.buttons.some(b=>b.pressed || b.value>.05));
+        if(slot>=0) { d.gamepadBinding={slot,id:pads[slot].id??''}; d.armed=false;d.gamepadArmed=false; }
+      }
+      const binding=d.gamepadBinding, candidate=binding && pads[binding.slot];
+      const pad=candidate && (candidate.id??'')===binding.id ? candidate : null;
+      if (pad?.mapping && pad.mapping !== 'standard') { d.gamepadWarning='Non-standard gamepad mapping: use another control'; d.gamepadArmed=false; d.armed=false;input.throttle=0;input.attack=input.support=input.special=false;continue; }
+      d.gamepadWarning= !binding ? 'Press a gamepad button to claim, then release' : !pad ? 'Bound gamepad disconnected' : '';
+
+      if (!pad || pad.connected === false) { d.gamepadArmed = false; d.armed = false; input.throttle = 0; input.attack = input.support = input.special = false; continue; }
       // A held trigger must not restart a car after stop, reassignment or reconnect.
       if (!d.gamepadArmed) {
-        const neutral = (pad.buttons[7]?.value ?? 0) <= .02 && Math.abs(pad.axes[0] ?? 0) <= .12 && ![0,1,3].some(i => pad.buttons[i]?.pressed);
+        const neutral = (pad.buttons[7]?.value ?? 0) <= .05 && Math.abs(pad.axes[0] ?? 0) <= .12 && ![0,1,3].some(i => pad.buttons[i]?.pressed);
         input.throttle = 0; input.attack = input.support = input.special = false;
         d.gamepadArmed = neutral; d.armed = neutral; continue;
       }
-      input.throttle = pad.buttons[7]?.value ?? 0;
+      input.throttle = (pad.buttons[7]?.value ?? 0) > .05 ? pad.buttons[7].value : 0;
       input.lane = -(Math.abs(pad.axes[0]) > 0.12 ? pad.axes[0] : 0) * 67.5;
       input.attack = !!pad.buttons[0]?.pressed; input.support = !!pad.buttons[1]?.pressed; input.special = !!pad.buttons[3]?.pressed;
     } else if (d.control === 'phone') {
@@ -504,7 +511,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';
-    ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
+    ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? driver.gamepadWarning || 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
     const objective = session.view().rows.find(row => row.id === driver.id)?.task;
     ui.task.hidden = !objective; ui.task.textContent = objective?.cue ?? '';
     ui.recover.hidden = !s.safetyReason || s.safetyReason === 'Host stopped';

@@ -238,6 +238,7 @@ test('gamepad disconnect preserves the second controller slot and clears held we
   h.run(`const a=game.drivers[0], b=game.drivers[1]; game.setControl(a,'gamepad');game.setControl(b,'gamepad');
     const makePad=()=>({connected:true,axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))});
     const pa=makePad(), pb=makePad();let pads=[pa,pb];navigator.getGamepads=()=>pads;
+    pa.buttons[0].pressed=pb.buttons[0].pressed=true;readControls(.04);pa.buttons[0].pressed=pb.buttons[0].pressed=false;readControls(.04);
     readControls(.04);pa.buttons[7].value=.8;pa.buttons[0].pressed=true;pb.buttons[7].value=.4;readControls(.04);`);
   assert.equal(h.run('a.input.throttle'),.8);assert.equal(h.run('b.input.throttle'),.4);
   h.run('pads=[null,pb];readControls(.04)');
@@ -253,7 +254,7 @@ test('gamepad stops require neutral controls and do not shift other car slots', 
   h.run(`const a=game.drivers[0],b=game.drivers[1];game.setControl(a,'gamepad');game.setControl(b,'gamepad');
     const pa={axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))};
     const pb={axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))};
-    navigator.getGamepads=()=>[pa,pb];readControls(.04);pa.buttons[7].value=.7;pb.buttons[7].value=.3;readControls(.04);
+    navigator.getGamepads=()=>[pa,pb];pa.buttons[0].pressed=pb.buttons[0].pressed=true;readControls(.04);pa.buttons[0].pressed=pb.buttons[0].pressed=false;readControls(.04);readControls(.04);pa.buttons[7].value=.7;pb.buttons[7].value=.3;readControls(.04);
     a.car.safetyReason='Off track';readControls(.04);`);
   assert.equal(h.run('b.input.throttle'),.3);assert.equal(h.run('a.input.throttle'),0);
   h.run('a.car.safetyReason=null;readControls(.04)');assert.equal(h.run('a.input.throttle'),0);
@@ -290,3 +291,5 @@ test('H3 selecting Computer never starts motion and releases dropdown focus', as
 test('H2 slow intersection missions are blocked without relaxing the default watchdog',()=>{const h=host();h.node('addSim').click();h.run("world.setLayout('Figure eight');game.useTrack(world.track);game.setControl(game.drivers[0],'bot');chooseExperience('story');beginRound();");assert.equal(h.run('countdown'),null);assert.match(h.node('roundHelp').textContent,/Slow intersection/);assert.equal(h.run('game.safety.trackGapMs'),2000);});
 
 test('M1 leave and host revocation survive an online reconnect',()=>{for(const revoke of [false,true]){const h=host();h.node('addSim').click();h.run(`const d=game.drivers[0];game.setControl(d,'phone');const p={id:1,approved:true,name:'P',car:d.id};players.set(1,p);seat(p);${revoke?'releasePad(d,true)':"onRelay({type:'input',player:1,release:true})"};onRelay({type:'online',player:1});`);assert.equal(h.run('p.driver'),null);h.run("onRelay({type:'input',player:1,car:d.id,throttle:0})");assert.equal(h.run('p.driver === d'),true);}});
+
+test('M2 gamepad identity survives an earlier driver leaving gamepad mode and blur disarms',()=>{const h=host();h.node('addSim').click();h.node('addSim').click();h.run(`const a=game.drivers[0],b=game.drivers[1];game.setControl(a,'gamepad');game.setControl(b,'gamepad');const make=(index)=>({index,id:'Pad '+index,mapping:'standard',axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))});const pa=make(0),pb=make(1);navigator.getGamepads=()=>[pa,pb];pa.buttons[0].pressed=pb.buttons[0].pressed=true;readControls(.04);pa.buttons[0].pressed=pb.buttons[0].pressed=false;readControls(.04);readControls(.04);game.setControl(a,'none');readControls(.04);pa.buttons[7].value=.8;pb.buttons[7].value=.3;readControls(.04);`);assert.equal(h.run('b.input.throttle'),.3);h.event('blur');h.run('readControls(.04)');assert.equal(h.run('b.input.throttle'),0);});
