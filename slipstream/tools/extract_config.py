@@ -31,7 +31,7 @@ def load_json(path):
 def piece(path):
     lines = [l.split() for l in path.read_text().splitlines() if l.strip()]
     kind_code, piece_id = int(lines[1][0]), int(lines[4][0])
-    kind = NAMED.get(piece_id, KIND.get(kind_code, "straight"))
+    kind = NAMED.get(piece_id, KIND.get(kind_code, "unknown"))
     # Footprint from the two connector poses (entry faces backwards, exit forwards).
     # Jump and landing pieces have a drivable section shorter than their footprint.
     at = next(i for i in range(13, len(lines) - 2)
@@ -69,7 +69,7 @@ def piece(path):
                 progress, lateral = (y + 0.28) / 0.56, -(x - 0.28)
         # [progress 0..1 along the piece, lateral mm (left of forward is +)]
         table[str(loc)] = [round(progress, 3), round(lateral * 1000, 1)]
-    out = {"kind": kind, "exit": [round(ex * 1000, 1), round(ey * 1000, 1), round(eth, 6)], "locs": table}
+    out = {"raw_kind_code": kind_code, "kind": kind, "exit": [round(ex * 1000, 1), round(ey * 1000, 1), round(eth, 6)], "locs": table}
     if kind == "curve":
         out["radius"] = round(abs(ey) * 1000, 1)
         out["length"] = round(abs(ey) * 1000 * math.pi / 2, 1)

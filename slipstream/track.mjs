@@ -6,13 +6,14 @@
 // always positive to the LEFT of the direction of travel.
 
 export const CURVE_RADIUS = 280, LANE_LIMIT = 68;
+export const SPECIAL_UNVERIFIED = Object.freeze([53,54,57]);
 export const POSITION_MAX_AGE_MS = 2000;
 const TAU = Math.PI * 2;
 const norm = a => { a %= TAU; if (a > Math.PI) a -= TAU; if (a < -Math.PI) a += TAU; return a; };
 
 export class Pieces {
   constructor(table) { this.table = table; }
-  get(id) { return this.table[String(id)] ?? null; }
+  get(id) { const piece=this.table[String(id)]; return piece && SPECIAL_UNVERIFIED.includes(Number(id)) ? {...piece,kind:'special',unverified:true} : piece ?? null; }
   kind(id) { return this.get(id)?.kind ?? 'unknown'; }
   // Location code -> {progress 0..1 in the direction of travel, lateral mm (left +)}.
   locate(pieceId, locationId, reverse) {
@@ -31,7 +32,7 @@ export function traversal(pieces, id, reverse, hint = {}) {
     const turn = hint.turn ?? (reverse ? -1 : 1);
     return {id, kind, reverse, turn, length: def?.length ?? CURVE_RADIUS * Math.PI / 2, radius: def?.radius ?? CURVE_RADIUS};
   }
-  return {id, kind, reverse, turn: 0, length: def?.length ?? hint.length ?? 560, ...(!def ? {inferred: true} : {})};
+  return {id, kind, reverse, turn: 0, length: def?.length ?? hint.length ?? 560, ...(!def ? {inferred: true} : {}), ...(def?.unverified ? {unverified:true} : {})};
 }
 
 // Lay pieces end to end. Returns poses and whether the loop closes on itself.
@@ -73,6 +74,7 @@ export class Track {
   constructor(sequence) {
     Object.assign(this, layout(sequence));
     this.count = this.pieces.length;
+    this.unverifiedCount = this.pieces.filter(p=>p.unverified).length;
     this.inferredCount = this.pieces.filter(p => p.inferred).length;
   }
   // Path length of a piece in a given lane (inside of a curve is shorter).

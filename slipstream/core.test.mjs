@@ -162,7 +162,9 @@ test('every weapon type in the app data is implemented and labelled', () => {
 // Two cars on a straight: attacker behind, target ahead in the same lane.
 async function duel(attackerModel, targetModel, {gap = 0.25, bay = 'attack', select = 0, hold = 3, sameLane = true} = {}) {
   const r = rig('Grand circuit');
-  r.game.useTrack(buildTrack(P, LAYOUTS['Grand circuit']));
+  // Combat geometry fixture uses ordinary tiles; special-piece scoring is tested separately.
+  const combatTrack = buildTrack(P, LAYOUTS['Grand circuit'].map(([id, reverse]) => [id === 53 ? 36 : id === 57 ? 39 : id, reverse]));
+  r.world.track = combatTrack; r.game.useTrack(combatTrack);
   const a = r.add({model: attackerModel, control: 'browser'}, {index: 6, progress: 0.2, lateral: 22.5});
   const t = r.add({model: targetModel, control: 'browser'}, {index: 6, progress: 0.2 + gap * 1000 / 560, lateral: sameLane ? 22.5 : -58.5});
   r.game.startBattle();

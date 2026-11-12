@@ -154,7 +154,9 @@ from the left and right wheel distances.
 Supported pieces are all 21 modular piece ids in the app's data: straights
 (36, 39, 40, 48, 51), curves (17, 18, 20, 23, 24, 27), start and finish (34, 33),
 intersection (10), jump and landing (43, 46), and the Fast & Furious pieces
-(53, 54, 57, 58, 63). The older one-piece printed mats are not supported.
+(58, 63). Fast & Furious pieces 53, 54 and 57 are **special and unverified**;
+any map containing them is blocked from scored rounds. Their displayed geometry
+is provisional, not a supported physical classification. The older one-piece printed mats are not supported.
 
 Once mapped, every car is placed by matching the pieces it reports against the map,
 in either direction of travel. The exact lane comes from the location code. A real

@@ -254,3 +254,7 @@ public issue. Include the commit, the exact request and the observed result.
   bounded/expired; forwarded address headers are not trusted. Users behind one
   reverse proxy may share a bucket. Successful authenticated creations refund
   their token but cannot bypass an already exhausted bucket.
+- H4: Fast & Furious IDs 53, 54 and 57 are classified special/unverified in
+  runtime code and block scored rounds. Existing derived data were not regenerated;
+  future extraction retains raw kind codes and does not default unknown kinds to
+  straight. Provisional displayed geometry is not physical compatibility evidence.

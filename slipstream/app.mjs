@@ -193,6 +193,7 @@ function beginRound() {
     if (session.status === 'running' || session.status === 'paused' || countdown) return;
     if (game.pitReason) throw new Error('Complete the shared pit recovery before starting.');
     if (!game.track) throw new Error('Map the circuit first, or try the two-car simulation.');
+    if (game.track.unverifiedCount) throw new Error('Special Fast & Furious pieces 53, 54 and 57 are unverified; scored rounds are blocked.');
     if (game.track.inferredCount) throw new Error('Rescan the circuit: ' + game.track.inferredCount + ' sections were inferred. Clean the codes and use a lower scan speed.');
     const active = game.drivers.filter(d => d.car.connected && d.control !== 'none');
     const mode = $('mode').value;

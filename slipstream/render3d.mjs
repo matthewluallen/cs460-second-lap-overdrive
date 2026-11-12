@@ -56,7 +56,7 @@ export class Renderer3D {
     const grid=new THREE.GridHelper(this.span*3,40,0x355063,0x203442); grid.position.copy(this.center); grid.position.y=-.01; this.trackRoot.add(grid);
     for(const p of shape.pieces) {
       this.#ribbon(p,-109,109,0,1,0x0b1119,.015);
-      this.#ribbon(p,-103,103,0,1,p.inferred?0x584631:0x293441,.025);
+      this.#ribbon(p,-103,103,0,1,(p.inferred||p.unverified)?0x584631:0x293441,.025);
       for(const side of [-1,1]) this.#ribbon(p,side*96-1.7,side*96+1.7,0,1,0xb9d1d9,.026);
       for(const lane of [-45,0,45]) this.#ribbon(p,lane-.4,lane+.4,0,1,0x465868,.027);
       if(p.kind==='finish') for(let i=0;i<10;i++) for(let j=0;j<2;j++) this.#ribbon(p,-95+i*19,-76+i*19,.44+j*.07,.51+j*.07,(i+j)%2?0xdde6e5:0x101923,.029);

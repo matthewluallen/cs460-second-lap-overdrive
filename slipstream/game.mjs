@@ -139,6 +139,7 @@ export class Game {
   // --- battle ----------------------------------------------------------------
   startBattle() {
     if (!this.track) throw new Error('Map the track first');
+    if (this.track.unverifiedCount) throw new Error('Special track pieces are unverified; scored rounds are blocked');
     if (this.track.inferredCount) throw new Error('Rescan: some track sections were inferred, not identified');
     this.resume(); this.armComputers(); this.battle.start();
     for (const d of this.drivers) this.battle.get(d.car).participating = d.control !== 'none';
