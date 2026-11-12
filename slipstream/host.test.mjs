@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Game} from './game.mjs';
+import {FaultTransport, FaultRelay} from './faults.mjs';
 import {trackFromPlan} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
 import {Recorder} from './trace.mjs';
@@ -11,7 +12,8 @@ import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 
 // Execute the actual host handlers and loop with DOM stubs and the simulated
 // transport. These verify control logic, not browser rendering or real hardware.
-function host() {
+function host({injectFaults = false} = {}) {
+  const transports = [];
   const nodes = new Map(), documentEvents = {}, windowEvents = {}, intervals = [];
   let now = 0;
   function element(tag = 'div') {
@@ -37,7 +39,7 @@ function host() {
   const document = {hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
-  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, Game: class extends Game { constructor(options) { super({...options, clock: () => now}); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
+  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock: () => now}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
     fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage,
     performance: {now: () => now}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
@@ -50,8 +52,8 @@ function host() {
     .replace(/^import .*;$/gm, '')
     .replace("await Promise.all([load('pieces'), load('vehicles'), load('weapons')])", '[fixtures.pieces, fixtures.vehicles, fixtures.weapons]');
   vm.runInContext(source, context);
-  return {run: code => vm.runInContext(code, context), node, document,
-    tick(time) { now = time; for (const fn of intervals) fn(); },
+  return {transports, run: code => vm.runInContext(code, context), node, document,
+    tick(time) { now = time; for (const transport of transports) transport.advance(now); for (const fn of intervals) fn(); },
     visibility(hidden) { document.hidden = hidden; for (const fn of documentEvents.visibilitychange ?? []) fn(); },
     event(name, value = {}) { for (const fn of windowEvents[name] ?? []) fn(value); }};
 }
@@ -298,3 +300,56 @@ test('M2 gamepad identity survives an earlier driver leaving gamepad mode and bl
 test('M4 selected scan car waits through a countdown and other cars stay latched',async()=>{const h=host();h.node('addSim').click();h.node('addSim').click();h.run("game.setControl(game.drivers[0],'bot')");h.node('scanCar').value='2';h.node('scanClear').checked=true;h.node('scan').click();h.tick(40);await settle();assert.equal(h.run('game.drivers.every(d=>d.car.speed===0)'),true);h.tick(3000);await settle();assert.equal(h.run('game.scanner?.id'),2);assert.equal(h.run('game.drivers[0].car.speed'),0);assert.ok(h.run('game.drivers[1].car.speed')>0);});
 
 test('H4 special Fast & Furious pieces cannot start a scored round',()=>{const h=host();h.node('addSim').click();h.run("world.setLayout('Grand circuit');game.useTrack(world.track);game.setControl(game.drivers[0],'browser');beginRound()");assert.equal(h.run('countdown'),null);assert.match(h.node('roundHelp').textContent,/special|unverified/i);});
+
+for (const carCount of [1, 2, 3, 4]) for (const mode of carCount === 1 ? ['solo', 'team'] : ['solo', 'team', 'race', 'battle']) {
+  for (const fault of ['silent telemetry', 'host-to-relay outage', 'late delocalized']) {
+    test(`fault matrix: ${carCount}-car ${mode}, ${fault}`, async () => {
+      const h = host({injectFaults: true});
+      for (let i = 0; i < carCount; i++) h.node('addSim').click();
+      h.run(`game.useTrack(world.track);
+        for (let i = 0; i < game.drivers.length; i++) game.setControl(game.drivers[i], i % 2 ? 'bot' : 'browser');
+        const d = game.drivers[0]; game.setControl(d, 'phone');
+        const p = {id: 99, approved: true, name: 'Fault driver', car: d.id}; players.set(99, p); seat(p);
+        const relay = new FaultRelay(onRelay, relayStatus);`);
+      h.node('mode').value = mode; h.node('battle').click();
+      for (let t = 40; t <= 3040; t += 40) { h.tick(t); await settle(); }
+      assert.equal(h.run('session.status'), 'running');
+      assert.equal(h.run('session.view().rows.length'), carCount);
+      h.run(`relay.send({type:'input',player:99,throttle:0,steer:0});
+        for (const d of game.drivers) if(d.control==='browser') {cards.get(d).throttle.value=60;cards.get(d).throttle.oninput();}`);
+      for(let t=3080;t<=4040;t+=40){h.run(`relay.send({type:'input',player:99,throttle:.6});`);h.tick(t);await settle();}
+      assert.ok(h.run('d.car.speed') > 0, 'fault starts with a commanded moving car');
+      if (fault === 'silent telemetry') h.transports[0].silentTelemetry = true;
+      if (fault === 'late delocalized') h.transports[0].lateDelocalized(4240);
+      // Silent outage exercises the dead-man even when no status callback arrives.
+      if (fault === 'host-to-relay outage') h.run(`relay.setOutage(true,{announce:false});`);
+      for(let t=4080;t<=10040;t+=40){h.run(`relay.send({type:'input',player:99,throttle:.6});`);h.tick(t);await settle();}
+      assert.equal(h.run('d.car.speed'), 0);
+      if (fault === 'host-to-relay outage') {
+        assert.equal(h.run('d.armed'), false);
+        h.run(`relay.setOutage(false);relay.send({type:'input',player:99,throttle:.6});`);
+        h.tick(10080);await settle();assert.equal(h.run('d.car.speed'),0,'reconnect cannot revive held throttle');
+        h.run(`relay.send({type:'input',player:99,throttle:0,steer:0});relay.send({type:'input',player:99,throttle:.6});`);
+        h.tick(10120);await settle();assert.ok(h.run('d.car.speed')>0,'fresh neutral permits intentional control');
+      } else {
+        assert.equal(h.run('game.halted'),true);
+        assert.match(h.run('game.pitReason'),fault === 'silent telemetry' ? /telemetry/i : /left the track/i);
+        assert.equal(h.run('game.drivers.every(d=>d.car.speed===0)'),true);
+      }
+    });
+  }
+}
+
+test('M4 cancelling a scan latches STOP against subsequent input', async () => {
+ const h=host();h.node('addSim').click();h.node('scanCar').value='1';h.node('scanClear').checked=true;h.node('scan').click();h.tick(3000);await settle();
+ assert.ok(h.run('game.drivers[0].car.speed')>0);h.node('scan').click();
+ assert.equal(h.run('game.halted'),true);h.tick(3040);await settle();assert.equal(h.run('game.drivers[0].car.speed'),0);
+});
+
+test('M2 an unmapped gamepad cannot arm through assumed standard buttons', () => {
+ const h=host();h.node('addSim').click();
+ h.run(`const d=game.drivers[0];game.setControl(d,'gamepad');
+ const pad={index:0,id:'Unknown',mapping:'',axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))};
+ navigator.getGamepads=()=>[pad];pad.buttons[0].pressed=true;readControls(.04);pad.buttons[0].pressed=false;readControls(.04);pad.buttons[7].value=.8;readControls(.04);`);
+ assert.equal(h.run('d.input.throttle'),0);assert.match(h.run('d.gamepadWarning'),/Non-standard/);
+});

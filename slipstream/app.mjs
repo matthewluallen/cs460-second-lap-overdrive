@@ -137,7 +137,7 @@ $('connect').onclick = async event => {
 
 // --- top bar ---------------------------------------------------------------------
 $('scan').onclick = () => {
-  if (game.phase === 'scanning') return game.cancelScan();
+  if (game.phase === 'scanning') return halt('Scan cancelled');
   try { requireVisible(); if(countdown || game.pitReason) throw new Error('Complete or cancel the current start/recovery first'); const driver=game.drivers.find(d=>d.id===Number($('scanCar').value)); if(!driver || !driver.car.connected) throw new Error('Choose the car to scan'); if(!$('scanClear').checked) throw new Error('Confirm the track is clear and other cars are removed'); endRound('Track scan'); game.stopAll(); countdown={kind:'scan',scanner:driver.id,until:performance.now()+3000}; $('scanClear').checked=false; $('roundHelp').textContent='Scanning with '+driver.car.name+' after the countdown. Other cars remain stopped.';renderRound(); } catch (error) { log(error.message); }
 };
 $('battle').onclick = () => beginRound();
@@ -332,7 +332,7 @@ function readControls(dt) {
       }
       const binding=d.gamepadBinding, candidate=binding && pads[binding.slot];
       const pad=candidate && (candidate.id??'')===binding.id ? candidate : null;
-      if (pad?.mapping && pad.mapping !== 'standard') { d.gamepadWarning='Non-standard gamepad mapping: use another control'; d.gamepadArmed=false; d.armed=false;input.throttle=0;input.attack=input.support=input.special=false;continue; }
+      if (pad && pad.mapping !== undefined && pad.mapping !== 'standard') { d.gamepadWarning='Non-standard gamepad mapping: use another control'; d.gamepadArmed=false; d.armed=false;input.throttle=0;input.attack=input.support=input.special=false;continue; }
       d.gamepadWarning= !binding ? 'Press a gamepad button to claim, then release' : !pad ? 'Bound gamepad disconnected' : '';
 
       if (!pad || pad.connected === false) { d.gamepadArmed = false; d.armed = false; input.throttle = 0; input.attack = input.support = input.special = false; continue; }
