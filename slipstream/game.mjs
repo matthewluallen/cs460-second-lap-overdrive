@@ -8,9 +8,11 @@ export const TEAM_COLORS = [[0, 1, 0], [0, 0.4, 1], [1, 0.5, 0], [1, 0, 1], [0, 
 export const emptyInput = () => ({throttle: 0, lane: null, attack: false, support: false, special: false});
 
 export class Game {
-  constructor({pieces, weapons, vehicles, clock = () => performance.now(), log = () => {}}) {
+  constructor({pieces, weapons, vehicles, clock = () => performance.now(), log = () => {}, safety = {}}) {
     this.pieces = new Pieces(pieces); this.weapons = weapons; this.vehicles = vehicles;
     this.clock = clock; this.log = log;
+    this.safety = {firstTrackMs:5000, trackGapMs:2000, stopGraceMs:1000, scanMs:45000, scanLaps:3, ...safety};
+    for (const value of Object.values(this.safety)) if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid safety limit");
     this.drivers = []; this.track = null; this.battle = null; this.mapper = null; this.scanner = null;
     this.phase = 'garage'; this.halted = false; this.pitReason = null; this.topSpeed = 700; this.scanSpeed = 450; this.nextId = 1;
   }
@@ -51,6 +53,12 @@ export class Game {
   #message(driver, message) {
     if (message.type === 'closed') { this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
     if (this.phase === 'scanning' && driver === this.scanner) {
+      if (message.type === 'position') {
+        this.scanAnchor ??= message.pieceId;
+        if (message.pieceId === this.scanAnchor && this.scanLastPiece !== undefined && this.scanLastPiece !== this.scanAnchor) this.scanLaps++;
+        this.scanLastPiece = message.pieceId;
+        if (this.scanLaps >= this.safety.scanLaps) { this.requestPit(driver, 'Scan lap budget exceeded'); return; }
+      }
       const track = this.mapper.feed(message);
       if (track) this.#scanned(track);
     }
@@ -75,7 +83,12 @@ export class Game {
       d.car.safetyStop(d === offTrack ? 'Off track' : d.car.safetyReason || 'Host stopped');
     }
   }
-  get pitReady() { return !!this.pitReason && !this.drivers.some(d => d.car.safetyReason === 'Off track'); }
+  requestPit(driver, reason) {
+    this.battle?.pause?.(this.clock()); this.cancelScan(); this.halted = true;
+    this.pitReason = driver.car.name + ': ' + reason;
+    driver.car.safetyReason = reason; this.#stopDrivers(); this.log(this.pitReason);
+  }
+  get pitReady() { return !!this.pitReason && !this.drivers.some(d => d.car.safetyReason && d.car.safetyReason !== 'Host stopped'); }
   resumeFromPit() {
     if (!this.pitReason) return false;
     if (!this.pitReady) throw new Error('Return every off-track car to the circuit and recover it before clearing the pit stop');
@@ -92,6 +105,7 @@ export class Game {
     if (!driver) throw new Error('Connect a car first');
     if (driver.car.safetyReason === 'Off track') throw new Error('Return the car to the track and recover it before scanning');
     this.resume(); this.stopBattle();
+    this.scanStarted = this.clock(); this.scanLaps = 0; this.scanAnchor = undefined; this.scanLastPiece = undefined;
     this.mapper = new TrackMapper(this.pieces); this.scanner = driver; this.phase = 'scanning';
     this.track = null; for (const d of this.drivers) d.car.useTrack(null);
     // Scan on a printed lane: intersections have strips at ±18/±54 mm,
@@ -144,7 +158,7 @@ export class Game {
     for (const d of this.drivers) if (d.car.safetyReason === 'Host stopped') d.car.recover();
   }
   recoverCar(driver) {
-    if (!this.drivers.includes(driver) || driver.car.safetyReason !== 'Off track') return false;
+    if (!this.drivers.includes(driver) || (!driver.car.safetyReason || driver.car.safetyReason === 'Host stopped')) return false;
     driver.input = emptyInput(); driver.level = 0;
     if (driver.pad) { driver.pad.throttle = 0; driver.pad.seen = 0; }
     const recovered = driver.car.recover();
@@ -153,6 +167,16 @@ export class Game {
   }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
+    for (const d of this.drivers) {
+      const c=d.car;if (!c.connected) continue;
+      if (c.speed > 0) {
+        const hasTrack = c.lastTrackAt !== undefined && c.lastTrackAt >= c.motionSince;
+        if (now - (hasTrack ? c.lastTrackAt : c.motionSince) > (hasTrack ? this.safety.trackGapMs : this.safety.firstTrackMs)) { this.requestPit(d, 'Telemetry timeout'); break; }
+        if (d === this.scanner && now - this.scanStarted > this.safety.scanMs) { this.requestPit(d, 'Scan time budget exceeded'); break; }
+      } else if (c.stopRequestedAt != null && c.lastTrackAt > c.stopRequestedAt + this.safety.stopGraceMs && c.lastTrackAt > (c.checkedStopTrackAt ?? -Infinity) && now - (c.lastStopRetry ?? -Infinity) >= this.safety.stopGraceMs) {
+        c.lastStopRetry = now; c.checkedStopTrackAt = c.lastTrackAt; this.requestPit(d, 'STOP not confirmed: telemetry continues'); c.stop(); break;
+      }
+    }
     if (this.halted) { for (const d of this.drivers) if (d.car.connected && d.car.speed !== 0) d.car.stop(); return; }
     for (const d of this.drivers) {
       const car = d.car;

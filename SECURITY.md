@@ -229,3 +229,7 @@ public issue. Include the commit, the exact request and the observed result.
   phone dead-man expiry and relay status changes. A phone must provide a fresh
   neutral packet before motion; the phone also clears controls when host state
   goes stale. This is a software interlock, not a car-enforced host-loss timeout.
+- H2: moving cars have first-track and inter-message watchdogs (5 s / 2 s
+  defaults); scans have 45 s and three anchor-pass budgets. Continued track
+  telemetry after a 1 s stop grace triggers a repeated STOP and named pit alarm.
+  These conservative software defaults are configurable, not hardware-calibrated.

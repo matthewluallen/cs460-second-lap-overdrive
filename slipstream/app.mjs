@@ -236,7 +236,7 @@ function renderRound() {
   const view = session.view(), running = view.status === 'running' || view.status === 'paused';
   $('pitPanel').hidden = !game.pitReason;
   $('pitResume').disabled = !game.pitReady;
-  $('pitMessage').textContent = game.pitReason ? 'Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button, clear hands and obstacles, then continue.' : '';
+  $('pitMessage').textContent = game.pitReason ? game.pitReason + '. Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button, clear hands and obstacles, then continue.' : '';
   $('pitResume').textContent = view.status === 'paused' ? 'Track clear · Continue round' : 'Track clear · Rearm controls';
   $('roundLabel').textContent = game.pitReason ? 'SHARED PIT · CLOCK PAUSED' : countdown ? 'TRACK CLEAR · GET READY' : running ? activeExperience.toUpperCase() + ' · ROUND LIVE' : view.status === 'finished' ? 'ROUND COMPLETE' : 'READY WHEN YOU ARE';
   $('roundTitle').textContent = view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
@@ -506,7 +506,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
     const objective = session.view().rows.find(row => row.id === driver.id)?.task;
     ui.task.hidden = !objective; ui.task.textContent = objective?.cue ?? '';
-    ui.recover.hidden = s.safetyReason !== 'Off track';
+    ui.recover.hidden = !s.safetyReason || s.safetyReason === 'Host stopped';
     ui.browserControls.hidden = driver.control !== 'browser';
     ui.fireRow.hidden = game.phase !== 'battle';
     ui.throttle.value = Math.round((driver.level ?? 0) * 100); ui.throttle.disabled = game.halted || !!s.safetyReason;

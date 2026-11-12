@@ -76,6 +76,7 @@ export class Car {
     try { messages = decode(bytes); } catch { return; }
     const now = this.clock(); this.rx++;
     for (const m of messages) {
+      if (m.type === 'position' || m.type === 'transition') this.lastTrackAt = now;
       if (m.type === 'battery') this.millivolts = m.millivolts;
       else if (m.type === 'version') this.version = m.version;
       else if (m.type === 'status') this.status = m;
@@ -113,6 +114,8 @@ export class Car {
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
   setSpeed(mmPerSec, accel = 1000) {
     const speed = this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
+    if (speed > 0 && this.speed === 0) { this.motionSince = this.clock(); this.stopRequestedAt = null; }
+    if (speed === 0 && this.speed > 0) this.stopRequestedAt = this.clock();
     this.speed = speed;
     if (speed === this.lastSpeedSent && accel === this.lastAccel) return;
     this.lastSpeedSent = speed; this.lastAccel = accel;
@@ -134,6 +137,7 @@ export class Car {
   stop() {
     // A pending lane request may be discarded below, or the car may be moved
     // during recovery. The next steering target must reach the vehicle.
+    if (this.speed > 0) this.stopRequestedAt = this.clock();
     this.forceLane = true;
     for (const key of ['speed', 'lane', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
