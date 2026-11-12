@@ -367,7 +367,7 @@ function onRelay(m) {
   const fresh = x => ({id: x.id, name: String(x.name).slice(0, 16), online: false, driver: null, car: carOf(x), approved: x.approved === true});
   if (m.type === 'players') { for (const p of m.players) if (!players.has(p.id)) players.set(p.id, fresh(p)); }
   else if (m.type === 'joined') { players.set(m.id, fresh(m)); log(players.get(m.id).name + ' is waiting to be let in'); }
-  else if (m.type === 'online') { const p = players.get(m.player); if (p) { p.online = true; seat(p); } }
+  else if (m.type === 'online') { const p = players.get(m.player); if (p) { p.online = true; if (!p.manual && p.car !== undefined) seat(p, p.car); } }
   else if (m.type === 'offline' || m.type === 'left') { const p = players.get(m.player); if (p) { p.online = false; if (m.type === 'left') { if (p.driver) releasePad(p.driver); players.delete(m.player); } } }
   else if (m.type === 'input') {
     const p = players.get(m.player); if (!p) return;

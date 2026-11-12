@@ -288,3 +288,5 @@ test('H3 selecting Computer never starts motion and releases dropdown focus', as
 });
 
 test('H2 slow intersection missions are blocked without relaxing the default watchdog',()=>{const h=host();h.node('addSim').click();h.run("world.setLayout('Figure eight');game.useTrack(world.track);game.setControl(game.drivers[0],'bot');chooseExperience('story');beginRound();");assert.equal(h.run('countdown'),null);assert.match(h.node('roundHelp').textContent,/Slow intersection/);assert.equal(h.run('game.safety.trackGapMs'),2000);});
+
+test('M1 leave and host revocation survive an online reconnect',()=>{for(const revoke of [false,true]){const h=host();h.node('addSim').click();h.run(`const d=game.drivers[0];game.setControl(d,'phone');const p={id:1,approved:true,name:'P',car:d.id};players.set(1,p);seat(p);${revoke?'releasePad(d,true)':"onRelay({type:'input',player:1,release:true})"};onRelay({type:'online',player:1});`);assert.equal(h.run('p.driver'),null);h.run("onRelay({type:'input',player:1,car:d.id,throttle:0})");assert.equal(h.run('p.driver === d'),true);}});

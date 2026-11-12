@@ -238,3 +238,5 @@ public issue. Include the commit, the exact request and the observed result.
   keyboard focus. Slow Story/Precision intersection rounds are blocked under the
   unchanged two-second watchdog; algorithm-only tests label their longer simulator
   allowance explicitly (owner-approved compatibility policy).
+- M1: relay reconnection cannot auto-seat a player who left or was locally
+  revoked; a later explicit car selection is required.
