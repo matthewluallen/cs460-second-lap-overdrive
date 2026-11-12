@@ -51,3 +51,19 @@ position telemetry, track mapping or F&F Power Zone compatibility.
 The next hardware step is a stationary reconnect and inspection of the new startup
 trace, followed by a supervised scan only if initialization succeeds. Do not extend
 the two-second telemetry watchdog or 45-second scan budget to conceal failures.
+
+## Live follow-up with startup recording
+
+The deployed profile completed all version/ping stages on both the operator's MXT
+(firmware 9511) and replacement Groundshock (11866). This verifies replies, not
+semantic acceptance of every setting. Fixtures preserve the two hardware traces:
+`mxt-app-init-link-loss.json` and `groundshock-app-init-timeout.json`.
+
+MXT lost Bluetooth about four seconds after scan start; the operator reported the
+car turned off and suspected battery depletion. Groundshock returned firmware,
+pings, battery and a lane-update message, but no position/transition messages during
+the scan. The first-track watchdog stopped it after five seconds. Its displayed
+battery was approximately 4.14 V. The UI later logged another Bluetooth disconnect
+at 17:36:33, after the recorded scan and STOP. Its physical motion during the scan
+has not yet been confirmed by the operator. No map was completed. Do not claim this
+profile fixes localization merely because the initialization replies succeeded.
