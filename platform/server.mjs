@@ -13,7 +13,7 @@ const slipstreamDirectory=fileURLToPath(new URL('../slipstream/',import.meta.url
 const threeDirectory=dirname(require.resolve('three'));
 const qrModule=require.resolve('qrcode-generator').replace(/qrcode\.js$/,'qrcode.mjs');
 // Browser assets of the Slipstream controller. Tests and tools are never served.
-const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|render|render3d|net|game|car|ble|sim|battle|track|protocol|trace|session)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
+const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|render|render3d|net|game|car|ble|initialization|sim|battle|track|protocol|trace|session)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
 export const MAX_BODY_BYTES=4096;
 
 // Sent on every response. Pages use one inline <style> block and same-origin

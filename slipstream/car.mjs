@@ -2,12 +2,14 @@
 // The transport is either a Bluetooth link (ble.mjs) or a SimCar (sim.mjs); both
 // expose write(bytes), onNotify(fn) and close().
 import {encode, decode, rgb, EFFECT, TURN, MAX_SPEED} from './protocol.mjs';
+import {initializationPhases} from './initialization.mjs';
 import {Localizer, LANE_LIMIT} from './track.mjs';
 
 export const LANE_STEP = 22.5;
 
 export class Car {
   constructor(transport, {name = 'Car', model = 0, color = [0, 1, 0], pieces, simulated = false, clock = () => performance.now(), writeTimeoutMs = 1000} = {}) {
+    this.initializing = !!transport.initializationProfile; this.initializationStatus = this.initializing ? 'Connecting' : '';
     this.transport = transport; this.name = name; this.model = model; this.color = color;
     this.pieces = pieces; this.simulated = simulated; this.clock = clock;
     this.writeTimeoutMs = writeTimeoutMs; this.closing = false; this.faulted = false; this.safetyReason = null;
@@ -22,10 +24,41 @@ export class Car {
   }
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   async start() {
+    if (this.transport.initializationProfile) {
+      try {
+        for (const phase of initializationPhases(this.transport.initializationProfile)) {
+          if (!this.connected || this.closing || this.faulted) throw new Error('Connection closed during initialization');
+          this.initializationStatus = phase.name;
+          await this.#initializationPhase(phase);
+        }
+        this.initializationStatus = 'Connected; track telemetry not yet verified';
+        this.initializing = false; this.stop();
+        this.send('battery', encode.battery()); this.setLights(...this.color);
+      } catch (error) {
+        this.initializationStatus = 'Initialization failed: ' + error.message;
+        this.initializing = false;
+        if (!this.faulted && !this.closing) await this.#failSafe(error);
+      }
+      return;
+    }
     this.send('sdk', encode.sdkMode(true, 1));
     this.send('version', encode.version());
     this.send('battery', encode.battery());
     this.setLights(...this.color);
+  }
+  async #initializationPhase(phase) {
+    // Install the listener before queueing the request; some transports reply immediately.
+    await new Promise((resolve, reject) => {
+      let timer;
+      const finish = error => { clearTimeout(timer); off(); error ? reject(error) : resolve(); };
+      const off = this.on(message => {
+        if (message.type === phase.reply) finish();
+        else if (message.type === 'closed') finish(new Error(message.reason));
+      });
+      timer = setTimeout(() => finish(new Error(phase.name + ' response timed out')), this.transport.initializationTimeoutMs ?? 3000);
+      for (let i=0;i<phase.packets.length;i++) this.send('init-'+i, phase.packets[i]);
+      if (phase.reply === 'ping') this.send('init-ping', encode.ping());
+    });
   }
   // Latest command per key wins, so a slow radio never builds a backlog.
   send(key, bytes) {
@@ -119,7 +152,7 @@ export class Car {
   }
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
   setSpeed(mmPerSec, accel = 1000) {
-    const speed = this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
+    const speed = this.initializing || this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
     if (speed > 0 && this.speed === 0) { this.motionSince = this.clock(); this.stopRequestedAt = null; }
     if (speed === 0 && this.speed > 0) this.stopRequestedAt = this.clock();
     this.speed = speed;
@@ -129,7 +162,7 @@ export class Car {
   }
   // Lateral target, mm, positive to the left of travel.
   steerTo(lateral, speed = 350) {
-    if (this.safetyReason || this.closing || this.faulted) return;
+    if (this.initializing || this.safetyReason || this.closing || this.faulted) return;
     const target = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, lateral));
     if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return;
     this.forceLane = false; this.targetLateral = target;
@@ -139,7 +172,7 @@ export class Car {
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;
     this.steerTo(lanes * LANE_STEP);
   }
-  uturn() { if (this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
+  uturn() { if (this.initializing || this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
   stop() {
     // A pending lane request may be discarded below, or the car may be moved
     // during recovery. The next steering target must reach the vehicle.

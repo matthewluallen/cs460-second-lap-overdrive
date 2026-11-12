@@ -17,7 +17,7 @@ export class Game {
     this.phase = 'garage'; this.halted = false; this.pitReason = null; this.topSpeed = 700; this.scanSpeed = 450; this.nextId = 1;
   }
   modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
-  addCar(transport, {name, model = 8, simulated = false, control = 'none'} = {}) {
+  addCar(transport, {name, model = 8, simulated = false, control = 'none', beforeStart} = {}) {
     if (this.drivers.length >= MAX_CARS) throw new Error('A session supports at most four cars');
     if (typeof transport.id === 'string' && this.drivers.some(d => d.car.connected && d.car.transport.id === transport.id)) throw new Error('This car is already in the garage');
     const color = TEAM_COLORS.find(color => !this.drivers.some(d => d.car.color === color));
@@ -27,7 +27,8 @@ export class Game {
     this.drivers.push(driver);
     if (this.track) car.useTrack(this.track);
     if (this.battle) this.battle.add(car);
-    car.start();
+    beforeStart?.(driver);
+    car.initialization = car.start();
     return driver;
   }
   async removeCar(driver) {
@@ -104,6 +105,7 @@ export class Game {
   // --- track -----------------------------------------------------------------
   startScan(driver = this.drivers.find(d => d.car.connected)) {
     if (!driver) throw new Error('Connect a car first');
+    if (driver.car.initializing || !driver.car.connected) throw new Error('Wait for car initialization to complete');
     if (driver.car.safetyReason === 'Off track') throw new Error('Return the car to the track and recover it before scanning');
     if(this.pitReason) throw new Error('Pit stop: complete shared recovery before scanning');
     this.stopAll(); this.halted=false; if(driver.car.safetyReason==='Host stopped')driver.car.recover(); this.stopBattle();

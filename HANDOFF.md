@@ -180,3 +180,12 @@ re-exported initialization, transition and receive functions from the F&F librar
 It confirms the supported classic layout and an application startup sequence unlike
 our SDK path, but does not establish the missing-position root cause. No additional
 live commands were sent. Startup-inclusive recording is the next evidence gap.
+
+## F&F initialization implementation
+
+The Fast & Furious modular-kit connection now uses an app-derived phased startup,
+with exact default road-network bytes recovered from native data and ping/version
+barriers. Startup recording attaches before the first command. Unknown models no
+longer default to Groundshock. See [initialization evidence and deliberate safety
+differences](slipstream/review/FF-INITIALIZATION.md). 484 Node tests pass; real-car
+startup and scanning still require validation with the new build.

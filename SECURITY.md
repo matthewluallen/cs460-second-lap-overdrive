@@ -278,3 +278,9 @@ Regression: `public live session exposes only Slipstream pages and authenticated
   as validated transition telemetry. A recorded-hardware replay failed before the
   change and now triggers the first-track watchdog. This does not validate the
   short-frame format, localization initialization or the F&F special tiles.
+
+- F&F initialization: motion is blocked during staged startup; missing ping/version
+  responses fault and close the connection. STOP latches survive successful startup.
+  The app-derived profile disables SDK override and autonomous jump boost and sets
+  delocalized speed to zero. Firmware acceptance and physical effects are unverified;
+  host watchdogs, special-tile quarantine and supervision remain required.

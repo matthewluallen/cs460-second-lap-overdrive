@@ -40,6 +40,7 @@ const MODELS = Object.entries(vehicles.models).filter(([, m]) => !['Future', 'Un
 
 function addCard(driver) {
   const model = el('select', {title: 'Car model'}), control = el('select', {title: 'Who drives'});
+  if (!driver.car.model) model.append(new Option('Unidentified car — choose model', '0'));
   for (const [id, m] of MODELS) model.append(new Option(m.name + (m.truck ? ' (truck)' : ''), id));
   for (const [id, label] of CONTROLS) control.append(new Option(label, id));
   model.value = String(driver.car.model); control.value = driver.control;
@@ -126,12 +127,18 @@ $('connect').onclick = async event => {
     if (game.drivers.some(d => d.car.connected && d.car.transport.id === link.id)) throw new Error('This car is already in the pit crew. Use its existing controls.');
     log('Connecting to ' + (link.name || 'car') + '…');
     try { await link.open(); } catch (error) { link.close(); throw error; }
-    const model = link.model && vehicles.models[String(link.model)] ? link.model : 8;
+    const model = link.model && vehicles.models[String(link.model)] ? link.model : 0;
+    link.initializationProfile = $('kit').value === 'sdk' ? 'sdk' : 'fast-furious';
     if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
-    const driver = game.addCar(link, {model, name: vehicles.models[String(model)].name, control: 'none'});
+    const driver = game.addCar(link, {model, name: model ? vehicles.models[String(model)].name : 'Unidentified car', control: 'none', beforeStart: d => {
+      if (!recorder.active) recorder.start(game.drivers.filter(x=>!x.car.simulated), 'Hardware connection and initialization');
+      recorder.add(d); $('record').textContent='Stop recording'; $('saveTrace').disabled=true; $('traceNote').textContent='Recording from initialization…';
+    }});
     link.onClose(() => driver.car.connectionLost());
     addCard(driver);
-    log('Connected ' + driver.car.name + (link.model ? '' : ' (model not reported: choose it in the list)'));
+    log('Initializing ' + driver.car.name + ' (' + link.initializationProfile + ')…');
+    await driver.car.initialization;
+    log(driver.car.initializationStatus + (model ? '' : '. Model not reported; no Groundshock identity assumed.'));
   } catch (error) { if (error.name !== 'NotFoundError') log('Connect failed: ' + error.message); }
 };
 
@@ -517,7 +524,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';
-    ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? driver.gamepadWarning || 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
+    ui.left.textContent = driver.car.initializing ? 'Initializing: ' + driver.car.initializationStatus : !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? driver.gamepadWarning || 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
     const objective = session.view().rows.find(row => row.id === driver.id)?.task;
     ui.task.hidden = !objective; ui.task.textContent = objective?.cue ?? '';
     ui.recover.hidden = !s.connected || !s.safetyReason || s.safetyReason === 'Host stopped';
