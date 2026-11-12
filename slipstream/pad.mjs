@@ -7,7 +7,7 @@ const params = new URLSearchParams(location.hash.slice(1));
 const room = params.get('r') || '', joinKey = params.get('s') || params.get('j') || '', seated = params.has('s');
 const KEY = 'slipstream.pad.' + room + '.' + joinKey.slice(0, 8);
 const state = {throttle: 0, steer: 0, attack: false, support: false, special: false};
-let throttlePointer = null;
+let throttlePointer = null, releasePending = false, releaseCar = null;
 let online = false, driveReady = false, previousView = null, previousRoundStatus = null, tiltNeutral = null, tiltSample = null, tiltAngle = null;
 let haptics = false, lastBuzz = -Infinity;
 try { haptics = localStorage.getItem('slipstream.haptics') === 'on'; } catch {}
@@ -63,7 +63,8 @@ function onMessage(m) {
   if (m.type !== 'state') return;
   const mine = m.me, lobby = m.lobby ?? {};
   hasCar = !!mine;
-  const ready = online && allowed && hasCar && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
+  if (releasePending && (!mine || mine.id !== releaseCar)) { releasePending = false; releaseCar = null; }
+  const ready = online && allowed && !releasePending && hasCar && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
   const changedCar = !!mine && mine.id !== previousView?.id;
   if (!ready || changedCar) resetInputs({keepSelection: !mine});
   if (changedCar) { setSteer(0); tiltNeutral = null; feedback('Car changed. Raise the throttle when ready.', 'ready'); }
@@ -101,7 +102,7 @@ function onMessage(m) {
     document.documentElement.style.setProperty('--car', `rgb(${r},${g},${b})`);
     $('car').textContent = (mine.id ? mine.id + ' · ' : '') + mine.name + (mine.crew ? ' · ' + mine.crew + ' crew' : '');
     $('energy').style.width = Math.round(mine.energy * 100) + '%'; $('energy').className = mine.energy < 0.33 ? 'low' : mine.energy < 0.66 ? 'mid' : '';
-    $('status').textContent = round?.status === 'paused' ? 'Shared pit stop. All cars stopped; wait for the host.' : mine.connected === false ? 'Car disconnected. Ask the host to reconnect.' : mine.safetyReason === 'Host stopped' ? 'Cars stopped. Wait for GO or host Free drive.' : mine.safetyReason ? 'Safety stop: ' + mine.safetyReason : ({battle: 'Battle', ready: round?.status === 'running' ? 'Round live' : 'Free drive', scanning: 'Host is mapping the track', garage: 'Waiting for the track map', stopped: 'Host pressed STOP'})[lobby.phase] + ' · ' + mine.speed + ' mm/s';
+    $('status').textContent = releasePending ? 'Leaving car. Waiting for the host to confirm.' : round?.status === 'paused' ? 'Shared pit stop. All cars stopped; wait for the host.' : mine.connected === false ? 'Car disconnected. Ask the host to reconnect.' : mine.safetyReason === 'Host stopped' ? 'Cars stopped. Wait for GO or host Free drive.' : mine.safetyReason ? 'Safety stop: ' + mine.safetyReason : ({battle: 'Battle', ready: round?.status === 'running' ? 'Round live' : 'Free drive', scanning: 'Host is mapping the track', garage: 'Waiting for the track map', stopped: 'Host pressed STOP'})[lobby.phase] + ' · ' + mine.speed + ' mm/s';
     $('hits').textContent = Number.isFinite(mine.score) ? 'Score ' + mine.score + ' · Laps ' + mine.laps : 'Hits ' + mine.kills + ' · Lost ' + mine.deaths + ' · Laps ' + mine.laps;
     if (mine.assists) $('hits').textContent += ' · Assists ' + mine.assists;
     if (mine.targets?.length) $('hits').textContent += ' · Target ' + mine.targets.join(', ');
@@ -126,7 +127,7 @@ function onMessage(m) {
 
 function send() {
   if (!me || !link || !allowed || !online) return;
-  const body = {...state, throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once};
+  const body = {...state, throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once, ...(releasePending ? {release:true} : {})};
   const text = JSON.stringify(body), now = Date.now();
   // Always refresh a few times a second so the host's dead-man timer stays happy.
   if (text === lastSent && now - lastSentAt < 250) return;
@@ -181,7 +182,11 @@ for (const bay of ['attack', 'support', 'special']) {
   button.addEventListener('dblclick', () => { once.cycle = bay; });
 }
 $('uturn').onclick = () => { if (driveReady) once.uturn = true; };
-$('leave').onclick = () => { setThrottle(0); once.release = true; };
+$('leave').onclick = () => {
+  if (!hasCar) return;
+  releasePending = true; releaseCar = previousView?.id; lockControls(); once.release = true; send();
+  feedback('Leaving car. Controls locked until the host confirms.', 'ready');
+};
 
 // --- keyboard, for players on a laptop --------------------------------------------
 const down = new Set();

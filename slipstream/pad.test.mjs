@@ -6,7 +6,7 @@ import {readFileSync} from 'node:fs';
 // Execute the actual phone handlers against a small browser surface. No radio,
 // permissions or device sensor is implied by these logic-level regressions.
 function pad({vibration = true} = {}) {
-  const nodes = new Map(), callbacks = {}, buzzes = [];
+  const nodes = new Map(), callbacks = {}, buzzes = [], sent = [];
   function node(id) {
     if (!nodes.has(id)) nodes.set(id, {textContent: '', hidden: false, disabled: false, value: '', attrs: {}, events: {},
       style: {setProperty() {}}, classList: {add() {}, remove() {}, toggle() {}}, replaceChildren() {},
@@ -22,13 +22,13 @@ function pad({vibration = true} = {}) {
     window: {}, screen: {orientation: {angle: 0}},
     setInterval() {}, setTimeout() {}, addEventListener() {},
     api: async () => ({player: 1, playerKey: 'b'.repeat(48)}),
-    channel(options) { Object.assign(callbacks, options); return {send: async () => {}}; }
+    channel(options) { Object.assign(callbacks, options); return {send: async body => { sent.push(body); }}; }
   });
   vm.runInContext(readFileSync(new URL('./pad.mjs', import.meta.url), 'utf8').replace("import {api, channel} from './net.mjs';", ''), context);
   const run = code => vm.runInContext(code, context);
   const state = {type: 'state', me: {name: 'Car', color: [0, 1, 0], energy: 1, speed: 0, kills: 0, deaths: 0, laps: 0, bays: {}, disabled: false}, lobby: {phase: 'ready', cars: []}};
   const ready = async () => { await node('go').onclick(); callbacks.onStatus('online'); callbacks.onMessage({type: 'approved'}); callbacks.onMessage(state); };
-  return {run, node, callbacks, buzzes, state, ready};
+  return {run, node, callbacks, buzzes, sent, state, ready};
 }
 
 test('phone disconnect and host stop discard throttle and held controls before recovery', async () => {
@@ -188,4 +188,22 @@ test('throttle ignores unrelated pointers and ended gestures', async () => {
   slider.events.pointerdown({pointerId:7,button:0,clientY:100});
   slider.events.pointermove({pointerId:8,clientY:12});assert.equal(p.run('state.throttle'),.5);
   slider.events.pointerup({pointerId:7});slider.events.pointermove({pointerId:7,clientY:12});assert.equal(p.run('state.throttle'),.5);
+});
+
+
+test('leaving a car locks held inputs until host acknowledgement and retries release', async () => {
+  const p=pad();await p.ready();p.callbacks.onMessage({...p.state,me:{...p.state.me,id:1}});
+  p.run('setThrottle(1); state.attack=true; down.add("KeyW")');p.node('leave').onclick();
+  assert.equal(p.run('releasePending'),true);assert.equal(p.run('driveReady'),false);
+  assert.equal(p.run('state.attack'),false);assert.equal(p.run('down.size'),0);
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:1}});p.run('setThrottle(1)');
+  assert.equal(p.run('state.throttle'),0);assert.equal(p.run('driveReady'),false);
+  assert.equal(p.sent.at(-1).release,true);assert.equal(p.sent.at(-1).throttle,0);assert.equal(p.sent.at(-1).attack,false);
+  p.run('once={};lastSentAt=0;send();');assert.equal(p.sent.at(-1).release,true);
+  assert.equal(p.run('releasePending'),true,'release survives outgoing one-shot cleanup');
+  p.callbacks.onStatus('offline');p.callbacks.onStatus('online');
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:1}});assert.equal(p.run('driveReady'),false);
+  p.callbacks.onMessage({...p.state,me:null});assert.equal(p.run('releasePending'),false);
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:2}});assert.equal(p.run('state.throttle'),0);
+  p.run('setThrottle(.5)');assert.equal(p.run('state.throttle'),.5);
 });

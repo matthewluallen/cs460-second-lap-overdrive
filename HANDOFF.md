@@ -43,7 +43,7 @@ python3 -m lapreturn.cwe_lab     # expect three "flaw_reproduced": false, exit 0
 npm run dependency-lab           # expect "regressionCheckPassed": true
 ```
 
-Review-fix verification on 12 November 2026: **416 Node tests pass on Node
+Review-fix verification on 12 November 2026: **419 Node tests pass on Node
 22.23.5**, **38 Python tests pass on Python 3.14.7**, audit reports zero
 vulnerabilities, and the dependency/CWE probes pass. Host/phone browser walkthroughs
 covered approval, simulated driving, story completion, and portrait/landscape
@@ -136,3 +136,8 @@ reassignments invalidate old gestures and held inputs; a new car starts with
 neutral steering. Unassigned/revoked phones disable stale weapon controls.
 Regression tests exercise the actual phone handlers with synthetic browser events;
 physical touchscreen and sensor behavior still need device validation.
+
+Phone release now remains locked and retries until acknowledged. Gamepad slots
+retain disconnected gaps, disconnected controls clear held weapons, and stop/
+reconnect/reassignment requires neutral controls before rearming. Host/phone
+regressions cover these transitions without claiming physical-device validation.

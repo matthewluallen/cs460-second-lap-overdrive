@@ -280,3 +280,13 @@ this conservative software rule still needs physical timing validation.
 See [independent verification and its limits](review/INDEPENDENT-REVIEW.md),
 [reverse-engineering tools](review/REA-REVIEW.md), and the coordinated-game design
 ideas in [DESIGN.md](DESIGN.md). Tests do not establish real host-loss stopping.
+
+### Controller handoffs
+
+Leaving a car locks phone controls until the host confirms the release. The phone
+retries that request after reconnecting; a stale car snapshot cannot restore
+throttle. Gamepads keep their browser slot when another controller disconnects.
+After a stop, reconnect or control reassignment, release the throttle trigger and
+weapon buttons and center the steering stick before driving again. The host shows
+“Release gamepad controls to arm” while it waits. These are software safeguards;
+physical stopping behavior still requires hardware validation.

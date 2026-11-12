@@ -311,18 +311,26 @@ addEventListener('keyup', event => held.delete(event.code));
 addEventListener('blur', () => { held.clear(); for (const d of game.drivers) if (SCHEMES[d.control] || d.control === 'browser') { d.level = 0; d.input.throttle = 0; d.input.attack = d.input.support = d.input.special = false; d.car.stop(); } });
 
 function readControls(dt) {
-  const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+  const pads = navigator.getGamepads ? [...navigator.getGamepads()] : [];
   let padIndex = 0;
   for (const d of game.drivers) {
     const s = SCHEMES[d.control], input = d.input;
-    if (game.halted || d.car.safetyReason) { d.level = 0; input.throttle = 0; input.attack = input.support = input.special = false; if (d.pad) d.pad.throttle = 0; continue; }
+    const slot = d.control === 'gamepad' ? padIndex++ : null;
+    if (slot !== d.gamepadSlot) { d.gamepadSlot = slot; d.gamepadArmed = false; }
+    if (game.halted || d.car.safetyReason) { d.gamepadArmed = false; d.level = 0; input.throttle = 0; input.attack = input.support = input.special = false; if (d.pad) d.pad.throttle = 0; continue; }
     if (s) {
       d.level = Math.max(0, Math.min(1, (d.level ?? 0) + (held.has(s.up) ? 0.9 * dt : 0) - (held.has(s.down) ? 1.6 * dt : 0)));
       input.throttle = d.level; input.attack = held.has(s.attack); input.support = held.has(s.support); input.special = held.has(s.special);
     } else if (d.control === 'browser') { input.throttle = d.level ?? 0;
     } else if (d.control === 'gamepad') {
-      const pad = pads[padIndex++];
-      if (!pad) { input.throttle = 0; continue; }
+      const pad = pads[slot];
+      if (!pad || pad.connected === false) { d.gamepadArmed = false; input.throttle = 0; input.attack = input.support = input.special = false; continue; }
+      // A held trigger must not restart a car after stop, reassignment or reconnect.
+      if (!d.gamepadArmed) {
+        const neutral = (pad.buttons[7]?.value ?? 0) <= .02 && Math.abs(pad.axes[0] ?? 0) <= .12 && ![0,1,3].some(i => pad.buttons[i]?.pressed);
+        input.throttle = 0; input.attack = input.support = input.special = false;
+        d.gamepadArmed = neutral; continue;
+      }
       input.throttle = pad.buttons[7]?.value ?? 0;
       input.lane = -(Math.abs(pad.axes[0]) > 0.12 ? pad.axes[0] : 0) * 67.5;
       input.attack = !!pad.buttons[0]?.pressed; input.support = !!pad.buttons[1]?.pressed; input.special = !!pad.buttons[3]?.pressed;
@@ -481,7 +489,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';
-    ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
+    ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
     const objective = session.view().rows.find(row => row.id === driver.id)?.task;
     ui.task.hidden = !objective; ui.task.textContent = objective?.cue ?? '';
     ui.recover.hidden = s.safetyReason !== 'Off track';

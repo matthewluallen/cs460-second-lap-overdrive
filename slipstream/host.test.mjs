@@ -230,3 +230,32 @@ test('four phone task dashboards fit the relay message limit', async () => {
   assert.ok(Object.values(payload.players).every(p => p.task.includes('Scan')));
   assert.ok(Buffer.byteLength(JSON.stringify({t:'state', ...payload})) < 3500);
 });
+
+
+test('gamepad disconnect preserves the second controller slot and clears held weapons', () => {
+  const h=host();h.node('addSim').click();h.node('addSim').click();
+  h.run(`const a=game.drivers[0], b=game.drivers[1]; game.setControl(a,'gamepad');game.setControl(b,'gamepad');
+    const makePad=()=>({connected:true,axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))});
+    const pa=makePad(), pb=makePad();let pads=[pa,pb];navigator.getGamepads=()=>pads;
+    readControls(.04);pa.buttons[7].value=.8;pa.buttons[0].pressed=true;pb.buttons[7].value=.4;readControls(.04);`);
+  assert.equal(h.run('a.input.throttle'),.8);assert.equal(h.run('b.input.throttle'),.4);
+  h.run('pads=[null,pb];readControls(.04)');
+  assert.equal(h.run('a.input.throttle'),0);assert.equal(h.run('a.input.attack'),false);
+  assert.equal(h.run('b.input.throttle'),.4);
+  h.run('pads=[pa,pb];readControls(.04)');assert.equal(h.run('a.input.throttle'),0);
+  h.run('pa.buttons[7].value=0;pa.buttons[0].pressed=false;readControls(.04);pa.buttons[7].value=.6;readControls(.04)');
+  assert.equal(h.run('a.input.throttle'),.6);
+});
+
+test('gamepad stops require neutral controls and do not shift other car slots', () => {
+  const h=host();h.node('addSim').click();h.node('addSim').click();
+  h.run(`const a=game.drivers[0],b=game.drivers[1];game.setControl(a,'gamepad');game.setControl(b,'gamepad');
+    const pa={axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))};
+    const pb={axes:[0],buttons:Array.from({length:8},()=>({value:0,pressed:false}))};
+    navigator.getGamepads=()=>[pa,pb];readControls(.04);pa.buttons[7].value=.7;pb.buttons[7].value=.3;readControls(.04);
+    a.car.safetyReason='Off track';readControls(.04);`);
+  assert.equal(h.run('b.input.throttle'),.3);assert.equal(h.run('a.input.throttle'),0);
+  h.run('a.car.safetyReason=null;readControls(.04)');assert.equal(h.run('a.input.throttle'),0);
+  h.run('pa.buttons[7].value=0;readControls(.04);pa.buttons[7].value=.7;readControls(.04)');assert.equal(h.run('a.input.throttle'),.7);
+  h.run("game.setControl(a,'none');game.setControl(a,'gamepad');readControls(.04)");assert.equal(h.run('a.input.throttle'),0);
+});
