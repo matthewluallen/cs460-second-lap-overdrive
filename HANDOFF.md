@@ -141,3 +141,16 @@ Phone release now remains locked and retries until acknowledged. Gamepad slots
 retain disconnected gaps, disconnected controls clear held weapons, and stop/
 reconnect/reassignment requires neutral controls before rearming. Host/phone
 regressions cover these transitions without claiming physical-device validation.
+
+## External review remediation (12 November 2026)
+
+Read [PR4 review response](slipstream/review/PR4-REVIEW-RESPONSE.md) for reproduced
+findings, separate fixing commits, baseline/final checks and remaining risks.
+Final verification: **478 Node tests, 38 Python tests**, zero npm audit findings;
+CWE and dependency regression probes pass. Includes 42 injected-fault matrix cases.
+H1/H2/H3/M1/M2/M3/M4/M12 are repaired in software; H4 special tiles 53/54/57 are
+quarantined from scored rounds, with physical behavior still unverified.
+The 2-second telemetry default remains. Story/Precision intersection rounds are
+blocked pending validation; longer Story algorithm-test timing is simulator-only.
+No hardware validation or complete-system formal proof is claimed. M13 and
+car-enforced host-loss stopping remain open. See the response before deployment.

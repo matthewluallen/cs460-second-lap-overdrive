@@ -258,3 +258,7 @@ public issue. Include the commit, the exact request and the observed result.
   runtime code and block scored rounds. Existing derived data were not regenerated;
   future extraction retains raw kind codes and does not default unknown kinds to
   straight. Provisional displayed geometry is not physical compatibility evidence.
+- M2/M4 follow-up: unmapped gamepads are blocked from assumed standard controls;
+  cancelling a scan now latches host STOP. Both had failing regressions before
+  repair. A 42-case fault matrix checks telemetry silence, relay outage and delayed
+  off-track reports across one to four cars; it does not establish physical stops.

@@ -292,3 +292,24 @@ After a stop, reconnect or control reassignment, release the throttle trigger an
 weapon buttons and center the steering stick before driving again. The host shows
 “Release gamepad controls to arm” while it waits. These are software safeguards;
 physical stopping behavior still requires hardware validation.
+
+### Safety changes from the external review
+
+Phones must send fresh neutral input after any stop, control handoff, relay status
+change or dead-man expiry. For a gamepad, press a button to claim its controller,
+then release buttons/triggers and center the stick; unsupported mappings stay
+stopped. Selecting Computer does not start a car: use Start round or Free drive
+and wait for the three-second countdown.
+
+Choose the scan car and confirm the track is clear with other cars removed before
+scanning. Scans and shared-pit resume use the same three-second countdown. Scan
+completion or cancellation latches STOP. Moving cars request a shared pit after
+5 seconds without a first position/transition or a 2-second gap thereafter.
+Scans are bounded to 45 seconds and three anchor returns. Continued track telemetry
+more than a second after a stop triggers another STOP and a visible pit alarm.
+These are software defaults requiring physical validation, not proven stop times.
+
+Slow Story/Precision missions on intersection maps are blocked pending validation
+under the unchanged 2-second watchdog. IDs 53, 54 and 57 remain special/unverified
+and cannot enter scored rounds. See [the review response](review/PR4-REVIEW-RESPONSE.md)
+for evidence and outstanding hardware and security work.
