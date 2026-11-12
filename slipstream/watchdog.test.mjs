@@ -16,3 +16,14 @@ test('H2 scan lap budget stops repeated anchor passes without closure',()=>{cons
 
 test('M3 moving connection fault opens a named shared pit',async()=>{const r=rig();r.d.input.throttle=1;r.at(0);await r.d.car.pumpPromise;r.d.car.transport.write=async()=>{throw new Error('radio lost');};r.d.car.refreshBattery();await r.d.car.pumpPromise;assert.equal(r.game.halted,true);assert.match(r.game.pitReason,/connection|link/i);assert.equal(r.game.pitReady,false);});
 test('M3 unexpected transport link loss on a moving car opens the pit',()=>{const r=rig();r.d.input.throttle=1;r.at(0);r.d.car.connectionLost();assert.equal(r.game.halted,true);assert.match(r.game.pitReason,/Groundshock.*Connection lost/);assert.equal(r.d.car.connected,false);});
+
+// Hardware replay: the recorded short 0x29 format carries no trusted piece ID or
+// wheel-distance fields. It must not stand in for validated track telemetry.
+test('MXT short transition capture cannot keep moving telemetry watchdog alive', async () => {
+ const {ReplayCar}=await import('./trace.mjs');
+ const trace=JSON.parse(readFileSync(new URL('./fixtures/mxt-short-transitions.json',import.meta.url)));
+ let now=0;const game=new Game({pieces:data('pieces'),vehicles:data('vehicles'),weapons:data('weapons'),clock:()=>now});
+ const radio=new ReplayCar(trace,0),d=game.addCar(radio,{control:'browser'});d.input.throttle=.5;
+ for(now=0;now<=5500;now+=20){radio.advance(now);game.tick(.02,now);await 0;}
+ assert.equal(game.halted,true);assert.match(game.pitReason,/Telemetry timeout/);assert.equal(d.car.speed,0);
+});

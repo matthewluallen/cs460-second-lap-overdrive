@@ -107,7 +107,10 @@ function decodeOne(m) {
         laneChangeId: has(12) ? v.getUint8(12) : 0, desiredSpeed: has(16) ? v.getUint16(15, true) : null};
     }
     case ID.TRANSITION: {
-      if (!has(7) || !Number.isFinite(v.getFloat32(4, true))) break;
+      // Only the full classic layout is understood. Real MXT scans emitted
+      // eight-byte 0x29 frames; interpreting these as track telemetry masked
+      // absent position data and kept the safety watchdog alive.
+      if (!has(17) || !Number.isFinite(v.getFloat32(4, true))) break;
       return {id, type: 'transition', pieceIndex: v.getInt8(2), previousPieceIndex: v.getInt8(3),
         offset: v.getFloat32(4, true),
         uphill: has(15) ? v.getUint8(14) : 0, downhill: has(15) ? v.getUint8(15) : 0,

@@ -159,3 +159,18 @@ Public hardware trials now use `PORT=3000 npm run slipstream:live`, which exclud
 the teaching APIs and bench pages (M13 deployment isolation). The user explicitly
 authorized public Codespaces forwarding for QR controllers. Latest local Node run:
 479 tests passed. See `slipstream/DEPLOYMENT.md`; hardware limits remain unchanged.
+
+## First hardware scan — 12 November 2026
+
+The operator identified the connected car as International MXT and reported almost
+three laps in the 45-second scan, on a circuit containing start/finish and F&F
+Power Zone. The browser misidentified it as Groundshock via its fallback. A partial
+recording started about 20 seconds into the scan. It contains short 8-byte 0x29
+frames and battery reports, but no 0x27 position frames. The scan timed out; the
+UI reported zero speed after STOP. Physical stop is not established by UI alone.
+`slipstream/fixtures/mxt-short-transitions.json` preserves hardware bytes and labels
+the incorrect model metadata; simulated-car events are excluded. Replay reproduced
+a safety bug: short 0x29 frames refreshed the track watchdog despite lacking the
+supported classic transition layout. The decoder now requires the full layout.
+480 Node tests pass. This repairs the watchdog gap, not MXT localization or Power
+Zone compatibility. Do not increase scan time or infer piece IDs from these bytes.

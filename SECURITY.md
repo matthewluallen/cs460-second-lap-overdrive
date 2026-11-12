@@ -273,3 +273,8 @@ the older mixed teaching mode must remain private. Public forwarding is an expli
 operator action. Room creation still requires the host code; joining still requires
 join credentials and host approval. Never place the host code in a public URL.
 Regression: `public live session exposes only Slipstream pages and authenticated relay`.
+
+- First MXT hardware scan follow-up: unsupported short 0x29 frames no longer count
+  as validated transition telemetry. A recorded-hardware replay failed before the
+  change and now triggers the first-track watchdog. This does not validate the
+  short-frame format, localization initialization or the F&F special tiles.
