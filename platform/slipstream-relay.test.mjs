@@ -250,3 +250,43 @@ test('rate limits, player cap, waiting cap, room cap and body size are enforced'
   for (let i = app.locals.slipstreamRelay.rooms.size; i < LIMITS.rooms; i++) assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 201);
   assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 429);
 });
+
+
+test('Unicode keys are refused without crashing the WebSocket server', async t => {
+  const {call, room, socket} = await start(t);
+  const r = await room();
+  for (const key of ['é'.repeat(48), '😀'.repeat(24), '\u0000'.repeat(48)])
+    assert.equal(await socket({room: r.room, key}).closed, 4403);
+  assert.equal((await call(r.base + '/join', {method: 'POST', body: {joinKey: 'é'.repeat(24)}})).status, 403);
+  assert.equal((await socket({room: r.room, key: r.hostKey}).next()).type, 'players');
+});
+
+test('rooms allow four approved drivers and four seats while retaining a waiting list', async t => {
+  const {call, room, join} = await start(t);
+  const r = await room();
+  for (let car = 1; car <= 4; car++) {
+    assert.equal((await call(r.base + '/seats', {method: 'POST', key: r.hostKey, body: {car}})).status, 201);
+    await join(r, 'Driver ' + car);
+  }
+  assert.equal((await call(r.base + '/seats', {method: 'POST', key: r.hostKey, body: {car: 5}})).status, 429);
+  const next = await join(r, 'Waiting', r.joinKey, false);
+  assert.equal((await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: next.player}})).status, 409);
+  await call(r.base + '/kick', {method: 'POST', key: r.hostKey, body: {player: 1}});
+  assert.equal((await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: next.player}})).status, 204);
+});
+
+
+test('same-seat replacement is atomic at four approved drivers', async t => {
+  const {call, room, join, socket} = await start(t);
+  const r = await room();
+  const seat = (await call(r.base + '/seats', {method: 'POST', key: r.hostKey, body: {car: 1}})).json;
+  const old = await join(r, 'Old', seat.seatKey, false);
+  const replacement = await join(r, 'New', seat.seatKey, false);
+  await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: old.player}});
+  const oldSocket = socket({room: r.room, key: old.playerKey});
+  assert.equal((await oldSocket.next()).type, 'approved');
+  for (let i = 0; i < 3; i++) await join(r, 'Other ' + i);
+  assert.equal((await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: replacement.player}})).status, 204);
+  assert.equal((await oldSocket.next()).type, 'kicked');
+  assert.equal((await call(r.base + '/input', {method: 'POST', key: old.playerKey, body: {throttle: 1}})).status, 403);
+});

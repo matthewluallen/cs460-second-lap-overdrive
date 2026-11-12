@@ -5,7 +5,7 @@ const ROAD_HALF = 105;
 const css = ([r, g, b], a = 1) => `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`;
 
 export class Renderer {
-  constructor(canvas) { this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.effects = []; this.view = null; }
+  constructor(canvas) { this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.effects = []; this.view = null; this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false; }
   resize() {
     const ratio = Math.min(2, window.devicePixelRatio || 1), box = this.canvas.getBoundingClientRect();
     const w = Math.max(200, Math.round(box.width * ratio)), h = Math.max(200, Math.round(box.height * ratio));
@@ -58,7 +58,7 @@ export class Renderer {
       }
     }
   }
-  addEffect(effect) { this.effects.push({...effect, born: performance.now()}); if (this.effects.length > 160) this.effects.shift(); }
+  addEffect(effect) { if (this.reducedMotion) return; this.effects.push({...effect, born: performance.now()}); if (this.effects.length > 160) this.effects.shift(); }
   draw({track, partial, cars, mines, now, banner}) {
     this.resize();
     const c = this.ctx, {width, height} = this.canvas;
@@ -89,7 +89,7 @@ export class Renderer {
       c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(bx, by, bw, 7 * s);
       c.fillStyle = car.energy < 0.33 ? '#ff4d6d' : car.energy < 0.66 ? '#ffb84d' : '#5dff9b'; c.fillRect(bx, by, bw * Math.max(0, car.energy), 7 * s);
       c.font = `600 ${Math.max(10, 26 * s)}px system-ui, sans-serif`; c.textAlign = 'center'; c.fillStyle = '#e9edf2';
-      c.fillText(car.name, x, by - 8 * s);
+      c.fillText(car.id + ' · ' + car.name + (car.control === 'bot' ? ' · CPU' : ''), x, by - 8 * s - (car.id % 2) * 14 * this.ratio);
     }
     this.#effects(at, track, now);
     if (banner) this.#banner(banner, true);

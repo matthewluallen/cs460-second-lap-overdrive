@@ -18,7 +18,7 @@ import express from 'express';
 import {randomBytes, timingSafeEqual} from 'node:crypto';
 import {WebSocketServer} from 'ws';
 
-export const LIMITS = Object.freeze({rooms: 16, players: 8, pending: 8, seats: 16, name: 16, stateBytes: 3500,
+export const LIMITS = Object.freeze({rooms: 16, players: 8, drivers: 4, pending: 8, seats: 4, name: 16, stateBytes: 3500,
   inputPerSecond: 40, statePerSecond: 12, badCodesPerMinute: 10, idleMs: 30 * 60 * 1000, hostGraceMs: 90 * 1000,
   socketAuthMs: 3000, socketBytes: 4096});
 export const SOCKET_PATH = '/api/slipstream/ws';
@@ -26,8 +26,11 @@ export const SOCKET_PATH = '/api/slipstream/ws';
 const token = bytes => randomBytes(bytes).toString('hex');
 // Easy to read off a terminal and type: no 0/O or 1/I/L.
 export const newHostCode = () => Array.from(randomBytes(10), b => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[b % 31]).join('').replace(/(.{5})/, '$1-');
-const same = (a, b) => typeof a === 'string' && typeof b === 'string' && a.length === b.length &&
-  timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const same = (a, b) => {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const left = Buffer.from(a), right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
+};
 const bearer = req => { const h = req.get('authorization') || ''; return h.startsWith('Bearer ') ? h.slice(7) : ''; };
 const unit = v => typeof v === 'number' && Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : 0;
 const plain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -183,6 +186,13 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     if (!room) return;
     const player = room.players.get(Number(req.body?.player));
     if (!player) return fail(res, 404, 'No such player');
+    const replaced = [...room.players.values()].filter(p => p !== player && p.approved && player.car !== null && p.car === player.car);
+    const remaining = [...room.players.values()].filter(p => p.approved && !replaced.includes(p));
+    if (!player.approved && remaining.length >= LIMITS.drivers)
+      return fail(res, 409, 'Four drivers are already approved; remove a driver before admitting another');
+    // Replace an occupied named seat atomically: an old socket loses authority now,
+    // before its asynchronous close handshake finishes.
+    for (const old of replaced) { room.players.delete(old.id); old.stream?.send({type: 'kicked'}); old.stream?.close(); }
     player.approved = true;
     if (player.car !== null && room.seats.has(player.car)) room.seats.set(player.car, token(12));
     player.stream?.send({type: 'approved'});
@@ -258,6 +268,7 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
         if (isHost) setHost(room, stream); else setPlayerStream(room, player, stream);
         return;
       }
+      if (rooms.get(room.id) !== room || (!isHost && room.players.get(player.id) !== player)) return refuse(4403);
       room.touched = now();
       const result = isHost ? (m.t === 'state' ? state(room, m) : {status: 400}) : (m.t === 'input' ? input(room, player, m) : {status: 400});
       // Over-limit or malformed messages are dropped, not answered: a flood gets nothing back.

@@ -1,8 +1,10 @@
 # The original Android app: what Slipstream is built on
 
-Analysed 12 November 2026 to rebuild browser control of the cars. This is the one
-file that names the third-party products involved, because it has to say what was
-examined. Slipstream itself is independent of them.
+The original author recorded this analysis on 12 November 2026 while rebuilding
+browser control. The APK/OBB, disassembly, timings and hashes below were not
+independently reproduced in the subsequent code review. Treat them as reported
+findings until the original artifacts and commands are available for verification.
+Slipstream is independent of the named third-party products.
 
 ## What was examined
 
@@ -14,9 +16,14 @@ examined. Slipstream itself is independent of them.
 - **Tool:** Ghidra 12.2 headless on `lib/armeabi-v7a/libDriveEngine.so`
   (15.5 MB, 32-bit ARM, SHA-256 `88bbb08b…5887778`). Auto-analysis took 11 minutes.
 
-Nothing from the app is redistributed here: no code, art, audio or text. The JSON
-tables under `data/` are numeric measurements and gameplay parameters derived by
-`tools/extract_config.py`, which you can re-run against your own copy of the OBB.
+The JSON tables under `data/` include derived track measurements and copied
+vehicle names, weapon identifiers, and selected structured configuration such as
+targeters, cooldowns and script parameters. They are not numeric-only and the
+claim that no text was copied would be incorrect. `tools/extract_config.py` shows
+which fields are selected; it does not bundle executable app binaries, artwork or
+audio. Source permissions and distribution terms have not been established here;
+this description is not legal clearance. Re-running the extractor requires a
+separately obtained source OBB.
 
 To re-derive the tables yourself, unzip the main OBB and run
 `python3 -I tools/extract_config.py <unzipped>/assets/rams/overdrive/basestation/config data`.
@@ -161,7 +168,9 @@ Classes that matter for control:
 ## Not analysed
 
 - The iOS app, the DRIVE (first generation) app and the Fast & Furious edition app.
-- Car firmware. The OBB contains firmware images; none were opened.
+- Car firmware execution/decryption. A separate earlier report describes image
+  metadata and entropy checks; see [FIRMWARE-TWIN.md](FIRMWARE-TWIN.md) for the
+  evidence limitations. No runnable firmware was verified in this review.
 - The road-network upload format (`0x46`–`0x49`), which would let cars lane-keep and
   merge on their own as in the original game.
 - Playback sequences (`0x2f`–`0x31`), the app's scripted light and motion effects.

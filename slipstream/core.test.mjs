@@ -264,7 +264,7 @@ test('a full bot battle runs on every layout without losing cars, and stop halts
     const {game, world, run, add} = rig(name);
     const scout = add({model: 8}, {index: 2});
     game.startScan(scout); assert.ok(await run(90, () => game.phase === 'ready'));
-    for (const model of [9, 14, 15, 16, 18, 19, 20]) add({model});
+    for (const model of [9, 14, 15]) add({model});
     for (const d of game.drivers) game.setControl(d, 'bot');
     game.startBattle(); await run(60);
     const snap = game.snapshot();

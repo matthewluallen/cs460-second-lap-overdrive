@@ -1,121 +1,77 @@
-# Can we run the car firmware in QEMU as a digital twin?
+# Firmware emulation: evidence and limits
 
-Short answer: **not practically, and it is the wrong tool for a "digital twin" here.**
-Two things block it, and even if both were solved QEMU would give us the least
-useful part. This memo records why, from the teardown and FCC OSINT, and what to
-build instead. Dates and part numbers are cited in [ANALYSIS.md](ANALYSIS.md) and
-the teardown sources listed at the end.
+The repository has no verified runnable car-firmware image or validated peripheral
+model. The useful next step is recording physical-car traces and comparing them
+with the behavioural simulator. Firmware emulation remains a separate research
+project; its feasibility has not been established by this review.
 
-## What the hardware actually is
+This memo corrects the earlier claim that entropy analysis "confirmed" encryption.
+The original APK/OBB, firmware files, disassembly and measurement commands were
+not independently examined during the code review. The observations below are
+reported by the original author, not new verified findings.
 
-Both generations use the same split design, confirmed by iFixit, EE World and a
-community PCB trace:
+## What the earlier analysis reported
 
-| Part | What it is | Role |
-|---|---|---|
-| ST **STM32F051K8** | ARM Cortex-M0, 48 MHz, **64 KB** flash, motor-control timers | Runs the car's ~20,000 lines of firmware |
-| Nordic **nRF8001** | BLE **connectivity IC** (a slave, driven over SPI) | Radio only; runs no application code we could emulate |
-| Optical sensor + IR LED | Reads the track's printed codes ~500×/second | The car's only real input |
-| Hall-effect sensor | Counts drive-gear teeth | Wheel speed feedback |
-| DC motors | Drive and steer | The car's only real output |
+The hardware account described an STM32F051K8 microcontroller for motor control,
+an nRF8001 BLE connectivity IC, an optical track sensor, Hall-effect wheel
+feedback, and motors. Its cited sources were iFixit's *Anki Drive Teardown*, EE
+World's *Teardown: Inside the Anki Overdrive racecar set*, ST/Power Systems Design,
+and a community PCB trace. Exact board revisions and peripheral behavior still
+need direct verification before choosing an emulator model.
 
-The important shape: the firmware is a tight **sensor → control loop → motor**
-program. Almost all of its behaviour is reacting to the optical and Hall inputs and
-driving the motors. The "intelligence" (track map, strategy, weapons) was always in
-the phone app, not the car — iFixit and ST both say so.
+The earlier OBB inspection described `basestation/firmware` update files under the
+name "RushHour", including factory/Drive version identifiers `2031`, `2062`,
+`2120`, `2149`, and `7d7d`. It reported:
 
-## Blocker 1: we have no firmware binary
+- `.ota` files with magic `c0 ff ee 54`, a header, and approximately 28–36 KB size.
+- `.safe` files with the ASCII magic `DriveHW5`, a header, and approximately
+  46–58 KB size.
+- Body entropy of 7.99–8.00 bits per byte; attempted decompression unsuccessful;
+  no recognized readable strings, symbols or STM32 vector table in the inspected
+  payloads.
+- Conditional `.ota.h` arrays referring to `DEV_FEATURES_ALLOWED`.
 
-The firmware lives in the STM32's internal 64 KB flash. To emulate it we need that
-image, and there are only three ways to get one, all with problems:
+High entropy and failed attempts with unspecified decompression methods do not
+prove encryption or rule out compression, packing, or another container format.
+No algorithm, key, authenticated format, executable entry point, or successfully
+loaded image was verified here. Encryption is a hypothesis from the earlier
+analysis; it should not be presented as a confirmed technical or legal conclusion.
+This project has not pursued firmware decryption or protection bypass.
 
-1. **Dump it off a car.** STM32 flash has Readout Protection (RDP). Getting past it
-   is published research — cold-boot stepping (Fraunhofer, WOOT '17), the
-   "Exceptional Failure" glitch, the Pi-Pico `picopwner` tool, and commercial RDP1
-   decryptors — but every method needs the physical chip, a glitching rig and hours
-   of fiddling, and it is an attack on a device's protection. It is not a software
-   task and not something to do casually.
-2. **Use the firmware-update images in the app — checked, and they are encrypted.**
-   The app's OBB ships a `basestation/firmware` folder of OTA images under the
-   project codename "RushHour" (Anki Drive's internal name; the manifest carries a
-   2013 Anki copyright). It holds the full version history — factory 2013 (`2031`),
-   Drive 2.0.1 (`2062`), 2.1.x (`2120`), 2.2.x (`2149`) and a "Future" build
-   (`7d7d`) — in two formats:
-   - `.ota`: 4-byte magic `c0 ff ee 54`, then an 8-byte header, ~28–36 KB.
-   - `.safe`: 8-byte ASCII magic `DriveHW5`, then a header, ~46–58 KB.
+A reproducible follow-up would need exact source hashes, the files and byte ranges
+measured, the scripts/commands used, decompressor versions and results, and evidence
+for the image/container format. The original report's statements that no public
+image exists or no emulator supports the chip are time-dependent and were not
+reverified here.
 
-   Every file's body has Shannon entropy of **7.99–8.00 bits/byte**, the payloads do
-   not decompress, and across ~1 MB of images there is **no readable string, symbol
-   table or STM32 vector table**. That is the signature of encryption, not
-   compression — consistent with Anki's advertised 128-bit encryption. So these are
-   confirmed **not runnable**: there is no image to load into an emulator without
-   first defeating the encryption. The decryption key would live in the app's native
-   engine or the car's bootloader; recovering it to decrypt the images is a
-   protection-circumvention exercise this project does not pursue. (The empty
-   `.ota.h` C arrays in the OBB only hold real bytes under a `DEV_FEATURES_ALLOWED`
-   build flag, which the shipping app does not set; the binary `.ota`/`.safe` files
-   are the real, encrypted payloads.)
-3. **Ask someone who already dumped one.** No public Anki *car* firmware dump
-   exists that I could find (unlike the Vector robot, whose OTA images were
-   decrypted by its rooting community).
+## Why a CPU image would not be a complete car simulator
 
-## Blocker 2: QEMU gives us the CPU, not the car
+Even with a runnable firmware image, a useful emulator would need the relevant
+clocks, timers, SPI/radio behavior, sensor inputs, wheel feedback and motor-output
+interpretation. It would also need a track-and-motion model to turn commands into
+physical effects. CPU instruction execution alone does not demonstrate steering,
+localization, braking or loss-of-link behavior.
 
-Even with an image:
+The existing `sim.mjs` instead models the Bluetooth boundary: commands in,
+notifications out, and simulated motion. This is useful for testing host logic,
+but it is not firmware-faithful evidence. The controller and simulator share many
+assumptions, so agreement between them is not independent validation.
 
-- Mainline QEMU has **no STM32F0 machine**. STM32 support lives in forks, mostly
-  F1/F4. Emulating the F051 means writing a machine model (clocks, flash, the
-  TIM1/TIM3 motor timers, SPI, USART, GPIO, ADC).
-- A running CPU does nothing without the **physical world**. The firmware spins
-  waiting on the optical sensor and Hall sensor and writes motor PWM. To make it
-  *drive* you must model all of that and feed it a simulated track — the optical
-  code stream for a given position, the Hall pulses for a given speed, the SPI
-  traffic to and from the nRF8001. That track-and-physics model is the actual work,
-  and it is the same model we would write anyway without QEMU.
+## Next useful work
 
-So QEMU would reproduce the one part that is already simple (a small Cortex-M0
-control loop) while we still hand-write the hard part (the track, sensors and
-motor response). That is a poor trade.
+1. Capture one supervised physical-car run with **Record** and retain the layout,
+   model, firmware version, control settings and expected observations alongside
+   the trace. Add assertions with explicit expected mapping and lane direction.
+2. Measure notification cadence separately from optical sensor sampling. The
+   earlier note conflated approximately 500 Hz with 20 ms; those are different
+   rates, and neither should be adopted as a verified BLE cadence.
+3. Measure left/right steering, off-track reporting, stop/braking behavior, host
+   loss and Bluetooth link loss. Then repeat with two and four cars.
+4. Compare the simulator against those observations before adding realism claims.
+5. Revisit a firmware emulator only if a usable image, permission to use it, and
+   the peripheral-model scope are established. No distribution or legal clearance
+   for third-party firmware is asserted by this document.
 
-## What a digital twin should be here, and mostly already is
-
-The useful twin models the car **at the Bluetooth boundary** — same packets in,
-same notifications out, same timing — not the transistors. That is exactly what
-[`sim.mjs`](sim.mjs) is: a `SimCar` accepts the real wire bytes and emits real
-position, transition and status notifications, and the whole stack above it
-(decoder, mapper, localiser, battle) runs against it unchanged. It is a behavioural
-digital twin already.
-
-To make it firmware-faithful rather than merely plausible, in rough order of value:
-
-1. **Validate against real cars.** Record traces with the host page's **Record**
-   button and drop them in [`fixtures/`](fixtures/README.md); the test suite already
-   replays them. This is what turns the sim's assumptions into pass/fail, and needs
-   no firmware at all.
-2. **Match the real cadence and quirks** from those traces: the ~500 Hz / 20 ms
-   sensor interval, the exact delocalization behaviour when the car leaves the line,
-   the battery-voltage curve, the version/ping reply timing.
-3. **Only if a real image is ever dumped**, revisit emulation — and then reach for
-   **Renode** or a QEMU STM32 fork with a custom peripheral+track model, scoped as
-   its own project, not a weekend task.
-
-## Bottom line
-
-A firmware-in-QEMU twin is blocked on having no runnable image, and even unblocked
-it would emulate the easy part and leave the hard part (track physics) to us. The
-behavioural twin we already have is the right abstraction; the highest-value next
-step is recording real-car traces to validate it. The OBB firmware images have now been
-fingerprinted and are confirmed encrypted (see Blocker 1), which closes the last
-"maybe" — there is no shortcut to a runnable image here.
-
-## Sources
-
-- iFixit, *Anki Drive Teardown* — STM32F051K8, nRF8001, optical sensor.
-- EE World Online, *Teardown: Inside the Anki Overdrive racecar set* — optical
-  sensor ~500/s, Hall-effect wheel sensor, Nordic BLE.
-- ST / Power Systems Design — STM32 selected by Anki, "20,000 lines of code,"
-  track analysed 500×/second.
-- Community PCB trace (Fisch37 gist) — STM32F051K8 + nRF8001, J2 header on USART1
-  (PA9/PA10), likely UART system bootloader.
-- STM32 RDP research: Obermaier et al. (Fraunhofer WOOT '17); "Exceptional Failure"
-  (zapb.de); `CTXz/stm32f1-picopwner`; reports of commercial RDP1 decryptors.
+See [ANALYSIS.md](ANALYSIS.md) for the earlier app report and
+[fixtures/README.md](fixtures/README.md) for trace handling. The missing verified
+host-loss stop remains a hardware-safety issue regardless of emulator choice.

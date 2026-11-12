@@ -6,8 +6,8 @@ change that repaired them, how each repair is verified, and what is still out
 of scope.
 
 **Original flawed baseline:** commit `ab809451fc99564474b2b83baca0f63b78c24034`
-on `main`. Check that commit out (or tag it) to reproduce the original
-exercises; the lab guides under `bench/` still describe its behavior.
+preserved as `course-vulnerable-baseline`. Check that tag or commit out to
+reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
 ## Summary
 
@@ -121,7 +121,9 @@ Neither exists under `npm start`; the option must be the boolean set by the
   requests for that car are refused; if they are offline, a newcomer may ask, but
   the original driver keeps the car until the host hands it over.
 - **Secrets** come from `crypto.randomBytes`: host key and player keys 192 bits, join
-  and seat keys 96 bits. Comparisons are constant-time.
+  and seat keys 96 bits. Comparisons check encoded byte lengths before the
+  constant-time comparison, so malformed Unicode keys are refused rather than
+  crashing the WebSocket process.
 - **Keys never appear in a URL the server sees.** They travel in `Authorization`
   headers, JSON bodies, or the first WebSocket message. QR links carry the join or
   seat key in the URL fragment, which browsers do not send.
@@ -135,12 +137,26 @@ Neither exists under `npm start`; the option must be the boolean set by the
   speed to 1400 mm/s regardless of what any input says. A player cannot publish
   state and a host cannot inject input.
 - **Each player sees only their own car's state.** The player id comes from the key.
-- **Limits:** 16 rooms, 8 players, 8 waiting and 16 seats per room, 40 inputs and 12
+- **Limits:** 16 rooms; 8 total player records per room (including waiting players),
+  at most 4 approved drivers and 4 seats; 40 inputs and 12
   state updates per second per sender, 16-character names stripped to letters,
   digits and `_ . -`. Rooms close 90 seconds after the host leaves or after 30 idle
   minutes.
-- **Dead-man:** a player who stops sending for 0.7 seconds has their car stopped.
-  STOP ALL holds every car at zero until the host resumes.
+- **Dead-man:** while the host loop runs, stale player input (0.7 seconds)
+  requests zero throttle. Physical braking time and scheduling delay are unverified.
+  STOP ALL always stops and latches the cars; it never acts as a resume toggle.
+  Free drive and round start are separate explicit actions.
+- **Host control wins:** selecting Parked or a local controller revokes that
+  phone's car assignment. Its next input cannot reclaim the car automatically.
+- **Off-track events latch a stop.** Returning the car to the track and pressing
+  Recover clears the off-track latch; ordinary throttle or round start cannot.
+- **Transport faults:** writes and cleanup have deadlines. A rejected write gets
+  a bounded best-effort zero-speed command before transport closure; an unresolved
+  write is closed without racing a second GATT operation. Physical stop is not
+  guaranteed by the browser's requested stop or disconnect.
+- **Visibility and limits:** hiding a host with real cars halts the game, including
+  cars stationary at that moment. At most four cars can be added. The selected
+  speed ceiling applies to scans and battle boosts as well as normal throttle.
 - **Dependencies:** `qrcode-generator` 2.0.4 and `ws` 8.22.2, both exact pins with no
   runtime dependencies of their own.
 - Only the controller's own pages, modules and three data files are served; its
@@ -151,13 +167,14 @@ Known limits of the controller:
 - **The host code is shared by everyone who may host.** Anyone who has it can open
   rooms; it does not let them touch another host's room.
 - **If the host browser dies, nothing tells the cars to stop.** What a car does when
-  its Bluetooth link drops has not been measured. A keep-alive is the next safety
-  item and needs a real car to verify.
+  its Bluetooth link drops has not been measured. A device-enforced timeout needs
+  hardware validation; periodic host pings alone do not establish that guarantee.
 - **A public Codespaces port is public.** The pages are reachable by anyone with the
   address; driving still needs the host's approval.
 - **Physical safety is the operator's job.** Software limits speed; it cannot see a
   hand on the track.
-- Covered by `platform/slipstream-relay.test.mjs` and `slipstream/core.test.mjs`.
+- Tests cover the relay, safety behavior, host/phone interactions and round scoring
+  under `platform/` and `slipstream/`. They do not certify real hardware behavior.
 
 ## How to verify
 

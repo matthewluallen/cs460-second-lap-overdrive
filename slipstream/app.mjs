@@ -7,6 +7,7 @@ import {Renderer} from './render.mjs';
 import {WEAPON_LABEL} from './battle.mjs';
 import {api, channel} from './net.mjs';
 import {Recorder} from './trace.mjs';
+import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...children) => { const n = Object.assign(document.createElement(tag), props); n.append(...children); return n; };
@@ -15,9 +16,13 @@ const SAVED = 'slipstream.track.v1';
 
 const [pieces, vehicles, weapons] = await Promise.all([load('pieces'), load('vehicles'), load('weapons')]);
 const game = new Game({pieces, vehicles, weapons, log});
+game.topSpeed = 400;
 const world = new SimWorld(game.pieces, 'Capsule');
 const renderer = new Renderer($('map'));
 const recorder = new Recorder();
+const session = new RoundSession();
+let countdown = null, sessionResultShown = false;
+let activeMission = null, activeExperience = 'arcade', recordEligible = true;
 window.slipstream = {game, world, recorder, get transport() { return room?.link.transport ?? null; }};                        // for the browser console and tests
 
 function log(text) {
@@ -28,7 +33,7 @@ function log(text) {
 
 // --- garage --------------------------------------------------------------------
 const cards = new Map();           // driver -> DOM refs
-const CONTROLS = [['none', 'Parked'], ['keys1', 'Keyboard W A S D'], ['keys2', 'Keyboard arrows'], ['gamepad', 'Gamepad'], ['phone', 'Phone or link'], ['bot', 'Computer']];
+const CONTROLS = [['none', 'Parked'], ['browser', 'On-screen controls'], ['keys1', 'Keyboard W A S D'], ['keys2', 'Keyboard arrows'], ['gamepad', 'Gamepad'], ['phone', 'Phone or link'], ['bot', 'Computer']];
 const MODELS = Object.entries(vehicles.models).filter(([, m]) => !['Future', 'Unrecognized'].includes(m.name)).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
 function addCard(driver) {
@@ -36,7 +41,7 @@ function addCard(driver) {
   for (const [id, m] of MODELS) model.append(new Option(m.name + (m.truck ? ' (truck)' : ''), id));
   for (const [id, label] of CONTROLS) control.append(new Option(label, id));
   model.value = String(driver.car.model); control.value = driver.control;
-  const name = el('span', {className: 'name', textContent: driver.car.name});
+  const name = el('span', {className: 'name', textContent: driver.id + ' · ' + driver.car.name});
   const tag = el('span', {className: 'tag', textContent: driver.car.simulated ? 'sim' : 'live'});
   const remove = el('button', {className: 'small', textContent: '✕', title: 'Disconnect'});
   const code = el('button', {className: 'small', textContent: 'Code', title: 'Show this car\'s own join code'});
@@ -44,12 +49,33 @@ function addCard(driver) {
   const seatLink = el('input', {readOnly: true, className: 'seatlink'});
   const seatBox = el('div', {className: 'seat', hidden: true}, seatCanvas, el('p', {className: 'note', textContent: 'Scan to drive this car from a phone, or open the link on a laptop.'}), seatLink);
   const energy = el('i'), speed = el('i');
+  const recover = el('button', {className: 'recovery', textContent: 'Car back on track · Recover', hidden: true});
+  recover.onclick = () => { if (document.hidden) return; game.recoverCar(driver); driver.level = 0; if (driver.pad) driver.pad.throttle = 0; refresh(); };
+  const throttle = el('input', {type: 'range', min: 0, max: 100, value: 0, step: 5});
+  throttle.setAttribute('aria-label', driver.car.name + ' throttle');
+  throttle.oninput = () => { if (driver.control === 'browser' && !game.halted && !driver.car.safetyReason) driver.level = Number(throttle.value) / 100; else throttle.value = 0; };
+  const leftButton = el('button', {textContent: '← Lane', title: 'Move one lane left'}), rightButton = el('button', {textContent: 'Lane →', title: 'Move one lane right'});
+  leftButton.onclick = () => { if (!game.halted && !driver.car.safetyReason) game.nudge(driver, 1); };
+  rightButton.onclick = () => { if (!game.halted && !driver.car.safetyReason) game.nudge(driver, -1); };
+  const brake = el('button', {textContent: 'Brake', className: 'brake'});
+  brake.onclick = () => { driver.level = 0; driver.input.throttle = 0; throttle.value = 0; driver.car.stop(); };
+  const browserControls = el('div', {className: 'browser-controls', hidden: true}, el('label', {textContent: 'Throttle'}, throttle), el('div', {className: 'row'}, leftButton, brake, rightButton));
+  const fireRow = el('div', {className: 'row'});
+  for (const bay of ['attack', 'support', 'special']) {
+    const fire = el('button', {textContent: bay === 'attack' ? 'Fire' : bay === 'support' ? 'Support' : 'Special'});
+    fire.onpointerdown = event => { fire.setPointerCapture(event.pointerId); if (!game.halted) driver.input[bay] = true; };
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) fire.addEventListener(type, () => { driver.input[bay] = false; });
+    fire.onkeydown = event => { if (event.code === 'Space' || event.code === 'Enter') { event.preventDefault(); if (!game.halted) driver.input[bay] = true; } };
+    fire.onkeyup = fire.onblur = () => { driver.input[bay] = false; };
+    fireRow.append(fire);
+  }
+  browserControls.append(fireRow);
   const left = el('span'), right = el('span'), weaponsBox = el('div', {className: 'weapons'});
   const card = el('div', {className: 'car'},
     el('div', {className: 'top'}, name, tag, code, remove),
     el('div', {className: 'grid'}, model, control),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
-    el('div', {className: 'meta'}, left, right), weaponsBox, seatBox);
+    el('div', {className: 'meta'}, left, right), weaponsBox, recover, browserControls, seatBox);
   code.onclick = async () => {
     if (!seatBox.hidden) { seatBox.hidden = true; return; }
     try {
@@ -61,21 +87,23 @@ function addCard(driver) {
   };
   seatLink.onfocus = () => seatLink.select();
   card.style.setProperty('--c', `rgb(${driver.car.color.map(v => Math.round(v * 255)).join()})`);
-  model.onchange = () => { game.setModel(driver, Number(model.value)); driver.car.name = game.modelName(driver.car.model); name.textContent = driver.car.name; };
-  control.onchange = () => { releasePad(driver); game.setControl(driver, control.value); };
-  remove.onclick = async () => { releasePad(driver); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
+  model.onchange = () => { if (session.status === 'running' || countdown) halt('Car changed'); game.setModel(driver, Number(model.value)); driver.car.name = game.modelName(driver.car.model); name.textContent = driver.id + ' · ' + driver.car.name; };
+  control.onchange = () => { if (session.status === 'running' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
+  remove.onclick = async () => { if (session.status === 'running' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
-  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, weaponsBox, control, name, seatBox});
+  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow});
   refresh();
 }
 
 $('layout').append(...Object.keys(LAYOUTS).map(n => new Option(n, n)));
 $('layout').value = world.layoutName;
 $('layout').onchange = () => {
+  halt('Layout changed');
   world.setLayout($('layout').value);
-  if (game.drivers.some(d => d.car.simulated) && game.track) { game.stopAll(); game.resume(); game.track = null; game.phase = 'garage'; game.battle = null; for (const d of game.drivers) d.car.useTrack(null); log('Layout changed: scan the track again'); }
+  if (game.drivers.some(d => d.car.simulated) && game.track) { game.track = null; game.phase = 'garage'; game.battle = null; for (const d of game.drivers) d.car.useTrack(null); log('Layout changed: scan the track again'); }
 };
 $('addSim').onclick = () => {
+  if (game.drivers.length >= 4 || session.status === 'running' || countdown) return;
   const taken = new Set(game.drivers.map(d => d.car.model)), next = MODELS.find(([id]) => !taken.has(Number(id))) ?? MODELS[0];
   const sim = world.addCar({model: Number(next[0])});
   const driver = game.addCar(sim, {model: Number(next[0]), simulated: true, control: game.drivers.some(d => d.control === 'keys1') ? 'bot' : 'keys1'});
@@ -86,10 +114,13 @@ if (!bluetoothAvailable()) { $('bleNote').textContent = 'Bluetooth is not availa
 else $('bleNote').textContent = 'Real cars move as soon as they have a driver. Keep the track clear and someone next to it.';
 $('connect').onclick = async event => {
   try {
+    if (game.drivers.length >= 4) throw new Error('The garage holds four cars. Disconnect one first.');
     const link = await chooseCar(event.shiftKey);
+    if (game.drivers.some(d => d.car.connected && d.car.transport.id === link.id)) throw new Error('This car is already in the pit crew. Use its existing controls.');
     log('Connecting to ' + (link.name || 'car') + '…');
-    await link.open();
+    try { await link.open(); } catch (error) { link.close(); throw error; }
     const model = link.model && vehicles.models[String(link.model)] ? link.model : 8;
+    if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
     const driver = game.addCar(link, {model, name: vehicles.models[String(model)].name, control: 'none'});
     link.onClose(() => { log(driver.car.name + ' lost its Bluetooth link'); driver.car.connected = false; });
     addCard(driver);
@@ -100,14 +131,140 @@ $('connect').onclick = async event => {
 // --- top bar ---------------------------------------------------------------------
 $('scan').onclick = () => {
   if (game.phase === 'scanning') return game.cancelScan();
-  try { game.resume(); game.startScan(); } catch (error) { log(error.message); }
+  try { requireVisible(); endRound('Track scan'); game.resume(); game.startScan(); } catch (error) { log(error.message); }
 };
-$('battle').onclick = () => { try { game.phase === 'battle' ? game.stopBattle() : (game.resume(), game.startBattle()); } catch (error) { log(error.message); } };
-$('stop').onclick = () => { if (game.halted) { game.resume(); log('Resumed'); } else game.stopAll(); };
-$('top').oninput = () => { game.topSpeed = Number($('top').value); $('topLabel').textContent = 'Top speed ' + game.topSpeed + ' mm/s'; };
+$('battle').onclick = () => beginRound();
+$('stop').onclick = () => halt('Host stopped');
+$('resume').onclick = () => { if (countdown) return; try { requireVisible(); session.reset(); activeMission = null; game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); } catch (error) { log(error.message); } };
+$('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s'; };
 game.onTrack = track => { if (!game.drivers.every(d => d.car.simulated)) try { localStorage.setItem(SAVED, JSON.stringify(track.toJSON())); } catch {} };
 let saved = null; try { saved = JSON.parse(localStorage.getItem(SAVED)); } catch {}
-if (Array.isArray(saved) && saved.length >= 4) { $('loadMap').hidden = false; $('loadMap').onclick = () => { try { game.loadTrack(saved); log('Loaded the saved map'); } catch (error) { log(error.message); } }; }
+if (Array.isArray(saved) && saved.length >= 4) { $('loadMap').hidden = false; $('loadMap').onclick = () => { try { halt('Map changed'); game.loadTrack(saved); log('Loaded the saved map'); } catch (error) { log(error.message); } }; }
+
+// Three different moods, one shared set of driving and safety rules.
+let experience = 'arcade';
+const EXPERIENCES = {arcade: ['solo', 'battle', 'team'], competition: ['solo', 'race'], story: ['team']};
+const timeText = ms => { const seconds = Math.ceil(ms / 1000); return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0'); };
+const lapText = ms => ms === null ? 'No full lap yet' : (ms / 1000).toFixed(2) + 's best lap';
+function requireVisible() { if (document.hidden) throw new Error('Return to the host tab before starting cars.'); }
+function scoringSnapshot(now = performance.now()) {
+  return game.snapshot(now).map(row => {
+    const driver = game.drivers.find(d => d.id === row.id), pose = driver.car.localizer?.estimate(now);
+    return {...row, circuitProgress: pose?.located && game.track ? (game.track.distance(pose.index, pose.progress, pose.direction) / game.track.length) % 1 : undefined, circuitDirection: pose?.direction};
+  });
+}
+function endRound(reason = 'ended') {
+  recordEligible = false;
+  countdown = null; $('countdown').hidden = true;
+  if (session.status === 'running' || session.status === 'paused') session.finish(performance.now(), reason);
+}
+function halt(reason = 'Host stopped') { endRound(reason); game.stopAll(); held.clear(); renderRound(); }
+function modeInfo() {
+  const mode = $('mode').value, mission = STORY_MISSIONS.find(m => m.id === $('mission').value);
+  $('modeDescription').textContent = experience === 'story' ? mission.briefing : ROUND_MODES[mode].description;
+  $('missionField').hidden = experience !== 'story';
+  $('roundHelp').textContent = experience === 'story' ? 'A shared mission for 1–4 human or computer drivers. Virtual beacons are earned by complete laps.' : mode === 'solo' ? '1–4 cars · individual best laps · 90 seconds' : mode === 'team' ? '1–4 cars · shared lap goal · 2 minutes' : '2–4 cars · human, computer, or a mix · 2 minutes';
+}
+function chooseExperience(value) {
+  if (session.status === 'running' || countdown) return;
+  experience = value;
+  for (const button of document.querySelectorAll('[data-experience]')) button.setAttribute('aria-pressed', String(button.dataset.experience === value));
+  $('mode').replaceChildren(...EXPERIENCES[value].map(id => new Option(ROUND_MODES[id].title, id)));
+  modeInfo();
+}
+for (const mission of STORY_MISSIONS) $('mission').append(new Option(mission.title, mission.id));
+for (const button of document.querySelectorAll('[data-experience]')) button.onclick = () => chooseExperience(button.dataset.experience);
+$('mode').onchange = $('mission').onchange = modeInfo;
+chooseExperience('arcade');
+function beginRound() {
+  try {
+    requireVisible();
+    if (session.status === 'running' || countdown) return;
+    if (!game.track) throw new Error('Map the circuit first, or try the two-car simulation.');
+    const active = game.drivers.filter(d => d.car.connected && d.control !== 'none');
+    const mode = $('mode').value;
+    if (active.length < ROUND_MODES[mode].minCars) throw new Error('Choose a driver for at least ' + ROUND_MODES[mode].minCars + ' car(s) in the pit crew.');
+    if (active.some(d => d.car.safetyReason && d.car.safetyReason !== 'Host stopped')) throw new Error('Recover the off-track car or disconnect it before starting.');
+    if (active.some(d => d.control === 'phone' && !d.pad)) throw new Error('Approve a phone driver or choose another control before starting.');
+    game.stopAll(); held.clear(); session.reset(); sessionResultShown = false; recordEligible = true;
+    $('results').hidden = true;
+    countdown = {until: performance.now() + 3000, mode, ids: active.map(d => d.id), mission: experience === 'story' ? STORY_MISSIONS.find(m => m.id === $('mission').value) : null};
+    $('roundHelp').textContent = 'Track clear? Cars stay stopped through the countdown. Apply throttle after GO.';
+    renderRound();
+  } catch (error) { $('roundHelp').textContent = error.message; log(error.message); }
+}
+function tickRound(now) {
+  if (countdown) {
+    if (document.hidden && game.drivers.some(d => !d.car.simulated)) { halt('Host tab hidden'); return; }
+    if (now >= countdown.until) {
+      const ready = countdown; countdown = null; $('countdown').hidden = true;
+      try {
+        requireVisible();
+        if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
+        game.resume(); if (ready.mode === 'battle') game.startBattle();
+        const opts = ready.mission ? {goal: ready.mission.goalPerCar * ready.ids.length, durationMs: ready.mission.durationMs} : {};
+        activeMission = ready.mission; activeExperience = experience;
+        session.start(ready.mode, scoringSnapshot(now).filter(s => ready.ids.includes(s.id)), now, opts);
+        log('GO · ' + (ready.mission?.title ?? ROUND_MODES[ready.mode].title));
+      } catch (error) { game.stopAll(); $('roundHelp').textContent = error.message; log(error.message); }
+    }
+  }
+  if (session.status === 'running') {
+    if (game.halted) endRound('Safety stop');
+    else session.update(scoringSnapshot(now), now);
+  }
+  if (session.status === 'finished' && !sessionResultShown) {
+    sessionResultShown = true; game.stopAll(); showResults();
+  }
+}
+function renderRound() {
+  const view = session.view(), running = view.status === 'running';
+  $('roundLabel').textContent = countdown ? 'TRACK CLEAR · GET READY' : running ? activeExperience.toUpperCase() + ' · ROUND LIVE' : view.status === 'finished' ? 'ROUND COMPLETE' : 'READY WHEN YOU ARE';
+  $('roundTitle').textContent = view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
+  $('roundGoal').textContent = view.goal ? view.teamLaps + ' / ' + view.goal + ' shared laps · every driver contributes' : view.mode === 'battle' ? '100 points per virtual knockout · 25 per lap' : view.mode === 'solo' ? 'Complete a full circuit. Find your fastest clean rhythm.' : 'Complete laps. Keep your eyes on the physical track.';
+  $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
+  $('roundState').textContent = countdown ? 'Get ready' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
+  $('countdown').hidden = !countdown; $('countdown').textContent = countdown ? $('roundClock').textContent : '';
+  $('endRound').hidden = !running && !countdown;
+  for (const button of document.querySelectorAll('[data-experience]')) button.disabled = running || !!countdown;
+  $('mode').disabled = $('mission').disabled = running || !!countdown;
+}
+function showResults() {
+  const view = session.view();
+  const goalMet = view.mode === 'team' && view.teamLaps >= view.goal;
+  $('resultTitle').textContent = goalMet ? 'Mission accomplished.' : view.reason !== 'time' && view.reason !== 'goal' ? 'Round ended safely.' : view.mode === 'team' ? 'One more run?' : 'That’s a wrap.';
+  $('resultSummary').textContent = view.mode === 'team' ? view.teamLaps + ' of ' + view.goal + ' shared laps. ' + (goalMet ? 'Your crew did it together.' : 'Build your rhythm and try again.') : 'Full laps count. Virtual knockouts count. Physical contact never earns points.';
+  $('resultRows').replaceChildren(...view.rows.map(row => {
+    const label = row.name + (row.computer ? ' · CPU' : ' · human');
+    let record = '';
+    if (view.mode === 'solo' && row.bestLapMs !== null && !row.computer && recordEligible) {
+      const driver = game.drivers.find(d => d.id === row.id);
+      // Personal records compare like-for-like setups, never simulated and live laps.
+      const key = 'slipstream.best.v1.' + JSON.stringify([game.track?.toJSON(), driver?.car.simulated, driver?.car.model, row.control, game.topSpeed]);
+      try {
+        const old = Number(localStorage.getItem(key));
+        if (!old || row.bestLapMs < old) { localStorage.setItem(key, String(row.bestLapMs)); record = old ? ' · New personal best!' : ' · First recorded best'; }
+        else record = ' · Record ' + (old / 1000).toFixed(2) + 's';
+      } catch { record = ' · Session best'; }
+    }
+    const earned = view.badges?.some(b => b.driverId === row.id && b.id === 'full-lap') ? ' · Full circuit earned' : '';
+    const winner = view.winnerIds.includes(row.id) && view.mode !== 'team' ? ' ★' : '';
+    return el('li', {}, el('strong', {textContent: label + winner}), el('span', {textContent: row.laps + ' laps · ' + (view.mode === 'battle' ? row.score + ' pts' : lapText(row.bestLapMs)) + record + earned}));
+  }));
+  $('results').hidden = false;
+}
+$('endRound').onclick = () => halt('Finished by host');
+$('rematch').onclick = beginRound;
+$('dismissResults').onclick = () => { $('results').hidden = true; };
+$('demo').onclick = () => {
+  if (game.drivers.length) { $('roundHelp').textContent = 'Disconnect your current cars before loading the simulation demo.'; return; }
+  $('addSim').click(); $('addSim').click();
+  game.useTrack(world.track); game.stopAll();
+  for (const d of game.drivers) { d.car.localizer.seed(d.sim.index, d.sim.direction, performance.now()); d.car.localizer.progress = d.sim.progress; d.car.localizer.lateral = d.sim.lateral; }
+  const first = game.drivers[0]; game.setControl(first, 'browser');
+  $('roundHelp').textContent = 'Simulation ready: your on-screen car and one computer rival. Choose a challenge, then Start round.';
+  refresh();
+};
 
 // --- keyboard and gamepad ----------------------------------------------------------
 const SCHEMES = {
@@ -117,8 +274,9 @@ const SCHEMES = {
 const held = new Set();
 const typing = target => ['INPUT', 'SELECT', 'TEXTAREA'].includes(target?.tagName);
 addEventListener('keydown', event => {
-  if (event.code === 'Escape') { game.stopAll(); return; }
+  if (event.code === 'Escape') { halt('Host stopped'); return; }
   if (typing(event.target) || event.repeat) return;
+  if (game.halted) return;
   held.add(event.code);
   for (const d of game.drivers) {
     const s = SCHEMES[d.control]; if (!s) continue;
@@ -131,16 +289,18 @@ addEventListener('keydown', event => {
   }
 });
 addEventListener('keyup', event => held.delete(event.code));
-addEventListener('blur', () => held.clear());
+addEventListener('blur', () => { held.clear(); for (const d of game.drivers) if (SCHEMES[d.control] || d.control === 'browser') { d.level = 0; d.input.throttle = 0; d.input.attack = d.input.support = d.input.special = false; d.car.stop(); } });
 
 function readControls(dt) {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   let padIndex = 0;
   for (const d of game.drivers) {
     const s = SCHEMES[d.control], input = d.input;
+    if (game.halted || d.car.safetyReason) { d.level = 0; input.throttle = 0; input.attack = input.support = input.special = false; if (d.pad) d.pad.throttle = 0; continue; }
     if (s) {
       d.level = Math.max(0, Math.min(1, (d.level ?? 0) + (held.has(s.up) ? 0.9 * dt : 0) - (held.has(s.down) ? 1.6 * dt : 0)));
       input.throttle = d.level; input.attack = held.has(s.attack); input.support = held.has(s.support); input.special = held.has(s.special);
+    } else if (d.control === 'browser') { input.throttle = d.level ?? 0;
     } else if (d.control === 'gamepad') {
       const pad = pads[padIndex++];
       if (!pad) { input.throttle = 0; continue; }
@@ -159,12 +319,10 @@ function readControls(dt) {
 // --- phone players -------------------------------------------------------------------
 let room = null;                   // {room, hostKey, joinKey, stop}
 const players = new Map();         // id -> {name, online, driver}
-function releasePad(driver) { if (driver.pad) { driver.pad.player.driver = null; driver.pad = null; } }
+function releasePad(driver, revoke = false) { if (driver.pad) { const player = driver.pad.player; player.driver = null; if (revoke) { player.car = undefined; player.manual = true; } driver.pad = null; driver.input.throttle = 0; driver.car.stop(); } }
 function seat(player, wantedId = player.car) {
   if (player.driver || !player.approved) return;
-  // A per-car code names its car: hand that car over to remote control.
-  const named = player.car && game.drivers.find(d => d.id === player.car && d.car.connected);
-  if (named && !named.pad && named.control !== 'phone') game.setControl(named, 'phone');
+  // Approval may offer a seat; recurring input never changes the host's control mode.
   const free = d => d.control === 'phone' && !d.pad && d.car.connected;
   const driver = game.drivers.find(d => free(d) && d.id === wantedId) ?? (wantedId ? null : game.drivers.find(free));
   if (!driver) return;
@@ -189,7 +347,7 @@ function onRelay(m) {
     pad.throttle = Math.max(0, Math.min(1, Number(m.throttle) || 0)); pad.steer = Math.max(-1, Math.min(1, Number(m.steer) || 0));
     pad.attack = m.attack === true; pad.support = m.support === true; pad.special = m.special === true;
     if (m.cycle === 'attack' || m.cycle === 'support' || m.cycle === 'special') game.battle?.cycle(p.driver.car, m.cycle);
-    if (m.uturn === true) p.driver.car.uturn();
+    if (m.uturn === true && !game.halted && game.phase !== 'scanning') p.driver.car.uturn();
   }
   renderPlayers();
 }
@@ -197,6 +355,7 @@ function onRelay(m) {
 // that car; whoever held it before is removed, and its code is replaced.
 async function approve(p) {
   try {
+    if (session.status === 'running' || countdown) throw new Error('Finish the round before changing drivers.');
     await api('/rooms/' + room.room + '/approve', {method: 'POST', key: room.hostKey, body: {player: p.id}});
     p.approved = true;
     const taken = p.car && game.drivers.find(d => d.id === p.car);
@@ -204,7 +363,7 @@ async function approve(p) {
       const old = taken.pad.player; releasePad(taken); players.delete(old.id);
       api('/rooms/' + room.room + '/kick', {method: 'POST', key: room.hostKey, body: {player: old.id}}).catch(() => {});
     }
-    if (taken) cards.get(taken).seatBox.hidden = true;
+    if (taken) { cards.get(taken).seatBox.hidden = true; game.setControl(taken, 'phone'); }
     seat(p); log('Let in ' + p.name); renderPlayers();
   } catch (error) { log('Could not let ' + p.name + ' in: ' + error.message); }
 }
@@ -267,32 +426,46 @@ let lastState = 0;
 function pushState(snapshot, now) {
   if (!room || now - lastState < 200) return;
   lastState = now;
-  const view = s => ({name: s.name, color: s.color, energy: +s.energy.toFixed(2), speed: Math.round(s.speed), disabled: s.disabled, shield: s.shield,
-    kills: s.kills, deaths: s.deaths, laps: s.laps,
+  const round = session.view(), roundRows = new Map(round.rows.map(row => [row.id, row]));
+  const view = s => ({name: s.name, color: s.color, energy: +s.energy.toFixed(2), speed: Math.round(s.speed), disabled: s.disabled, shield: s.shield, connected: s.connected, safetyReason: s.safetyReason,
+    kills: roundRows.get(s.id)?.hits ?? s.kills, deaths: roundRows.get(s.id)?.losses ?? s.deaths, laps: roundRows.get(s.id)?.laps ?? s.laps,
     bays: Object.fromEntries(['attack', 'support', 'special'].map(b => [b, s[b] ? {label: WEAPON_LABEL[s[b].type], style: s[b].style, ready: s[b].ready, charge: +s[b].charge.toFixed(1)} : null]))});
   const byDriver = new Map(snapshot.map(s => [s.id, s])), mine = {};
   for (const p of players.values()) if (p.driver) mine[p.id] = view(byDriver.get(p.driver.id));
-  const lobby = {phase: game.halted ? 'stopped' : game.phase, cars: game.drivers.filter(d => d.control === 'phone').map(d => ({id: d.id, name: d.car.name, color: d.car.color, free: !d.pad}))};
+  const lobby = {phase: game.halted ? 'stopped' : game.phase, round: {title: countdown ? 'Get ready' : activeMission?.title ?? round.title, remainingMs: countdown ? Math.max(0, countdown.until - now) : round.remainingMs, status: countdown ? 'countdown' : round.status, mode: countdown?.mode ?? round.mode, goal: round.goal, teamLaps: round.teamLaps}, cars: game.drivers.filter(d => d.control === 'phone').map(d => ({id: d.id, name: d.car.name, color: d.car.color, free: !d.pad}))};
   room.link.send({players: mine, lobby}).catch(() => {});
 }
 
 // --- loops ---------------------------------------------------------------------------
 const PHASE = {garage: 'Garage', scanning: 'Scanning', ready: 'Track ready', battle: 'Battle'};
 function refresh(snapshot = game.snapshot()) {
+  renderRound();
+  const busy = session.status === 'running' || !!countdown;
+  $('carCount').textContent = game.drivers.length + ' / 4 cars';
+  $('addSim').disabled = game.drivers.length >= 4 || busy;
+  $('connect').disabled = !bluetoothAvailable() || game.drivers.length >= 4 || busy;
+  $('demo').hidden = game.drivers.length > 0;
+  $('layout').disabled = busy;
+  $('liveTag').textContent = game.drivers.some(d => !d.car.simulated) ? 'LIVE HARDWARE · SUPERVISE' : 'SIMULATION';
+  $('arenaTitle').textContent = !game.drivers.length ? 'Make room for a little rivalry.' : session.status === 'running' ? 'Eyes up. The track is the game.' : 'Your crew. Your next challenge.';
   $('empty').hidden = game.drivers.length > 0;
   const chip = $('phase'); chip.textContent = game.halted ? 'Stopped' : PHASE[game.phase];
   chip.className = 'chip' + (game.phase === 'battle' ? ' live' : game.phase === 'scanning' ? ' scan' : '');
   $('scan').textContent = game.phase === 'scanning' ? 'Cancel scan' : game.track ? 'Rescan track' : 'Scan track';
-  $('scan').disabled = !game.drivers.some(d => d.car.connected);
-  $('battle').disabled = !game.track; $('battle').textContent = game.phase === 'battle' ? 'End battle' : 'Start battle';
-  $('stop').textContent = game.halted ? 'RESUME' : 'STOP ALL';
+  $('scan').disabled = busy || !game.drivers.some(d => d.car.connected);
+  $('battle').disabled = !game.track || busy; $('battle').textContent = countdown ? 'Get ready…' : session.status === 'running' ? 'Round live' : 'Start round';
+  $('resume').hidden = !game.halted || !!countdown;
   const byId = new Map(snapshot.map(s => [s.id, s]));
   for (const [driver, ui] of cards) {
     const s = byId.get(driver.id); if (!s) continue;
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';
-    ui.left.textContent = !s.connected ? 'disconnected' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : '');
+    ui.left.textContent = !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
+    ui.recover.hidden = s.safetyReason !== 'Off track';
+    ui.browserControls.hidden = driver.control !== 'browser';
+    ui.fireRow.hidden = game.phase !== 'battle';
+    ui.throttle.value = Math.round((driver.level ?? 0) * 100); ui.throttle.disabled = game.halted || !!s.safetyReason;
     ui.right.textContent = (s.millivolts ? (s.millivolts / 1000).toFixed(2) + ' V · ' : '') + (s.located ? 'on map' : game.track ? 'locating' : 'no map');
     if (ui.control.value !== driver.control) ui.control.value = driver.control;
     const chips = ['attack', 'support', 'special'].filter(b => s[b]).map(b => {
@@ -302,7 +475,9 @@ function refresh(snapshot = game.snapshot()) {
     });
     ui.weaponsBox.replaceChildren(...chips);
   }
-  const rows = [...snapshot].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths).map(s => el('tr', {}, el('td', {textContent: s.name}), el('td', {textContent: s.kills}), el('td', {textContent: s.deaths}), el('td', {textContent: s.laps})));
+  const round = session.view();
+  const standings = round.rows.length ? round.rows.map(row => ({...row, kills: row.hits, deaths: row.losses})) : [...snapshot].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
+  const rows = standings.map(s => el('tr', {}, el('td', {textContent: s.id + ' · ' + s.name + (s.control === 'bot' ? ' · CPU' : '')}), el('td', {textContent: s.kills}), el('td', {textContent: s.deaths}), el('td', {textContent: s.laps})));
   $('scores').tBodies[0].replaceChildren(...rows);
 }
 
@@ -312,6 +487,7 @@ setInterval(() => {
   readControls(dt);
   world.step(dt);
   game.tick(dt, now);
+  tickRound(now);
   if (game.battle) for (const e of game.battle.drain()) {
     const id = car => game.drivers.find(d => d.car === car)?.id;
     renderer.addEffect({...e, from: id(e.from), to: id(e.to), car: id(e.car), life: e.type === 'explosion' || e.type === 'disabled' ? 700 : e.type === 'beam' ? 160 : 400});
@@ -331,8 +507,8 @@ function frame() {
 requestAnimationFrame(frame);
 
 // A hidden tab gets its timers throttled, so it cannot be trusted to drive cars.
-document.addEventListener('visibilitychange', () => { if (document.hidden && game.drivers.some(d => !d.car.simulated && d.car.speed > 0)) { game.stopAll(); log('Tab hidden: cars stopped'); } });
-addEventListener('pagehide', () => { for (const d of game.drivers) d.car.stop(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && game.drivers.some(d => !d.car.simulated && d.car.connected)) { halt('Host tab hidden'); log('Tab hidden: cars stopped. Return and explicitly resume.'); } });
+addEventListener('pagehide', () => { halt('Host page closed'); });
 try { $('hostCode').value = sessionStorage.getItem('slipstream.hostCode') || ''; } catch {}
 $('record').onclick = () => {
   if (recorder.active) { recorder.stop(); $('record').textContent = 'Record'; $('saveTrace').disabled = false; $('traceNote').textContent = recorder.events.length + ' messages recorded from ' + recorder.cars.length + ' car(s).'; return; }

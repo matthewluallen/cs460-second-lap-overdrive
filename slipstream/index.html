@@ -3,27 +3,30 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Slipstream control</title>
+<meta name="theme-color" content="#101520">
+<title>Slipstream · Race together</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header>
-  <div class="brand"><span class="mark"></span><h1>SLIPSTREAM <small>control</small></h1></div>
+  <div class="brand"><span class="mark"></span><h1>SLIPSTREAM <small>tiny cars. big moments.</small></h1></div>
   <span id="phase" class="chip">Garage</span>
   <div class="actions">
     <button id="scan" title="Drive one car round to map the track">Scan track</button>
     <button id="loadMap" hidden>Use saved map</button>
-    <button id="battle" class="primary" disabled>Start battle</button>
+    <button id="battle" class="primary" disabled>Start round</button>
+    <button id="resume" hidden>Free drive</button>
     <button id="stop" class="danger" title="Esc">STOP ALL</button>
   </div>
 </header>
 <main>
   <aside id="garage">
-    <h2>Garage</h2>
+    <div class="section-heading"><h2>Pit crew</h2><span id="carCount" class="counter">0 / 4 cars</span></div>
     <div class="row">
       <button id="connect" class="primary">Connect car</button>
       <button id="addSim">Add simulated car</button>
     </div>
+    <button id="demo" class="demo">Try a two-car simulation →</button>
     <p id="bleNote" class="note"></p>
     <label class="field">Practice layout (simulated cars)
       <select id="layout"></select>
@@ -32,20 +35,35 @@
     <p class="note" id="empty">No cars yet. Connect a real car over Bluetooth, or add simulated cars to try everything without hardware.</p>
   </aside>
   <section id="stage">
-    <canvas id="map"></canvas>
+    <div class="stage-heading"><div><span class="eyebrow">YOUR TABLE. YOUR CIRCUIT.</span><h2 id="arenaTitle">Make room for a little rivalry.</h2></div><span id="liveTag" class="chip">Simulation ready</span></div>
+    <section class="challenge-panel">
+    <h2>Pick your experience</h2>
+    <div class="experience-tabs" role="group" aria-label="Game experience"><button data-experience="arcade" aria-pressed="true">Arcade</button><button data-experience="competition" aria-pressed="false">Competition</button><button data-experience="story" aria-pressed="false">Story</button></div>
+    <label class="field">Your next challenge<select id="mode"></select></label>
+    <label class="field" id="missionField" hidden>Mission<select id="mission"></select></label>
+    <p id="modeDescription" class="mission-brief"></p>
+    <p id="roundHelp" class="note">Human, computer, or a mix. Up to four cars.</p>
+    <button id="endRound" hidden>Finish round &amp; stop</button>
+    </section>
+    <canvas id="map" aria-label="Live circuit map and car positions"></canvas>
+    <div id="roundHud" class="round-hud"><div><span id="roundLabel" class="eyebrow">READY WHEN YOU ARE</span><strong id="roundTitle">Choose your kind of fun</strong><span id="roundGoal">Add cars, map the circuit, then start a round.</span></div><div class="clock"><strong id="roundClock">—</strong><span id="roundState">Free drive</span></div></div>
+    <div id="countdown" class="countdown" hidden role="status" aria-live="assertive"></div>
+    <section id="results" class="results" hidden aria-labelledby="resultTitle"><span class="eyebrow">ROUND COMPLETE · CARS STOPPED</span><h2 id="resultTitle">Nice run.</h2><p id="resultSummary"></p><ol id="resultRows"></ol><button id="rematch" class="primary">Play again</button><button id="dismissResults">Back to pit crew</button></section>
     <div id="keys" class="keys">
       <span><b>Player 1</b> W S speed · A D lane · F fire · G support · R special · Q E switch weapon · X U-turn</span>
       <span><b>Player 2</b> arrows · K fire · L support · O special · I P switch weapon · M U-turn</span>
     </div>
   </section>
   <aside id="side">
-    <h2>Scoreboard</h2>
-    <table id="scores"><thead><tr><th>Car</th><th>Hits</th><th>Lost</th><th>Laps</th></tr></thead><tbody></tbody></table>
+
+    <section class="side-block"><h2>On the grid</h2>
+    <table id="scores"><thead><tr><th>Car</th><th title="Virtual knockouts">KOs</th><th>Lost</th><th>Laps</th></tr></thead><tbody></tbody></table>
     <h2>Speed limit</h2>
-    <label class="field"><span id="topLabel">Top speed 700 mm/s</span>
-      <input id="top" type="range" min="300" max="1200" step="50" value="700">
+    <label class="field"><span id="topLabel">Speed ceiling 400 mm/s</span>
+      <input id="top" type="range" min="300" max="1200" step="50" value="400">
     </label>
-    <h2>Remote players</h2>
+    </section>
+    <section class="side-block"><h2>Remote players</h2>
     <label class="field" id="codeField">Host code (printed where the server was started)
       <input id="hostCode" type="text" autocomplete="off" spellcheck="false" placeholder="ABCDE-FGHJK">
     </label>
@@ -58,11 +76,12 @@
       <button id="closeRoom">Close room</button>
     </div>
     <p id="roomNote" class="note"></p>
-    <h2>Trace</h2>
+    </section>
+    <details class="diagnostics"><summary>Recording &amp; session log</summary><h2>Trace</h2>
     <div class="row"><button id="record">Record</button><button id="saveTrace" disabled>Save trace</button></div>
     <p class="note" id="traceNote">Records every byte to and from each car, for replay in tests.</p>
     <h2>Log</h2>
-    <ol id="log"></ol>
+    <ol id="log"></ol></details>
   </aside>
 </main>
 <script type="module" src="app.mjs"></script>

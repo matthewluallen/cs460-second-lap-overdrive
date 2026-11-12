@@ -5,8 +5,11 @@ Input: the `basestation/config` directory unpacked from the app's main OBB
 (the basestation/config folder inside the app's main OBB file; ANALYSIS.md gives the path).
 Output: pieces.json, vehicles.json, weapons.json in the directory given second.
 
-The tables are derived measurements (lengths, lane offsets, numeric gameplay
-parameters). No app code, art, audio or text is copied.
+The tables contain derived track measurements plus copied vehicle names, item
+identifiers and selected structured gameplay configuration (including targeters,
+cooldowns and script parameters). They are not numeric-only. This script does not
+bundle executable app binaries, artwork or audio. Its inclusion does not establish
+permission to redistribute source-derived data; consult ANALYSIS.md and LICENSE.txt.
 
     python3 -I tools/extract_config.py <config-dir> data
 """

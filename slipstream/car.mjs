@@ -7,9 +7,10 @@ import {Localizer, LANE_LIMIT} from './track.mjs';
 export const LANE_STEP = 22.5;
 
 export class Car {
-  constructor(transport, {name = 'Car', model = 0, color = [0, 1, 0], pieces, simulated = false, clock = () => performance.now()} = {}) {
+  constructor(transport, {name = 'Car', model = 0, color = [0, 1, 0], pieces, simulated = false, clock = () => performance.now(), writeTimeoutMs = 1000} = {}) {
     this.transport = transport; this.name = name; this.model = model; this.color = color;
     this.pieces = pieces; this.simulated = simulated; this.clock = clock;
+    this.writeTimeoutMs = writeTimeoutMs; this.closing = false; this.faulted = false; this.safetyReason = null;
     this.connected = true; this.pending = new Map(); this.pumping = false;
     this.listeners = new Set(); this.localizer = null;
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0;
@@ -28,25 +29,46 @@ export class Car {
   }
   // Latest command per key wins, so a slow radio never builds a backlog.
   send(key, bytes) {
-    if (!this.connected) return;
+    if (!this.connected || this.closing || this.faulted) return;
     this.pending.delete(key); this.pending.set(key, bytes);
-    if (!this.pumping) this.#pump();
+    if (!this.pumping) this.pumpPromise = this.#pump();
   }
   async #pump() {
     this.pumping = true;
     try {
-      while (this.pending.size && this.connected) {
+      while (this.pending.size && this.connected && !this.closing) {
         const [key, bytes] = this.pending.entries().next().value;
         this.pending.delete(key);
-        await this.transport.write(bytes); this.tx++; this.tap?.('tx', bytes);
+        await this.#write(bytes);
       }
-    } catch (error) { this.#lost(error); }
+    } catch (error) { await this.#failSafe(error); }
     finally { this.pumping = false; }
   }
-  #lost(error) {
-    if (!this.connected) return;
-    this.connected = false; this.pending.clear();
-    for (const fn of this.listeners) fn({type: 'closed', reason: error?.message ?? 'disconnected'}, this);
+  async #write(bytes) {
+    let timer;
+    // A timeout is NOT completion of the browser's GATT operation. Callers must
+    // close the link rather than start another write when this deadline fires.
+    try {
+      await Promise.race([Promise.resolve().then(() => this.transport.write(bytes)), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
+      })]);
+      this.tx++; this.tap?.('tx', bytes);
+    } finally { clearTimeout(timer); }
+  }
+  async #failSafe(error) {
+    this.faulted = true; this.safetyReason = 'Connection fault'; this.speed = 0; this.pending.clear();
+    // A rejected, settled command may leave a perfectly live radio and a moving
+    // car. Try STOP once before releasing the link; never retry motion.
+    if (!error.writeTimedOut) {
+      try { await this.#write(encode.speed(0, 2500)); } catch {}
+    }
+    this.#finishClose(error);
+  }
+  #finishClose(error) {
+    const wasConnected = this.connected;
+    this.connected = false; this.pending.clear(); this.unsubscribe?.();
+    try { this.transport.close(); } catch {}
+    if (wasConnected && error) for (const fn of this.listeners) fn({type: 'closed', reason: error.message ?? 'disconnected'}, this);
   }
   #receive(bytes) {
     this.tap?.('rx', bytes);
@@ -90,7 +112,7 @@ export class Car {
   }
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
   setSpeed(mmPerSec, accel = 1000) {
-    const speed = Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
+    const speed = this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
     this.speed = speed;
     if (speed === this.lastSpeedSent && accel === this.lastAccel) return;
     this.lastSpeedSent = speed; this.lastAccel = accel;
@@ -98,6 +120,7 @@ export class Car {
   }
   // Lateral target, mm, positive to the left of travel.
   steerTo(lateral, speed = 350) {
+    if (this.safetyReason || this.closing || this.faulted) return;
     const target = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, lateral));
     if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return;
     this.forceLane = false; this.targetLateral = target;
@@ -107,8 +130,20 @@ export class Car {
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;
     this.steerTo(lanes * LANE_STEP);
   }
-  uturn() { this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
-  stop() { this.pending.delete('speed'); this.lastSpeedSent = -1; this.setSpeed(0, 2500); }
+  uturn() { if (this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
+  stop() {
+    for (const key of ['speed', 'lane', 'turn']) this.pending.delete(key);
+    // STOP is the next command after any already-running write.
+    this.pending = new Map([['speed', encode.speed(0, 2500)], ...this.pending]);
+    this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
+    if (!this.connected || this.closing || this.faulted) { this.pending.clear(); return; }
+    if (!this.pumping) this.pumpPromise = this.#pump();
+  }
+  safetyStop(reason) { this.safetyReason = reason; this.stop(); }
+  recover() {
+    if (!this.connected || this.closing || this.faulted) return false;
+    this.safetyReason = null; this.lastSpeedSent = -1; return true;
+  }
   setLights(r, g, b, effect = EFFECT.STEADY, cycles = 0) {
     const key = [r, g, b, effect, cycles].join();
     if (key === this.lightKey) return;
@@ -118,8 +153,18 @@ export class Car {
   // Position updates stop when the car does, so an old reading means stationary.
   get liveSpeed() { return this.clock() - (this.lastPosition ?? -1e9) > 900 ? Math.min(this.reportedSpeed, this.speed) : this.reportedSpeed; }
   pose(now = this.clock()) { return this.localizer?.pose(now) ?? null; }
-  async close() {
-    if (this.connected) { try { await this.transport.write(encode.speed(0, 2500)); await this.transport.write(encode.disconnect()); } catch {} }
-    this.connected = false; this.unsubscribe?.(); try { this.transport.close(); } catch {}
+  close() {
+    if (this.closePromise) return this.closePromise;
+    this.closing = true; this.pending.clear(); this.speed = 0;
+    return this.closePromise = (async () => {
+      // The queue owns the radio until its current operation settles or times
+      // out. Disconnect must never race a light, speed, or calibration write.
+      await this.pumpPromise;
+      if (this.connected) {
+        try { await this.#write(encode.speed(0, 2500)); await this.#write(encode.disconnect()); }
+        catch (error) { await this.#failSafe(error); }
+      }
+      this.#finishClose();
+    })();
   }
 }
