@@ -6,8 +6,9 @@ Story missions. Simulated practice works without owning any hardware.
 
 **Status: Slipstream has not been validated on physical cars.** Automated tests use
 simulated transports and traces. Packet layouts are based on the published SDK
-and the earlier app analysis ([ANALYSIS.md](ANALYSIS.md)); the original APK/OBB
-analysis was not independently reproduced in this review. The separate instructor
+and independent static app reviews ([standard OVERDRIVE](review/INDEPENDENT-REVIEW.md),
+[Fast & Furious](review/FAST-FURIOUS-REVIEW.md)). Static analysis does not establish
+physical compatibility. The separate instructor
 trial is not validation of this controller. Treat the first live session as a test:
 see [First run with real cars](#first-run-with-real-cars).
 
@@ -26,6 +27,19 @@ computer drivers, **Scan track**, choose a feel and challenge, then **Start roun
 The countdown leads into a short round and a result card. **Play again** explicitly
 starts a new round. Simulated cars exercise the controller code; agreement with
 the simulator does not prove agreement with physical hardware.
+
+## 3D studio and remote hosting
+
+Select **3D studio** above the map for an orbitable, zoomable circuit view. The
+original procedural cars, lighting and track use Three.js; no Unity install or
+app artwork is required. **2D map** remains available, including when WebGL fails.
+The scene visualizes telemetry and inferred track geometry, not measured height
+or collision avoidance. Drag the desktop panel dividers, or focus one and use
+Left/Right/Home. Narrow screens stack the panels; phones have a dedicated pad.
+
+For Codespaces or Docker, follow **[DEPLOYMENT.md](DEPLOYMENT.md)**. The nearby
+laptop owns Bluetooth and runs the game; the remote server serves pages and relays
+phone inputs. Keep that laptop awake with the host tab visible.
 
 ## Choose your kind of fun
 

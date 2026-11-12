@@ -19,7 +19,8 @@ const [pieces, vehicles, weapons] = await Promise.all([load('pieces'), load('veh
 const game = new Game({pieces, vehicles, weapons, log});
 game.topSpeed = 400;
 const world = new SimWorld(game.pieces, 'Capsule');
-const renderer = new Renderer($('map'));
+const mapRenderer = new Renderer($('map'));
+let renderer = mapRenderer, studioRenderer = null, studioLoading = false, requestedView = '2d';
 const recorder = new Recorder();
 const session = new RoundSession();
 let countdown = null, sessionResultShown = false;
@@ -526,7 +527,8 @@ function frame() {
   const cars = game.drivers.map(d => { const s = byId.get(d.id); return {...s, pose: d.car.pose(now), truck: vehicles.models[String(d.car.model)]?.truck}; });
   const banner = game.phase === 'scanning' ? 'Mapping the track: ' + (game.mapper.sequence.length) + ' pieces so far' + (game.mapper.problem ? ' · ' + game.mapper.problem : '')
     : !game.track && game.drivers.length ? 'Press “Scan track” to map the layout' : '';
-  renderer.draw({track: game.track, partial: game.phase === 'scanning' ? game.mapper.sequence : null, cars, mines: game.battle?.mines ?? [], now, banner, objectives: session.view().rows.filter(r => r.task && Number.isFinite(r.task.gateProgress)).map(r => ({progress: r.task.gateProgress, label: String(r.id)}))});
+  try { renderer.draw({track: game.track, partial: game.phase === 'scanning' ? game.mapper.sequence : null, cars, mines: game.battle?.mines ?? [], now, banner, objectives: session.view().rows.filter(r => r.task && Number.isFinite(r.task.gateProgress)).map(r => ({progress: r.task.gateProgress, label: String(r.id)}))}); }
+  catch (error) { if (renderer !== mapRenderer) { requestedView='2d'; useMap('3D interrupted · 2D map active'); log('3D view interrupted: '+error.message); } }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -574,3 +576,45 @@ $('planUse').onclick = () => {
   } catch (error) { log(error.message); }
 };
 $('planBuilder').ontoggle = drawPlan;
+
+// Visualization is optional and never issues motion commands.
+function useMap(note = '2D telemetry map') {
+  renderer = mapRenderer; $('map').hidden = false; $('map3d').hidden = true;
+  $('view2d').setAttribute('aria-pressed','true'); $('view3d').setAttribute('aria-pressed','false');
+  $('sceneNote').textContent = note;
+  for (const id of ['cameraOut','cameraIn','cameraReset']) $(id).disabled = true;
+}
+async function useStudio() {
+  requestedView = '3d';
+  if (studioLoading) return;
+  try {
+    if (!studioRenderer) {
+      studioLoading = true; $('sceneNote').textContent = 'Opening 3D studio…';
+      const {Renderer3D} = await import('./render3d.mjs');
+      studioRenderer = new Renderer3D($('map3d'), {onLost: () => { requestedView='2d'; useMap('3D paused by the browser · 2D map remains available'); }});
+    }
+    if (requestedView !== '3d') return;
+    if (!studioRenderer.available) throw new Error('Graphics context has not recovered');
+    renderer = studioRenderer; $('map').hidden = true; $('map3d').hidden = false;
+    $('view2d').setAttribute('aria-pressed','false'); $('view3d').setAttribute('aria-pressed','true');
+    $('sceneNote').textContent = 'Drag to orbit · Visual model, not measured elevation';
+    for (const id of ['cameraOut','cameraIn','cameraReset']) $(id).disabled = false;
+  } catch (error) { requestedView='2d'; useMap('3D unavailable on this browser · 2D map active'); log('3D view unavailable: '+error.message); }
+  finally { studioLoading=false; }
+}
+$('view3d').onclick = useStudio;
+$('view2d').onclick = () => { requestedView='2d'; useMap(); };
+$('cameraIn').onclick = () => studioRenderer?.setZoom(.15);
+$('cameraOut').onclick = () => studioRenderer?.setZoom(-.15);
+$('cameraReset').onclick = () => studioRenderer?.resetView();
+useMap();
+// Start in the lightweight map; the 3D button loads WebGL only when requested.
+for (const [id, variable, start, sign] of [['garageResize','--garage-width',280,1],['telemetryResize','--telemetry-width',270,-1]]) {
+  const handle=$(id); let width=start, drag=null;
+  const resize = value => { width=Math.max(220,Math.min(420,value)); document.body.style.setProperty(variable,width+'px'); handle.setAttribute('aria-valuenow',String(Math.round(width))); };
+  handle.setAttribute('aria-valuemin','220'); handle.setAttribute('aria-valuemax','420'); handle.setAttribute('aria-valuenow',String(start));
+  handle.onpointerdown = e => { drag={x:e.clientX,width}; handle.setPointerCapture(e.pointerId); };
+  handle.onpointermove = e => { if(drag)resize(drag.width+(e.clientX-drag.x)*sign); };
+  handle.onpointerup = handle.onpointercancel = handle.onlostpointercapture = () => { drag=null; };
+  handle.onkeydown = e => { if(['ArrowLeft','ArrowRight','Home'].includes(e.key)) { e.preventDefault(); e.stopPropagation(); resize(e.key==='Home'?start:width+(e.key==='ArrowRight'?20:-20)*sign); } };
+}

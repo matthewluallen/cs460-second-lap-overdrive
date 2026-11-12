@@ -86,3 +86,20 @@ aside{padding:1.2rem;background:#111824}h2{color:#c3cddd;font-size:.7rem;letter-
 #planBuilder summary { cursor: pointer; font-weight: 700; padding: 12px 0; }
 
 @media (min-width:651px) and (max-width:1050px) { #garage { overflow: auto; min-height: 0; } }
+
+/* Workspace dimensions follow the viewport; the circuit is the flexible center. */
+main { grid-template-columns: minmax(220px,var(--garage-width,280px)) 6px minmax(0,1fr) 6px minmax(220px,var(--telemetry-width,270px)); }
+.panel-resize { background:#111b28; cursor:col-resize; touch-action:none; border-inline:1px solid #253247; }
+.panel-resize:hover,.panel-resize:focus-visible { background:#a6d5df; outline:2px solid #c1f594; outline-offset:-2px; }
+#stage { min-height:0; overflow:auto; }
+.view-toolbar { display:flex; align-items:center; justify-content:space-between; gap:.5rem; padding:.45rem 1.2rem; flex-wrap:wrap; }
+.view-switch,.camera-tools { display:flex; gap:.3rem; }
+.view-toolbar button { min-height:34px; font-size:.72rem; padding:.35rem .65rem; }
+.view-switch button[aria-pressed=true] { color:#defbd0; border-color:#79a885; background:#233b35; }
+#circuitViewport { position:relative; flex:1 0 240px; min-height:240px; overflow:hidden; background:radial-gradient(ellipse at center,#1c2c3b,#0c141f); }
+#circuitViewport canvas { position:absolute; inset:0; display:block; width:100%; height:100%; min-height:0; }
+#map3d { touch-action:none; cursor:grab; } #map3d:active { cursor:grabbing; }
+#sceneNote { position:absolute; bottom:.6rem; left:.9rem; right:.9rem; pointer-events:none; color:#acbbc9; font-size:.65rem; text-align:center; text-shadow:0 1px 5px #000; }
+@media(max-width:1150px) { main { grid-template-columns:250px minmax(0,1fr); grid-template-rows:minmax(700px,calc(100svh - 90px)) auto; } body { overflow:auto; height:auto; min-height:100svh; } header { position:sticky; top:0; z-index:10; flex-wrap:wrap; } .panel-resize { display:none; } #garage { overflow:auto;min-height:0; } #side { display:block;grid-column:1/-1;columns:2; } #stage { min-height:0; } }
+@media(max-width:700px) { main { display:flex;flex-direction:column; } #stage { order:-1;min-height:760px; } #garage,#side { overflow:visible;columns:unset; } .view-toolbar { padding:.45rem .8rem; } #circuitViewport { flex:none;height:clamp(260px,43svh,500px); } }
+@media(min-width:1151px) and (max-height:800px) { #stage { overflow:auto; } #circuitViewport { flex:none;height:280px; } }

@@ -10,9 +10,10 @@ const versions=Object.freeze({express:require('express/package.json').version});
 const benchDirectory=fileURLToPath(new URL('../bench/',import.meta.url));
 const driveDirectory=fileURLToPath(new URL('../instructor-drive/',import.meta.url));
 const slipstreamDirectory=fileURLToPath(new URL('../slipstream/',import.meta.url));
+const threeDirectory=dirname(require.resolve('three'));
 const qrModule=require.resolve('qrcode-generator').replace(/qrcode\.js$/,'qrcode.mjs');
 // Browser assets of the Slipstream controller. Tests and tools are never served.
-const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|render|net|game|car|ble|sim|battle|track|protocol|trace|session)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
+const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|render|render3d|net|game|car|ble|sim|battle|track|protocol|trace|session)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
 export const MAX_BODY_BYTES=4096;
 
 // Sent on every response. Pages use one inline <style> block and same-origin
@@ -138,6 +139,7 @@ export function createApp({instructorLiveDrive=false,slipstream=false,hostCode=n
     res.set('Cache-Control','no-store');
     if(slipstream!==true)return res.status(404).json({error:'Not found'});
     if(req.path==='/vendor/qrcode.mjs')return res.type('text/javascript').sendFile(basename(qrModule), {root: dirname(qrModule), dotfiles: 'deny'});
+    if(['/vendor/three.module.js','/vendor/three.core.js'].includes(req.path))return res.type('text/javascript').sendFile(basename(req.path), {root:threeDirectory,dotfiles:'deny'});
     if(!SLIPSTREAM_FILE.test(req.path))return res.status(404).json({error:'Not found'});
     next();
   },express.static(slipstreamDirectory,{dotfiles:'deny',index:'index.html',redirect:false}));
@@ -171,17 +173,23 @@ export function parsePort(value='8000'){
   return port;
 }
 
+export function serverBindAddress({slipstream=false,container=false}={}) {
+  if(container && !slipstream)throw new Error('--container requires --slipstream');
+  return container?'0.0.0.0':'127.0.0.1';
+}
+
 if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
   try{
     const port=parsePort(process.env.PORT);
-    // HOST is intentionally not configurable. This teaching server is loopback-only.
+    // Loopback remains the default. Container binding is an explicit Slipstream-only opt-in.
     const instructorLiveDrive=instructorDriveEnabled(process.env.CS460_INSTRUCTOR_LIVE_DRIVE);
     const slipstream=process.argv.includes('--slipstream');
     // The host code gates room creation. Set SLIPSTREAM_HOST_CODE to choose it.
     const hostCode=process.env.SLIPSTREAM_HOST_CODE||newHostCode();
     if(slipstream&&hostCode.length<8)throw new Error('SLIPSTREAM_HOST_CODE must be at least 8 characters');
     const app=createApp({instructorLiveDrive,slipstream,hostCode});
-    const server=app.listen(port,'127.0.0.1',()=>{
+    const bindAddress=serverBindAddress({slipstream,container:process.argv.includes('--container')});
+    const server=app.listen(port,bindAddress,()=>{
       // Bound slow or stalled clients on this single-process teaching server.
       server.headersTimeout=10000;server.requestTimeout=15000;server.keepAliveTimeout=5000;
       console.log(`CS 460 mock support server: http://127.0.0.1:${port}`);
@@ -189,7 +197,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
         app.locals.slipstreamRelay.attach(server);
         console.log(`Slipstream controller: http://127.0.0.1:${port}/slipstream/ (real cars move; supervise the track)`);
         console.log(`Host code (needed to invite players): ${hostCode}`);
-        // Regular output also keeps a Codespace from idling out mid-session.
+        // Status output does not guarantee that a Codespace stays awake.
         setInterval(()=>console.log(`[slipstream] ${new Date().toISOString()} rooms ${app.locals.slipstreamRelay.rooms.size}`),5*60*1000).unref();
       }
       if(instructorLiveDrive)console.log('Instructor drive prototype enabled at /instructor-drive/; physical movement remains unverified.');

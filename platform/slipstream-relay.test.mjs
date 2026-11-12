@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {once} from 'node:events';
 import {WebSocket} from 'ws';
-import {createApp, SECURITY_HEADERS} from './server.mjs';
+import {createApp, SECURITY_HEADERS, serverBindAddress} from './server.mjs';
 import {LIMITS, SOCKET_PATH, newHostCode} from './slipstream-relay.mjs';
 
 const CODE = 'TESTC-ODE42';
@@ -57,7 +57,7 @@ async function start(t, options = {slipstream: true, hostCode: CODE}) {
 
 test('controller and relay do not exist unless the server is started with the slipstream option', async t => {
   const {call} = await start(t, {});
-  for (const path of ['/slipstream/', '/slipstream/app.mjs', '/slipstream/pad.html', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs'])
+  for (const path of ['/slipstream/', '/slipstream/app.mjs', '/slipstream/pad.html', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js'])
     assert.equal((await call(path)).status, 404, path);
   assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 404);
   for (const value of ['true', 1, 'yes']) {
@@ -69,7 +69,7 @@ test('controller and relay do not exist unless the server is started with the sl
 test('enabled controller serves only its browser assets, with security headers', async t => {
   const {origin, host} = await start(t);
   for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs',
-    '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs']) {
+    '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 200, path);
     const csp = response.headers.get('content-security-policy');
@@ -78,7 +78,7 @@ test('enabled controller serves only its browser assets, with security headers',
     assert.equal(response.headers.get('cache-control'), 'no-store', path);
   }
   for (const path of ['/slipstream/core.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
-    '/slipstream/../package.json', '/slipstream/data/../core.test.mjs', '/slipstream/vendor/qrcode.js', '/slipstream/.git/config']) {
+    '/slipstream/../package.json', '/slipstream/data/../core.test.mjs', '/slipstream/vendor/qrcode.js', '/slipstream/vendor/three.cjs', '/slipstream/vendor/../package.json', '/slipstream/.git/config']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 404, path);
   }
@@ -289,4 +289,12 @@ test('same-seat replacement is atomic at four approved drivers', async t => {
   assert.equal((await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: replacement.player}})).status, 204);
   assert.equal((await oldSocket.next()).type, 'kicked');
   assert.equal((await call(r.base + '/input', {method: 'POST', key: old.playerKey, body: {throttle: 1}})).status, 403);
+});
+
+// The teaching bench remains loopback-only; container exposure is an explicit game-only choice.
+test('container binding requires explicit Slipstream opt-in', () => {
+  assert.equal(serverBindAddress(), '127.0.0.1');
+  assert.equal(serverBindAddress({slipstream:true}), '127.0.0.1');
+  assert.throws(() => serverBindAddress({container:true}));
+  assert.equal(serverBindAddress({slipstream:true,container:true}), '0.0.0.0');
 });

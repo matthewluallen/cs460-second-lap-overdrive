@@ -5,7 +5,8 @@ import {readFile} from 'node:fs/promises';
 test('dependencies are exact registry releases with lockfile integrity and no removed packages',async()=>{
   const manifest=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
   const lock=JSON.parse(await readFile(new URL('../package-lock.json',import.meta.url),'utf8'));
-  assert.deepEqual(Object.keys(manifest.dependencies).sort(),['express','qrcode-generator','ws']);
+  assert.deepEqual(Object.keys(manifest.dependencies).sort(),['express','qrcode-generator','three','ws']);
+  assert.match(manifest.dependencies.three,/^\d+\.\d+\.\d+$/);
   assert.match(manifest.dependencies.ws,/^\d+\.\d+\.\d+$/);
   assert.match(manifest.dependencies['qrcode-generator'],/^\d+\.\d+\.\d+$/);
   assert.equal(manifest.devDependencies,undefined);

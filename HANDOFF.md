@@ -43,7 +43,7 @@ python3 -m lapreturn.cwe_lab     # expect three "flaw_reproduced": false, exit 0
 npm run dependency-lab           # expect "regressionCheckPassed": true
 ```
 
-Review-fix verification on 12 November 2026: **405 Node tests pass on Node
+Review-fix verification on 12 November 2026: **406 Node tests pass on Node
 22.23.5**, **38 Python tests pass on Python 3.14.7**, audit reports zero
 vulnerabilities, and the dependency/CWE probes pass. Host/phone browser walkthroughs
 covered approval, simulated driving, story completion, and portrait/landscape
@@ -83,6 +83,19 @@ Run the controller locally with `npm run slipstream` (prints a host code; opens
 - **The course exercises were removed.** The deliberate flaws the class was built on
   no longer reproduce; use `course-vulnerable-baseline` at
   `ab809451fc99564474b2b83baca0f63b78c24034` for those exercises.
+
+## Fast & Furious, 3D studio and container hosting
+
+Read [the Fast & Furious review](slipstream/review/FAST-FURIOUS-REVIEW.md) for the
+independent `com.anki.foxtrot` analysis, matching derived tables and transport code,
+and the native-analysis warnings. Power Zone effects remain unimplemented.
+[Deployment instructions](slipstream/DEPLOYMENT.md) describe Codespaces hosting
+with a nearby Bluetooth laptop and phone clients. The optional Three.js studio
+uses original procedural graphics with a 2D fallback; desktop panels resize.
+Local verification covers 1440×900, 390×844 and 844×390 host layouts, keyboard
+resizing, WebGL context-loss fallback, and a non-root Docker build with assets
+and authenticated room join/approval. Actual Codespaces forwarding and physical
+Bluetooth/sensors remain unverified.
 
 ## Broader review and coordination build
 

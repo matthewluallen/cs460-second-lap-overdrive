@@ -42,6 +42,7 @@
     <div id="cars"></div>
     <p class="note" id="empty">No cars yet. Connect a real car over Bluetooth, or add simulated cars to try everything without hardware.</p>
   </aside>
+  <div id="garageResize" class="panel-resize" role="separator" aria-label="Resize pit crew" aria-orientation="vertical" tabindex="0"></div>
   <section id="stage">
     <div class="stage-heading"><div><span class="eyebrow">YOUR TABLE. YOUR CIRCUIT.</span><h2 id="arenaTitle">Make room for a little rivalry.</h2></div><span id="liveTag" class="chip">Simulation ready</span></div>
     <section class="challenge-panel">
@@ -54,7 +55,8 @@
     <button id="endRound" hidden>Finish round &amp; stop</button>
     </section>
     <section id="pitPanel" class="pit-panel" hidden aria-live="polite"><strong>Shared pit stop</strong><p id="pitMessage"></p><button id="pitResume" class="primary">Track clear · Continue round</button></section>
-    <canvas id="map" aria-label="Live circuit map and car positions"></canvas>
+    <div class="view-toolbar"><div class="view-switch" role="group" aria-label="Circuit view"><button id="view3d" aria-pressed="false">3D studio</button><button id="view2d" aria-pressed="true">2D map</button></div><div class="camera-tools"><button id="cameraOut" aria-label="Zoom out">−</button><button id="cameraReset">Reset view</button><button id="cameraIn" aria-label="Zoom in">+</button></div></div>
+    <div id="circuitViewport"><canvas id="map" aria-label="Live circuit map and car positions"></canvas><canvas id="map3d" hidden tabindex="0" aria-label="3D circuit visualization. Drag or use arrow keys to orbit. Escape stops all cars."></canvas><div id="sceneNote">2D telemetry map</div></div>
     <div id="roundHud" class="round-hud"><div><span id="roundLabel" class="eyebrow">READY WHEN YOU ARE</span><strong id="roundTitle">Choose your kind of fun</strong><span id="roundGoal">Add cars, map the circuit, then start a round.</span></div><div class="clock"><strong id="roundClock">—</strong><span id="roundState">Free drive</span></div></div>
     <div id="countdown" class="countdown" hidden role="status" aria-live="assertive"></div>
     <section id="results" class="results" hidden aria-labelledby="resultTitle"><span class="eyebrow">ROUND COMPLETE · CARS STOPPED</span><h2 id="resultTitle">Nice run.</h2><p id="resultSummary"></p><ol id="resultRows"></ol><button id="rematch" class="primary">Play again</button><button id="dismissResults">Back to pit crew</button></section>
@@ -63,6 +65,7 @@
       <span><b>Player 2</b> arrows · K fire · L support · O special · I P switch weapon · M U-turn</span>
     </div>
   </section>
+  <div id="telemetryResize" class="panel-resize" role="separator" aria-label="Resize telemetry" aria-orientation="vertical" tabindex="0"></div>
   <aside id="side">
 
     <section class="side-block"><h2>On the grid</h2>
