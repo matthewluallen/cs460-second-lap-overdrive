@@ -20,6 +20,7 @@ export class Renderer3D {
     this.camera = new THREE.OrthographicCamera(-3,3,3,-3,.01,60);
     this.trackRoot = new THREE.Group(); this.scene.add(this.trackRoot);
     this.carRoot = new THREE.Group(); this.scene.add(this.carRoot); this.carMeshes = new Map();
+    this.objectiveRoot = new THREE.Group(); this.scene.add(this.objectiveRoot); this.objectiveKey = null;
     this.effectRoot = new THREE.Group(); this.scene.add(this.effectRoot); this.effects = [];
     this.azimuth = .25; this.pitch = .95; this.zoom = 1; this.center = new THREE.Vector3(); this.span = 3;
     this.lastFrame = -Infinity; this.shapeKey = ''; this.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -79,10 +80,29 @@ export class Renderer3D {
       box(.003,.004,.008,new THREE.MeshStandardMaterial({color:0xf54e61,emissive:0xf54e61,emissiveIntensity:.7}),-length/2,.022,z);
     }
     const ring=this.#mesh(new THREE.RingGeometry(.055,.059,36),new THREE.MeshBasicMaterial({color:color(row.color),side:THREE.DoubleSide,transparent:true,opacity:.7}),group);ring.rotation.x=-Math.PI/2;ring.position.y=.004;
-    const label=document.createElement('canvas');label.width=96;label.height=64;
-    const context=label.getContext('2d');context.fillStyle='#101a26';context.fillRect(12,8,72,48);context.font='bold 38px system-ui';context.textAlign='center';context.fillStyle='#eff8ff';context.fillText(String(row.id),48,47);
-    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(label),transparent:true,depthTest:false}));sprite.scale.set(.09,.06,1);sprite.position.set(0,.105,0);group.add(sprite);
-    this.carRoot.add(group); return {group, shell, ring, model:row.model};
+    const sprite=this.#label(row.id);sprite.position.set(0,.15,0);group.add(sprite);
+    const shield=this.#mesh(new THREE.SphereGeometry(.072,20,12),new THREE.MeshBasicMaterial({color:0x59c8ff,transparent:true,opacity:.18,depthWrite:false}),group);
+    shield.scale.y=.65;shield.position.y=.023;shield.visible=false;
+    const energyBack=new THREE.Sprite(new THREE.SpriteMaterial({color:0x101a26,depthTest:false}));energyBack.scale.set(.105,.015,1);energyBack.position.y=.112;energyBack.renderOrder=2;group.add(energyBack);
+    const energy=new THREE.Sprite(new THREE.SpriteMaterial({color:0x5dff9b,depthTest:false}));energy.position.set(0,.112,.001);energy.renderOrder=3;group.add(energy);
+    this.carRoot.add(group); return {group, shell, ring, shield, energy, model:row.model};
+  }
+  #label(text, tint='#eff8ff') {
+    const label=document.createElement('canvas');label.width=Math.max(96,String(text).length*26+24);label.height=64;
+    const context=label.getContext('2d');context.fillStyle='#101a26';context.fillRect(12,8,label.width-24,48);context.font='bold 38px system-ui';context.textAlign='center';context.fillStyle=tint;context.fillText(String(text),label.width/2,47);
+    const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(label),transparent:true,depthTest:false}));sprite.scale.set(.09*label.width/96,.06,1);return sprite;
+  }
+  #spot(track, distance, lateral=0) {
+    if(!track?.length||!Number.isFinite(distance))return null;
+    const d=((distance%track.length)+track.length)%track.length;
+    const p=track.pieces.find(p=>d>=p.start.distance&&d<p.start.distance+p.length);
+    if(!p)return null;
+    const q=pointOn(p,(d-p.start.distance)/p.length,lateral);
+    return new THREE.Vector3(q.x/1000,.055,-q.y/1000);
+  }
+  #pulse(position, radius, tint, opacity) {
+    const ring=this.#mesh(new THREE.TorusGeometry(radius,.004,4,36),new THREE.MeshBasicMaterial({color:tint,transparent:true,opacity,depthWrite:false}),this.effectRoot);
+    ring.rotation.x=-Math.PI/2;ring.position.copy(position);
   }
   addEffect(e) { if (!this.reducedMotion) { this.effects.push({...e,born:performance.now()}); if(this.effects.length>80)this.effects.shift(); } }
   draw({track, partial, cars=[], now, objectives=[], mines=[]}) {
@@ -98,7 +118,7 @@ export class Renderer3D {
     const half=Math.max(halfHeight+.09,(halfWidth+.09)/aspect)*1.12/this.zoom;
     this.camera.left=-half*aspect;this.camera.right=half*aspect;this.camera.top=half;this.camera.bottom=-half;this.camera.far=distance*3+20;this.camera.updateProjectionMatrix();
     this.scene.fog.near=distance+this.span*2;this.scene.fog.far=distance+this.span*5;
-    const ids=new Set(cars.map(c=>c.id)), positions=new Map();
+    const ids=new Set(cars.map(c=>c.id)), positions=new Map(), headings=new Map();
     for(const [id,entry] of this.carMeshes) if(!ids.has(id)){this.#clear(entry.group);this.carRoot.remove(entry.group);this.carMeshes.delete(id);}
     for(const row of cars){
       let m=this.carMeshes.get(row.id);if(m&&m.model!==row.model){this.#clear(m.group);this.carRoot.remove(m.group);this.carMeshes.delete(row.id);m=null;}
@@ -106,17 +126,51 @@ export class Renderer3D {
       if(!row.pose)continue;
       m.group.position.set(row.pose.x/1000,.03,-row.pose.y/1000);m.group.rotation.y=row.pose.heading;
       m.shell.color.copy(row.disabled?new THREE.Color(0x614052):color(row.color));m.ring.material.opacity=row.located ? .75 : .2;
-      positions.set(row.id,m.group.position.clone());
+      m.shield.visible=!!row.shield;
+      const energy=Number.isFinite(row.energy)?Math.max(0,Math.min(1,row.energy)):0;
+      m.energy.scale.set(.1*energy,.009,1);m.energy.visible=energy>0;
+      m.energy.material.color.set(energy<.33?0xff4d6d:energy<.66?0xffb84d:0x5dff9b);
+      positions.set(row.id,m.group.position.clone());headings.set(row.id,row.pose.heading);
     }
     this.#clear(this.effectRoot);
     this.effects=this.effects.filter(e=>now-e.born<(e.life??350));
-    for(const e of this.effects){const a=positions.get(e.from),b=positions.get(e.to);if(e.type!=='beam'||!a||!b)continue;
-      const g=new THREE.BufferGeometry().setFromPoints([a.clone().add(new THREE.Vector3(0,.04,0)),b.clone().add(new THREE.Vector3(0,.04,0))]);this.effectRoot.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:e.color??0xeaffaa})));}
-    if(track)for(const o of objectives){const d=o.progress*track.length,p=track.pieces.find(p=>d>=p.start.distance&&d<p.start.distance+p.length);if(!p)continue;
-      const q=pointOn(p,(d-p.start.distance)/p.length);const g=new THREE.TorusGeometry(.075,.004,4,28);const marker=this.#mesh(g,new THREE.MeshBasicMaterial({color:0xc1f594}),this.effectRoot);marker.rotation.x=-Math.PI/2;marker.position.set(q.x/1000,.045,-q.y/1000);}
+    for(const e of this.effects){
+      const a=positions.get(e.from),b=positions.get(e.to),car=positions.get(e.car);
+      const age=Math.max(0,(now-e.born)/(e.life??350)),fade=1-age;
+      if(e.type==='beam'&&a&&b){
+        const g=new THREE.BufferGeometry().setFromPoints([a.clone().add(new THREE.Vector3(0,.04,0)),b.clone().add(new THREE.Vector3(0,.04,0))]);
+        this.effectRoot.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:e.color??0xeaffaa,transparent:true,opacity:fade})));
+      }else if((e.type==='shot'||e.type==='tracer')&&a){
+        const heading=headings.get(e.from),reach=Math.min(2,Math.max(0,e.length??.7))*(e.type==='tracer'?.6:1);
+        const start=a.clone().add(new THREE.Vector3(0,.04,0)),end=start.clone().add(new THREE.Vector3(Math.cos(heading)*reach,0,-Math.sin(heading)*reach));
+        this.effectRoot.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([start,end]),new THREE.LineBasicMaterial({color:e.color??0xffd34d,transparent:true,opacity:fade})));
+      }else if(['burst','pulse','horn','rage'].includes(e.type)&&a){
+        this.#pulse(a.clone().add(new THREE.Vector3(0,.025,0)),.04+Math.min(1,e.radius??.3)*age,e.color??0xffb84d,fade);
+      }else{
+        const position=e.type==='explosion'?(this.#spot(track,e.distance,e.lateral)??car):car;
+        const tint={explosion:0xffb84d,disabled:0xff6577,blocked:0x59c8ff,hit:0xff6577,crash:0xff6577,recovered:0x5dff9b,assist:0xc1f594}[e.type];
+        if(position&&tint)this.#pulse(position.clone().add(new THREE.Vector3(0,.025,0)),.065+age*(e.type==='explosion'?.22:.08),tint,fade);
+      }
+    }
+    // Cache mission labels rather than allocating canvas textures every frame.
+    const objectiveKey=JSON.stringify([this.shapeKey,!!track,objectives]);
+    if(objectiveKey!==this.objectiveKey){
+      this.objectiveKey=objectiveKey;this.#clear(this.objectiveRoot);
+      const gates=new Map();
+      if(track)for(const o of objectives){
+        if(!Number.isFinite(o.progress))continue;
+        const progress=((o.progress%1)+1)%1,key=progress.toFixed(6);
+        if(!gates.has(key))gates.set(key,{progress,labels:[]});
+        gates.get(key).labels.push(String(o.label));
+      }
+      for(const o of gates.values()){const q=this.#spot(track,o.progress*track.length);if(!q)continue;
+        const marker=this.#mesh(new THREE.TorusGeometry(.075,.004,4,28),new THREE.MeshBasicMaterial({color:0xc1f594}),this.objectiveRoot);marker.rotation.x=-Math.PI/2;marker.position.copy(q);
+        const label=this.#label(o.labels.join('·'),'#c1f594');label.position.copy(q).add(new THREE.Vector3(0,.11,0));this.objectiveRoot.add(label);
+      }
+    }
     if(track)for(const mine of mines){const p=track.pieces.find(p=>mine.distance>=p.start.distance&&mine.distance<p.start.distance+p.length);if(!p)continue;const q=pointOn(p,(mine.distance-p.start.distance)/p.length,mine.lateral);
       const m=this.#mesh(new THREE.CylinderGeometry(.025,.035,.012,12),new THREE.MeshStandardMaterial({color:now>=mine.armedAt?0xff6577:0x88636d,emissive:0x5f1328}),this.effectRoot);m.position.set(q.x/1000,.04,-q.y/1000);}
     this.renderer.render(this.scene,this.camera);
   }
-  dispose(){this.#clear(this.trackRoot);this.#clear(this.carRoot);this.#clear(this.effectRoot);this.renderer.dispose();}
+  dispose(){this.#clear(this.trackRoot);this.#clear(this.carRoot);this.#clear(this.effectRoot);this.#clear(this.objectiveRoot);this.renderer.dispose();}
 }

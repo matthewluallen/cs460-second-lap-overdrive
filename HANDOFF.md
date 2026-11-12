@@ -93,7 +93,9 @@ and the native-analysis warnings. Power Zone effects remain unimplemented. Diagn
 firmware, distinguish mixed sessions, and reject callbacks from previous sessions.
 [Deployment instructions](slipstream/DEPLOYMENT.md) describe Codespaces hosting
 with a nearby Bluetooth laptop and phone clients. The optional Three.js studio
-uses original procedural graphics with a 2D fallback; desktop panels resize.
+uses original procedural graphics with a 2D fallback; desktop panels resize. The 3D feedback pass adds energy bars,
+shields, grouped numbered mission gates and attack/recovery cues. Browser checks
+exercise 13 effect types, cached gate labels and reduced-motion status visibility.
 Local verification covers 1440×900, 390×844 and 844×390 host layouts, keyboard
 resizing, WebGL context-loss fallback, and a non-root Docker build with assets
 and authenticated room join/approval. Actual Codespaces forwarding and physical

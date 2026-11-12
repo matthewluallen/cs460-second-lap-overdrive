@@ -33,6 +33,9 @@ the simulator does not prove agreement with physical hardware.
 Select **3D studio** above the map for an orbitable, zoomable circuit view. The
 original procedural cars, lighting and track use Three.js; no Unity install or
 app artwork is required. **2D map** remains available, including when WebGL fails.
+The 3D view includes energy bars, shields, numbered mission gates, and attack/
+recovery cues. Shared gates list every assigned car number. Reduced motion removes
+animated effects while keeping persistent energy, shield and objective indicators.
 The scene visualizes telemetry and inferred track geometry, not measured height
 or collision avoidance. Drag the desktop panel dividers, or focus one and use
 Left/Right/Home. Narrow screens stack the panels; phones have a dedicated pad.
