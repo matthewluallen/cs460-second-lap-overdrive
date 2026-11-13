@@ -1,3 +1,9 @@
+# Original app architecture review
+
+Read [ORIGINAL-APP-STATE-MACHINES.md](slipstream/review/ORIGINAL-APP-STATE-MACHINES.md) for the expanded vehicle lifecycle, mapping/localization, host-owned multi-car interactions, feature evidence ledger and staged implementation gaps. A fresh read-only Ghidra export inspected35 selected lifecycle/control functions (including thunks); manifest and reproducible script are committed, proprietary export stays local. This review does not claim complete app or firmware reconstruction. No new firmware commands or hardware trials were performed.
+
+Key new evidence: native pause/full-stop and drive/acquisition explicitly toggle SkipAutoDriveInDeloc0x35; current software does not. Hardware semantics remain unvalidated, so no speculative policy change. Native configuration also makes our short low-speed pulse a command/STOP probe, not guaranteed optical acquisition. Rear-facing cone targeting is a separately reproduced software bug scheduled after control/localization recovery.
+
 # Independent advisory and follow-up repairs
 
 Read [REVERSE-ENGINEERING-ADVISORY.md](slipstream/review/REVERSE-ENGINEERING-ADVISORY.md) for three independent AI reverse-engineering reviews and reproduced repairs. The unknown0x43 incident packet is firmware delocalization-recovery entry. This is newly identified evidence, not a proven physical cause. Scan-reference overwrite, diagnostic auto-calibration, expired-motion race, negative-status aging and startup-notification capture are repaired with regressions. No physical commands in this review pass.
