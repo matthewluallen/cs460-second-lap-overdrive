@@ -1,3 +1,11 @@
+# Architecture follow-through: directional targeting and map evidence
+
+Rear-facing cone targeters now honor negative range in the source car's direction of travel. Regressions first reproduced failures using both real Shredder loadouts, then verified ahead/behind, reverse travel, boundary, lateral width and loop wrap. Trailer anchors/global-pose angle semantics remain unresolved; this is not full native combat parity.
+
+Track validation is now a read-only evidence report in the live checks and trace export: geometric closure, start count, repeated IDs, inferred/special pieces and unverified intersection/jump traversal. It never certifies physical validity or changes existing scoring/safety gates. No-start layouts remain supported under existing policy.
+
+The full suite passes587 Node tests. Browser simulator preview confirmed map-check rendering; no real-car motion or firmware-policy changes. Hardware localization recovery remains the priority; command/STOP pulse is not guaranteed to cross an optical code.
+
 # Original app architecture review
 
 Read [ORIGINAL-APP-STATE-MACHINES.md](slipstream/review/ORIGINAL-APP-STATE-MACHINES.md) for the expanded vehicle lifecycle, mapping/localization, host-owned multi-car interactions, feature evidence ledger and staged implementation gaps. A fresh read-only Ghidra export inspected35 selected lifecycle/control functions (including thunks); manifest and reproducible script are committed, proprietary export stays local. This review does not claim complete app or firmware reconstruction. No new firmware commands or hardware trials were performed.

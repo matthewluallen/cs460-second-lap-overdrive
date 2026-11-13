@@ -80,7 +80,14 @@ export class Battle {
         const along = length >= 0 ? shifted > 0 && shifted <= length : shifted < 0 && shifted >= length;
         return along && wide <= (targeter.half_width ?? 0.1);
       }
-      case 'cone': return gap > 0 && gap <= (targeter.length ?? 1) && wide <= gap * Math.tan((targeter.theta ?? 0.3) / 2) + 0.02;
+      case 'cone': {
+        // Signed length chooses front/rear, relative to the source's travel.
+        // Preserve the existing angular width model; trailer anchors are a
+        // separate, still-unverified geometry feature.
+        const length = targeter.length ?? 1;
+        const along = length < 0 ? -gap : gap;
+        return along > 0 && along <= Math.abs(length) && wide <= along * Math.tan((targeter.theta ?? 0.3) / 2) + 0.02;
+      }
       case 'forward_track_distance':
         return gap >= (targeter.min_distance ?? 0.01) && gap <= (targeter.max_distance ?? 1) &&
           (targeter.half_width === undefined || wide <= targeter.half_width);

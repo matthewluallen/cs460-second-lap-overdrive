@@ -1,7 +1,7 @@
 // Host page: owns the Bluetooth links, runs the game loop, draws the map and
 // relays phone players. Nothing here trusts text from a car or a phone as HTML.
 import {Game} from './game.mjs';
-import {trackFromPlan} from './track.mjs';
+import {trackFromPlan, trackValidation} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
 import {chooseCar, bluetoothAvailable} from './ble.mjs';
 import {Renderer} from './render.mjs';
@@ -521,7 +521,8 @@ function refresh(snapshot = game.snapshot()) {
   if($('scanCar').dataset.key!==scanKey){const selected=$('scanCar').value;$('scanCar').replaceChildren(...scanOptions.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));if(scanOptions.some(d=>String(d.id)===selected))$('scanCar').value=selected;$('scanCar').dataset.key=scanKey;}
 
   const seconds=ms=>ms===null?'none yet':(ms/1000).toFixed(1)+'s ago';
-  $('liveDiagnostics').textContent=game.drivers.map(d=>{
+  const mapChecks=trackValidation(game.track);
+  $('liveDiagnostics').textContent=(mapChecks.available?'Map checks: '+(mapChecks.issues.join(', ')||'basic geometry checks clear')+' · physical validation not established by this report\n\n':'')+game.drivers.map(d=>{
     const x=d.car.diagnostics();
     const offset=x.laneChange ? (x.laneChange.offsetKnown?'reported '+x.laneChange.currentOffset.toFixed(1)+' mm':'UNKNOWN — lane calibration needed') : 'not reported';
     return d.car.name+' · firmware '+(x.firmware??'waiting')+' · '+x.profile+'\n'+
@@ -631,7 +632,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-12-live-diagnostics-1',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-12-live-diagnostics-1',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);

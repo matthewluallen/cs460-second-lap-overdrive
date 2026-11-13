@@ -145,3 +145,7 @@ Exact rear-cone reproduction: actual weapon data,10,000mm track; source pose dis
 7. Hardware matrix: original app baseline, our fresh SDK acquisition, repeated mapping, steering both directions, STOP/rearm, one-car race, multiple cars, phone/iPad, then attacks and special track. Each stage retains trace and operator observations.
 
 These priorities add state distinctions and evidence checks first. They do not transplant all native autonomous behavior into our stricter stop policy. Formal tests can verify host invariants under stated assumptions; they cannot prove firmware safety, sensor condition or physical stop distance.
+
+## Implemented follow-through
+
+Signed cone range is repaired with both real rear-facing loadouts and direction/boundary/wrap regressions. This does not implement trailer anchors or angle semantics. Map checks now expose start count, closure, repeated IDs, inferred/special sections and unresolved intersection/jump validation in live diagnostics and exports. The report is evidence-only and cannot certify physical acceptance; existing score gates are unchanged.

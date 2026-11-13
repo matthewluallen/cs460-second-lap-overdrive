@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Game} from './game.mjs';
 import {FaultTransport, FaultRelay} from './faults.mjs';
-import {trackFromPlan} from './track.mjs';
+import {trackFromPlan, trackValidation} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
 import {Recorder} from './trace.mjs';
 import {WEAPON_LABEL} from './battle.mjs';
@@ -40,7 +40,7 @@ function host({injectFaults = false, advancingClock = false} = {}) {
   const document = {hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
-  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
+  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, trackValidation, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
     fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage,
     performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
@@ -387,4 +387,11 @@ for (const advancingClock of [false,true]) test(`default two-car demo scores bot
   assert.ok(rows.every(row=>row.laps>0),JSON.stringify(rows));
   assert.equal(h.run('session.status'),'finished');
   assert.equal(h.run('world.cars.every(car=>car.targetSpeed===0)'),true);
+});
+
+test('host displays and exports map checks without claiming physical validation',()=>{
+ const h=host();h.node('demo').click();
+ assert.match(h.node('liveDiagnostics').textContent,/Map checks:/);
+ assert.equal(h.run('sessionTrace().diagnostics.trackChecks.physicalValidation'),false);
+ assert.equal(h.run('sessionTrace().diagnostics.trackChecks.available'),true);
 });

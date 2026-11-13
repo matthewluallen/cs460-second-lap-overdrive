@@ -260,3 +260,26 @@ export function trackFromPlan(pieces, plan) {
     return {...traversal(pieces, -1, p.reverse, p), inferred: true};
   }));
 }
+
+// Evidence report only. Geometry is not physical acceptance or car localization.
+export function trackValidation(track) {
+  if (!track) return {schema:'slipstream-track-checks-v1',available:false,physicalValidation:false,issues:['no-map']};
+  const pieces=track.pieces, counts=new Map();
+  for(const p of pieces)counts.set(p.id,(counts.get(p.id)??0)+1);
+  const startCount=pieces.filter(p=>p.kind==='start').length;
+  const inferred=pieces.flatMap((p,index)=>p.inferred?[{id:p.id,index}]:[]);
+  const special=pieces.flatMap((p,index)=>p.unverified||SPECIAL_UNVERIFIED.includes(Number(p.id))?[{id:p.id,index}]:[]);
+  const intersections=pieces.flatMap((p,index)=>p.kind==='intersection'?[index]:[]);
+  const jumps=pieces.flatMap((p,index)=>['jump','landing'].includes(p.kind)?[{id:p.id,index,reverse:!!p.reverse}]:[]);
+  const issues=[];
+  if(!track.closed)issues.push('geometry-not-closed');
+  if(startCount===0)issues.push('missing-start');else if(startCount>1)issues.push('multiple-starts');
+  if(inferred.length)issues.push('inferred-sections');
+  if(special.length)issues.push('unverified-special-sections');
+  if(intersections.length)issues.push('intersection-traversal-unverified');
+  if(jumps.length)issues.push('jump-direction-unverified');
+  return {schema:'slipstream-track-checks-v1',available:true,physicalValidation:false,
+    geometricClosure:!!track.closed,closureGapMm:track.gap,pieceCount:pieces.length,startCount,
+    repeatedPieceIds:[...counts].filter(([,n])=>n>1).map(([id,count])=>({id,count})),
+    inferred,special,intersections,jumps,issues};
+}
