@@ -1,3 +1,7 @@
+## Latest hardware evidence — 2026-11-13 15:03 UTC export
+
+The 5b3816d trial spun off before any steering command. See [pre-steering incident analysis](GROUNDSHOCK-PRESTEERING-OFFTRACK.md) and the committed `groundshock-sdk-presteering-offtrack.json` fixture. Exactly one nonzero speed command requested 240 mm/s; zero position/transition messages; off-road at +2155 ms; STOP recorded 1 ms later. The subsequent raw speed field decodes as 1802, but physical speed/firmware semantics remain unverified. No 0x25 or 0x2c occurred, so the offset-before-lane hypothesis remains untested. Operator confirmed spin-off; do not mistake the UI stopped state for physical stop verification. New capture assertion passes with the five existing steering-ACK tests. No runtime changes or further hardware run in this analysis.
+
 # Next-agent handoff — 13 November 2026
 
 ## Task

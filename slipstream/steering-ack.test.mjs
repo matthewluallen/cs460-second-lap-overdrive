@@ -48,3 +48,24 @@ test('Groundshock hardware: command 1 is cancelled in 41 ms and STOP is recorded
  assert.equal(positions.length,11);
  for(const p of positions){assert.equal(p.lastReceivedLaneChangeId,255);assert.equal(p.lastExecutedLaneChangeId,129);assert.equal(p.desiredLaneSpeed,70);}
 });
+
+test('Groundshock spin-off precedes all steering and records STOP after off-road',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const capture=JSON.parse(readFileSync(new URL('./fixtures/groundshock-sdk-presteering-offtrack.json',import.meta.url)));
+ const rows=capture.events.map(([at,car,direction,hex])=>({at,car,direction,b:Uint8Array.from(hex.split(' ').map(x=>parseInt(x,16)))}));
+ const tx=rows.filter(e=>e.direction==='tx');
+ assert.equal(tx.some(e=>[0x25,0x2c].includes(e.b[1])),false);
+ const motion=tx.filter(e=>e.b[1]===0x24&&new DataView(e.b.buffer).getInt16(2,true)>0);
+ assert.equal(motion.length,1);
+ assert.deepEqual([...motion[0].b],[6,0x24,240,0,232,3,0]);
+ const rx=rows.filter(e=>e.direction==='rx');
+ assert.equal(rx.some(e=>[0x27,0x29].includes(e.b[1])),false);
+ const off=rx.find(e=>e.b[1]===0x2b);
+ assert.equal(off.at-motion[0].at,2155);
+ const stop=tx.find(e=>e.at>=off.at&&e.b[1]===0x24);
+ assert.equal(stop.at-off.at,1,'capture timing is not physical stop latency');
+ assert.equal(new DataView(stop.b.buffer).getInt16(2,true),0);
+ const report=rx.find(e=>e.at>stop.at&&e.b[1]===0x36);
+ assert.equal(report.at-stop.at,47);
+ assert.deepEqual(decode(report.b)[0],{id:0x36,type:'speed',desired:0,accel:1000,actual:1802});
+});
