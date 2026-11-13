@@ -16,5 +16,10 @@
   "postStartCommand": "npm run slipstream:up",
   "remoteEnv": {
     "SLIPSTREAM_STATE_DIR": "/workspaces/.slipstream-managed"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
   }
 }
