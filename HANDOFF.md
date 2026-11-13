@@ -1,3 +1,7 @@
+# App parity requirement and collision dispatch review
+
+The user requires original-app protocol/state-machine fidelity. Current SDK/F&F subsets are not equivalent to the original app; read [the compatibility ledger](slipstream/review/COLLISION-PROTOCOL-PARITY.md) before more hardware changes. Native VehicleMessenger case0x4d has no direct stop; our diagnostic collision pit is a custom safety policy, and raw-packet battle damage is also not established app parity. A fresh read-only Ghidra export covered 63 collision-named functions. Firmware collision counts/age/flags are now visible in live checks; no motion policy changed. 589 Node tests passed; isolated simulator UI verified. Live page not reloaded during this review.
+
 # Supervised batch stopped on firmware collision signal
 
 At 10:04 America/Chicago on 13 November, the first of up to three authorized 150 mm/s pulses received 0x4d after 339 ms. STOP and shared pit activated; remaining pulses were cancelled. Operator confirms stopped and stayed on track with no visible impact. The cumulative trace and replay regression are retained; see [bounded test evidence](slipstream/review/GROUNDSHOCK-BOUNDED-STRAIGHT.md). Collision-signal accuracy and optical localization remain unresolved; do not bypass the pit. No driving-policy change.

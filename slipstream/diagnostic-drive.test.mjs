@@ -92,3 +92,11 @@ test('Groundshock batch capture latches pit at 339 ms and refuses remaining puls
  assert.equal(speeds(radio).at(-1),0);
  assert.equal(driver.car.telemetry.positions,0);
 });
+
+test('collision freshness remains separate from optical localization and physical impact',async()=>{
+ const {driver,radio,time}=await rig();assert.equal(driver.car.diagnostics().collisionAgeMs,null);
+ time(200);radio.emit([3,0x4d,1,0]);time(900);
+ const d=driver.car.diagnostics();assert.equal(d.collisionAgeMs,700);assert.equal(d.collisions,1);
+ assert.equal(d.lastCollision.wasSideOnCollision,true);assert.equal(d.lastCollision.wasFrontBackCollision,false);
+ assert.equal(d.positions,0);assert.equal(d.positionAgeMs,null);assert.equal(d.physicalStopVerified,false);
+});

@@ -1,0 +1,10 @@
+{
+  "librarySha256": "0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f",
+  "exportSha256": "d90d683440034aec01a48a98a83d9adc50eeaff7aae79099f744ad45a994756b",
+  "functions": 63,
+  "decompilerFailures": 0,
+  "scope": "Non-thunk BaseStation function names containing collision; not whole-program coverage",
+  "script": "slipstream/tools/ExportCollisionHandling.java",
+  "readOnly": true,
+  "executedApkOrFirmware": false
+}

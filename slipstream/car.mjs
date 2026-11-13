@@ -248,6 +248,7 @@ export class Car {
       startupNotifications:{buffered:this.transport.earlyDelivered??0,dropped:this.transport.earlyDropped??0,timestampBasis:'buffered packets timestamped on drain'},
       connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,
       requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
+      collisionAgeMs:age(this.telemetry.lastCollision?.at),
       batteryAgeMs:age(this.telemetry.batteryAt),statusAgeMs:age(this.telemetry.statusAt),status:{...this.status},
       millivolts:this.millivolts,notificationAgeMs:age(this.telemetry.lastNotificationAt),positionAgeMs:age(this.telemetry.lastPositionAt),
       lateralEstimate:this.lateralEstimate?{...this.lateralEstimate}:null,diagnosticMotion:!!this.diagnosticMotion,
