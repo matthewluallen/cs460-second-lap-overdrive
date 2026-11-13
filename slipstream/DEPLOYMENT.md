@@ -126,5 +126,7 @@ in screenshots or public reports.
 
 On 12 November 2026 both transports passed through the actual public Codespaces
 HTTPS endpoint from within the Codespace, with four clients each. A phone outside
-that network still requires acceptance testing. GitHub PR checks currently show
-no runs; recorded local/Codespaces test results must not be described as CI results.
+that network still requires acceptance testing. GitHub workflow
+[43368273825](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43368273825)
+succeeded for `56c0ae8`. Match each CI result to its commit; an empty PR summary
+during a push does not establish that no workflow ran.

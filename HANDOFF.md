@@ -9,7 +9,8 @@ look, how to verify, and what is deliberately unfinished or untrusted.
 actual origin. Four clients passed WebSocket and forced HTTP fallback through the
 public Codespaces proxy, including approval, neutral input, state and revocation.
 Temporary rooms were removed. See deployment instructions; no car or phone-hardware
-validation is implied. PR checks currently show no CI runs.
+validation is implied. GitHub workflow run 43368273825 passed for `56c0ae8`;
+the PR summary was temporarily empty while that run appeared in history.
 
 ## Phone neutral handshake and real network client coverage
 

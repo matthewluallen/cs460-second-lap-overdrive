@@ -75,4 +75,6 @@ state delivery, and rejected revoked credentials; both rooms were deleted. The
 client process ran inside Codespaces but addressed the public HTTPS proxy, not
 loopback. No Bluetooth connection or real-car command was made. An external phone
 on the classroom network remains unverified. PR #4 is open and mergeable but has
-no reported CI checks; local and Codespaces results are separate evidence.
+an initially empty check summary. Subsequent workflow history confirms successful
+run [43368273825](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43368273825)
+for `56c0ae8`. Local, Codespaces and CI results remain separately scoped evidence.
