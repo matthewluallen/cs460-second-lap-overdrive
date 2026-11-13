@@ -87,3 +87,14 @@ restart acceptance run remain required before classroom sign-off.
 Validation after repair: **537 Node tests pass**. In the actual browser, the corrected
 Lap sprint showed Boson at 7 laps and BigBang at 6 laps with finite lap times at the
 captured observation. This is browser/simulator evidence, not a physical-car race.
+
+Browser race completion: the corrected 120-second Lap sprint ended automatically
+with Boson at **8 laps**, BigBang at **7 laps**, a winner, lap times and both
+simulated cars stopped. The original pre-fix browser battle was observed moving
+and associating a target but did not show a knockout. Additional exploratory
+all-CPU default-loadout battle checks also produced no knockout; a guaranteed
+knockout is not currently a game rule, and the temporary assertion was not retained
+as a required regression. Directed weapon/disable/recovery and four-bot battle
+regressions pass. Default two-car battle pacing therefore still needs a fun/feedback
+review; do not turn weapon implementation coverage into a claim that every matchup
+is engaging or that physical targeting is validated.
