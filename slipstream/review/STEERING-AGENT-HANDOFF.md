@@ -136,3 +136,36 @@ npm run dependency-lab, and npm audit. Use Node >=22. Local Node 22 executable:
 Preserve the existing 1–4-car mode/fault matrix. Commit and push on this branch,
 update HANDOFF.md and relevant review notes with evidence and unresolved limits.
 No merging to main. No claim of world-class UI, real races or attacks until observed.
+
+## Update — SDK offset-precondition fix (session 011wDwgcsm)
+
+**Root cause (confirmed in software):** the SDK steering path sent `CHANGE_LANE`
+(0x25) without the preceding `SET_OFFSET_FROM_ROAD_CENTER` (0x2c). On firmware
+11866 the bare 0x25 is cancelled (0x41 reply, high-bit id 0x80, zero horizontal
+speed) and never registers (`recvID == 0xFF`). Full evidence chain, confirmed-vs-
+hypothesis split, and the decompiled references are in
+`review/STEERING-ROOT-CAUSE.md`.
+
+**Fix (shipped):** `slipstream/car.mjs` `steerTo()` now prepends a keyed
+`'lane-offset'` send of `SET_OFFSET_FROM_ROAD_CENTER` — carrying the car's **current
+measured offset**, not a blind zero — before `CHANGE_LANE`, on the `sdk` profile only.
+Non-SDK profiles (F&F, simulator, undefined) keep the bare `CHANGE_LANE` unchanged.
+Cancellation and `stop()` clear `'lane-offset'` together with `'lane'`. This honours
+the earlier warning against inserting zero resets into absolute steering without
+handling the frame. New tests: `slipstream/steering-offset.test.mjs` (6).
+
+**Still a hypothesis:** that this produces real lateral movement on firmware 11866.
+An ACK/registration is not proof of physical lane completion. Must be confirmed on the
+car via the single-variable test in `STEERING-ROOT-CAUSE.md` → "Next hardware test".
+Hardware verification is currently blocked (car in pit; remote-devices/Mac bridge
+not connected this session). Not faked, not stubbed — flagged open.
+
+**Build-env correction:** the "6 failing platform tests" reported earlier were a
+missing declared dependency only — `three@0.187.0` absent from `node_modules`,
+causing `Cannot find module 'three'` at import in four `platform/*` suites. Installing
+the declared version restores them. No code defect was involved.
+
+**Verification after this change:** full suite **563 Node tests passed** (the prior
+557 baseline plus the 6 new steering tests), Node 22. Safety invariants — command
+ordering, STOP priority, safety latches, neutral-input arming, watchdogs, shared-pit,
+1–4-car matrix — unchanged and passing.

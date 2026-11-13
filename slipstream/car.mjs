@@ -157,6 +157,7 @@ export class Car {
           // The requested target was not reached. Drop queued steering; the
           // reported offset is an estimate, not newly verified track geometry.
           this.pending.delete('lane');
+          this.pending.delete('lane-offset');
           this.targetLateral = m.offsetKnown && Math.abs(m.currentOffset) <= LANE_LIMIT
             ? this.offsetSign * m.currentOffset : this.lateral;
           this.forceLane = true;
@@ -269,9 +270,25 @@ export class Car {
     // The upper bit is reserved for cancellation in car reports. An ACK is
     // evidence of command processing, never proof of physical lane completion.
     this.laneCommandId = (this.laneCommandId + 1) & 0x7f;
+    const absolute = this.offsetSign * target;
     this.telemetry.laneRequest = {id:this.laneCommandId,at:this.clock(),target,
-      offset:this.offsetSign*target,horizontalSpeed:speed,acceleration:1000};
-    this.send('lane', encode.changeLane(this.offsetSign * target, speed, 1000, this.laneCommandId));
+      offset:absolute,horizontalSpeed:speed,acceleration:1000};
+    // SDK-mode lane changes require the current offset reference to be declared
+    // immediately before the move. The open-source drive-sdk vehicle-tool
+    // (cmd_anki_vehicle_change_lane) writes SET_OFFSET_FROM_ROAD_CENTER (0x2c)
+    // then CHANGE_LANE (0x25) back-to-back on the same characteristic; our SDK
+    // steering omitted the 0x2c. Firmware 11866 answered the bare 0x25 with a
+    // cancellation (0x41: current==target, horizontal speed 0, high-bit id 0x80 —
+    // the cancel semantics are confirmed by the app's Localization::ProcessLaneChangeUpdate).
+    // We declare the car's current measured offset (not a blind zero) so the
+    // absolute target resolves to the intended destination and our tracked frame
+    // is preserved. Unverified on hardware; see review/STEERING-ROOT-CAUSE.md.
+    if (this.transport.initializationProfile === 'sdk') {
+      const reference = this.offsetSign * this.lateral || 0;   // normalise -0 to 0 on the wire
+      this.telemetry.laneReference = {offset:reference,at:this.clock()};
+      this.send('lane-offset', encode.setOffset(reference));
+    }
+    this.send('lane', encode.changeLane(absolute, speed, 1000, this.laneCommandId));
   }
   nudge(direction) {   // +1 left, -1 right
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;
@@ -285,7 +302,7 @@ export class Car {
     this.forceLane = true;
     this.scanDelocalizationAllowance = false;
     this.pending.delete('scan-delocalization');
-    for (const key of ['speed', 'lane', 'turn']) this.pending.delete(key);
+    for (const key of ['speed', 'lane', 'lane-offset', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
     this.pending = new Map([['speed', encode.speed(0, 2500)],
       ...(this.scanDelocalizationUsed ? [['scan-delocalization', encode.maxDelocalizedSpeed(0)]] : []), ...this.pending]);
