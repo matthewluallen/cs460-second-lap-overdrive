@@ -13,5 +13,8 @@
   },
   "postCreateCommand": "npm ci --ignore-scripts",
   "remoteUser": "node",
-  "postStartCommand": "npm run slipstream:up"
+  "postStartCommand": "npm run slipstream:up",
+  "remoteEnv": {
+    "SLIPSTREAM_STATE_DIR": "/workspaces/.slipstream-managed"
+  }
 }

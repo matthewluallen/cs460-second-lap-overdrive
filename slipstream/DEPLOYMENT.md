@@ -21,7 +21,7 @@ latency affects phone inputs; rendering and the control loop share the host brow
 2. The configured devcontainer runs `npm run slipstream:up` on start. You can also
    run `PORT=3000 npm run slipstream:up` manually. It starts the live-only server in
    the background or verifies that the managed server is already running. Retrieve
-   the operator's private host code with `cat ~/.local/state/slipstream-managed/host-code`.
+   the operator's private host code with `cat "${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code"`.
    Keep that code private; it authorizes room creation.
 3. Open the forwarded port 3000 URL, appending `/slipstream/`, on the nearby laptop.
    Use the browser-facing **HTTPS** URL, normally
@@ -110,7 +110,7 @@ Run `npm run slipstream:check` with `SLIPSTREAM_CHECK_ORIGIN` set to your public
 HTTPS origin and `SLIPSTREAM_HOST_CODE` supplied privately. For managed startup:
 
 ```sh
-SLIPSTREAM_HOST_CODE="$(cat ~/.local/state/slipstream-managed/host-code)" \
+SLIPSTREAM_HOST_CODE="$(cat "${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code")" \
 SLIPSTREAM_CHECK_ORIGIN="https://YOUR-CODESPACE-3000.app.github.dev" \
 npm run slipstream:check
 ```
@@ -130,3 +130,21 @@ that network still requires acceptance testing. GitHub workflow
 [43368273825](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43368273825)
 succeeded for `56c0ae8`. Match each CI result to its commit; an empty PR summary
 during a push does not establish that no workflow ran.
+
+## Container rebuild persistence
+
+The configured Codespace sets `SLIPSTREAM_STATE_DIR=/workspaces/.slipstream-managed`.
+This private directory is outside the Git checkout and within the persistent
+workspace volume. Host code, log and process identity survive rebuilds there;
+the launcher still verifies identity and readiness before trusting an old PID.
+Ordinary local launches retain the home-directory default. Do not commit the state
+files or include the private log in public reports.
+
+Changing `.devcontainer/devcontainer.json` alone does not replace an existing
+container image. Apply it with `gh codespace rebuild -c YOUR-CODESPACE` between
+sessions. A rebuild interrupts rooms and connections; all cars must already be
+stopped. Verify the resulting runtime, automatic startup, host-code persistence,
+public forwarding and a new player join before the next physical session.
+
+GitHub documents `/workspaces` as persistent across rebuilds:
+https://docs.github.com/en/codespaces/developing-in-a-codespace/rebuilding-the-container-in-a-codespace
