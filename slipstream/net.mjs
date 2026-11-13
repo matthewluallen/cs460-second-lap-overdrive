@@ -23,6 +23,7 @@ export function listen(path, key, onMessage, onStatus = () => {}) {
       controller = new AbortController();
       try {
         const response = await fetch(BASE + path, {headers: {Authorization: 'Bearer ' + key}, signal: controller.signal, cache: 'no-store'});
+        if (stopped) return;
         if (response.status === 403 || response.status === 404) { onStatus('refused'); return; }
         if (!response.ok || !response.body) throw new Error('stream ' + response.status);
         onStatus('online'); delay = 500;
@@ -30,6 +31,7 @@ export function listen(path, key, onMessage, onStatus = () => {}) {
         let buffer = '';
         for (;;) {
           const {value, done} = await reader.read();
+          if (stopped) return;
           if (done) break;
           buffer += text.decode(value, {stream: true});
           if (buffer.length > 65536) throw new Error('stream overflow');
@@ -39,6 +41,7 @@ export function listen(path, key, onMessage, onStatus = () => {}) {
             for (const line of block.split('\n')) {
               if (!line.startsWith('data: ')) continue;
               let message; try { message = JSON.parse(line.slice(6)); } catch { continue; }
+              if (stopped) return;
               try { onMessage(message); } catch (error) { console.error(error); }
             }
           }
@@ -66,16 +69,20 @@ export function channel({room, key, role, onMessage, onStatus = () => {}}) {
     try { ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE + '/ws'); } catch { return useHttp(); }
     socket = ws;
     const giveUp = setTimeout(() => { if (!opened) ws.close(); }, 2500);
-    ws.onopen = () => ws.send(JSON.stringify({room, key}));
+    const current = () => !stopped && socket === ws;
+    ws.onopen = () => { if (current()) ws.send(JSON.stringify({room, key})); };
     ws.onmessage = event => {
+      if (!current()) return;
       if (!opened) { opened = true; live = true; failures = 0; delay = 500; clearTimeout(giveUp); onStatus('online'); }
+      if (!current()) return; // A status callback may have stopped this channel.
       let message; try { message = JSON.parse(event.data); } catch { return; }
       try { onMessage(message); } catch (error) { console.error(error); }
     };
     ws.onerror = () => {};
     ws.onclose = event => {
-      clearTimeout(giveUp); live = false;
-      if (stopped) return;
+      clearTimeout(giveUp);
+      if (!current()) return;
+      live = false; socket = null;
       if (event.code === 4403) { onStatus('refused'); return; }
       if (!opened && ++failures >= 2) return useHttp();
       onStatus('offline');
@@ -85,7 +92,8 @@ export function channel({room, key, role, onMessage, onStatus = () => {}}) {
   open();
   return {
     get transport() { return live ? 'socket' : stopHttp ? 'http' : 'connecting'; },
-    send(body) {
+    async send(body) {
+      if (stopped) throw new Error('Channel stopped');
       if (live) { socket.send(JSON.stringify({t: role === 'host' ? 'state' : 'input', ...body})); return Promise.resolve(); }
       return api('/rooms/' + room + (role === 'host' ? '/state' : '/input'), {method: 'POST', key, body});
     },

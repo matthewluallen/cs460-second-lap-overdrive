@@ -324,3 +324,13 @@ deadlock while retaining the host's fresh-neutral arming requirement. Car select
 and leave requests remain available while driving is locked. Tests also exercise
 the actual network client with 1–4 approved players over sockets and HTTP fallback,
 including per-player state separation and revoked credentials.
+
+## Closed-channel isolation (12 November 2026)
+
+The relay client discards late WebSocket messages/open events after stop or socket
+replacement, and late HTTP stream responses/bytes after cancellation. A stopped
+channel rejects further sends instead of falling back to HTTP. Socket send errors
+now reject promises so existing caller handlers receive them. Five failing tests
+reproduced these lifecycle defects before repair; all five and the real 1–4 player
+relay integration cases pass afterward. Server credentials, host arming and car
+stop behavior are unchanged. No hardware safety claim follows from this fix.

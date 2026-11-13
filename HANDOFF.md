@@ -3,6 +3,14 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Network lifecycle regression
+
+Five failing tests reproduced callbacks from stopped/replaced connections and a
+socket send exception that bypassed callers' promise error handling. The network
+client now rejects sends after stop, ignores stale socket/HTTP callbacks and turns
+send failures into promise rejections. All 535 Node tests pass, including real
+relay integration. This is software evidence only; hardware acceptance is pending.
+
 ## Full MVP round regression
 
 All 530 Node tests pass. The 90-second MVP round is exercised through every
