@@ -101,3 +101,48 @@ test('slow CPU curve capture times out on a 2116 ms optical gap without a lane o
   // This is zero requested speed with a nonzero reported sample, not proof of
   // physical stopping or movement; those observations belong in the report.
 });
+
+test('steady 300 mm/s CPU capture still cancels without a speed change or post-lane offset write', () => {
+  const steady = validate(json('./fixtures/groundshock-sdk-cpu-steady-speed-cancelled.json'));
+  assert.equal(steady.events.length,56);
+  assert.equal(steady.dropped,0);
+  const recorded = steady.events.map(([at,car,direction,hex],index)=>({at,car,direction,hex,index,packet:raw(hex)}));
+  const sent = recorded.filter(e=>e.direction==='tx');
+  const received = recorded.filter(e=>e.direction==='rx').flatMap(e=>decode(e.packet).map(message=>({...e,message})));
+  const motion = sent.filter(e=>e.packet[1]===ID.SPEED && speed(e)>0);
+  assert.deepEqual(motion.map(e=>[e.at,e.hex]),[[26565,'06 24 2c 01 e8 03 00']]);
+  const lane = sent.find(e=>e.packet[1]===ID.CHANGE_LANE);
+  assert.deepEqual([lane.at,lane.hex],[40125,'0b 25 5e 01 e8 03 00 00 b4 41 00 01']);
+  assert.equal(sent.some(e=>e.index>motion[0].index && e.index<lane.index && e.packet[1]===ID.SPEED),false);
+  const speedAck = received.find(e=>e.at===26611 && e.message.type==='speed');
+  assert.equal(speedAck.message.desired,300);
+  const latestPosition = received.filter(e=>e.index<lane.index && e.message.type==='position').at(-1);
+  assert.equal(latestPosition.at,40112);
+  assert.ok(latestPosition.index>speedAck.index,'new optical observation follows the speed acknowledgment');
+  assert.deepEqual([latestPosition.message.pieceId,latestPosition.message.locationId,latestPosition.message.reverse],[39,18,false]);
+  assert.equal(latestPosition.message.speed,314);
+  assert.ok(latestPosition.message.speed>=300);
+  assert.equal(lane.at-latestPosition.at,13);
+  assert.deepEqual([latestPosition.message.lastReceivedLaneChangeId,latestPosition.message.lastExecutedLaneChangeId],[1,2]);
+  const reference = recorded[lane.index-1];
+  assert.equal(reference.hex,'05 2c 00 00 58 c1');
+  assert.equal(view(reference.packet).getFloat32(2,true),-13.5);
+  assert.equal(latestPosition.message.offset,-16.5);
+  assert.equal(sent.some(e=>e.index>lane.index && e.packet[1]===ID.SET_OFFSET),false,
+    'no post-request automatic calibration write is present in this capture');
+  const cancel = received.find(e=>e.index>lane.index && e.message.type==='laneChange');
+  assert.equal(cancel.at,40308);
+  assert.equal(cancel.at-lane.at,183);
+  assert.deepEqual([cancel.message.laneChangeId,cancel.message.cancelled,cancel.message.currentOffset,
+    cancel.message.targetOffset,cancel.message.horizontalSpeed,cancel.message.verticalSpeed],
+    [0x80,true,-13.5,-13.5,0,300]);
+  const stop = sent.find(e=>e.index>cancel.index);
+  assert.deepEqual([stop.at,stop.hex],[40309,'06 24 00 00 c4 09 00']);
+  assert.equal(stop.at-cancel.at,1);
+  assert.equal(sent.some(e=>e.index>stop.index && e.packet[1]===ID.SPEED && speed(e)>0),false);
+  const postStop = received.find(e=>e.at===41042 && e.message.type==='transition');
+  assert.deepEqual([postStop.message.lastReceivedLaneChangeId,postStop.message.lastExecutedLaneChangeId],[1,1]);
+  assert.ok(postStop.message.offset>8 && postStop.message.offset<9);
+  // Late optical ACK/offset changes document firmware state only; they do not
+  // establish physical lane completion or negate the cancellation observation.
+});

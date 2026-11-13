@@ -1,3 +1,7 @@
+# Latest trial: stable300 still produces interrupted steering
+
+Build `77825b6` exercised the new speed-confirmation gate: fresh optical speed314, long-established requested300, then one lane request. Cancellation-state notification followed183 ms later; host STOP completed1 ms after it. Operator confirms **stopped on track; lane change only began**. The later optical ACK reports the new request executed, but does not prove completion. See [COMPUTER-DRIVER-HARDWARE.md](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Original direct cancellation handler clears lateral intent without directly sending forward STOP; whole-app downstream behavior remains unproved. A product decision is pending for an explicitly supervised comparison that would keep forward motion but lock steering on cancellation. Existing cancellation pit remains default and unchanged pending authorization.
+
 # Latest trial: ordinary forward movement, telemetry-gap stop before steering
 
 The `90538af` trial requested200 mm/s and received a2116 ms transition gap, tripping the unchanged two-second watchdog before any lane/offset request. Operator confirms **stopped on track; moved forward normally**. The speed-confirmation steering fix is therefore still untested physically. See [the updated CPU report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Next CPU policy permits the demonstrated300 mm/s pace with selected ceiling300; varying speed and completed repeated lane changes remain open.
