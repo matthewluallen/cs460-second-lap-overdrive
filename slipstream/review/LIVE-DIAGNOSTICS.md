@@ -63,3 +63,17 @@ The UI was inspected in a separate local browser tab using a simulated car. No
 physical car commands were issued. No physical scan success is claimed. Link loss
 or a hung browser can still prevent a stop/reset reaching firmware. The host and
 firmware protections described in the earlier review remain necessary.
+
+## Codespaces follow-up
+
+Controller commit `cccadb6` is checked out in the Codespace. The resumed container
+was Alpine 3.23.8, rather than the configured Node devcontainer image, and had no
+working Node runtime. Alpine's packaged Node 24.22.3/npm were installed; all 508
+Node tests passed there as well. The Slipstream-only server responds internally
+with the new diagnostics and the existing host code.
+
+The public port registration was absent after restart. Restoration encountered
+GitHub API connection timeouts; public availability is not established by the
+internal HTTP check. Verify the public URL and port 3000 forwarding before the
+next physical session. No active browser controller was refreshed and no physical
+car was commanded.
