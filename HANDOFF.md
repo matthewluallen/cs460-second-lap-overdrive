@@ -3,6 +3,26 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Control repairs ready for supervised acceptance
+
+The two reproduced SDK/app faults are repaired: unverified geometry cannot
+calibrate steering, and cancelled targets are cleared. Cancellation while moving
+now opens the shared pit, preventing automatic retries by continuous controllers.
+The Power Zone label and signal counts distinguish mapping from activation;
+actual zone attacks remain disabled pending hardware evidence.
+
+Fresh checks: 552 Node tests, 38 Python tests, CWE lab and dependency lab pass;
+zero npm audit advisories. This includes the existing 1–4-car mode/fault matrix.
+The new regressions first failed on the captured piece-57 offset correction and
+unachieved steering target. See `hardware-steering.test.mjs` and
+`live-diagnostics.test.mjs`. Node 22.23.5; Python 3.14.7.
+
+Changes are on the review branch, not loaded into the active Codespaces browser.
+Next hardware gate: load the repaired build while stopped, verify ordinary-piece
+left/right steering and STOP, then record marked-lane versus adjacent-lane passes
+in both directions. Only then enable a tested Power Zone attack implementation.
+Do not describe this as completed physical racing or formal firmware verification.
+
 ## Power Zone lane behavior reviewed
 
 Read [POWER-ZONE-AUDIT.md](slipstream/review/POWER-ZONE-AUDIT.md). Fresh Ghidra
@@ -15,11 +35,11 @@ runtime changes or car commands were made, and special-piece scoring stays gated
 ## SDK/app approach faults identified
 
 Read [SDK-APK-APPROACH-AUDIT.md](slipstream/review/SDK-APK-APPROACH-AUDIT.md).
-Fresh targeted Ghidra review plus captured-byte probes reproduced two unresolved
-faults: unverified piece 57 still drives offset calibration, and cancelled steering
+Fresh targeted Ghidra review plus captured-byte probes originally reproduced two
+faults (repaired in the follow-up above): unverified piece 57 still drives offset calibration, and cancelled steering
 retains an unachieved target. The packet layout is SDK-consistent; the reason for
 firmware cancellation is not yet proved. No live commands or runtime edits were
-made in this review. Repair these state/trust gaps before another steering trial.
+made in this review. The follow-up repairs need supervised hardware acceptance before racing.
 
 ## Hardware trace now replayed
 

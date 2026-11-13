@@ -41,3 +41,42 @@ test('cancellation report alone never supplies track position or watchdog freshn
  assert.equal(c.lastTrackAt,undefined);assert.equal(c.lastPosition,undefined);
  assert.equal(c.speed,0);
 });
+
+const piecesData=JSON.parse(readFileSync(new URL('./data/pieces.json',import.meta.url)));
+function radio(){let receive;return {sent:[],onNotify(fn){receive=fn;return()=>{};},async write(b){this.sent.push([...b]);},emit(b){receive(b);},close(){}};}
+const cancellation=()=>bytes(trace.events.find(e=>e[0]===406684)[3]);
+
+test('special piece 57 never calibrates offset or contributes sign-learning evidence',async()=>{
+ const r=radio(),c=new Car(r,{pieces:new Pieces(piecesData),clock:()=>277195});
+ c.lastPair={lateral:50,offset:-50};c.signVotes=2;
+ r.emit(bytes(trace.events.find(e=>e[0]===277195&&e[2]==='rx')[3]));await c.pumpPromise;
+ assert.equal(r.sent.filter(b=>b[1]===0x2c).length,0);
+ assert.equal(c.lastPair,null);assert.equal(c.signVotes,2);assert.equal(c.offsetSign,-1);
+ assert.equal(c.telemetry.calibrationBlocked.pieceId,57);
+ assert.equal(c.lastTrackAt,277195,'raw position still feeds the existing watchdog');
+});
+test('cancelled steering clears unachieved target and permits a fresh explicit request',async()=>{
+ const r=radio(),c=new Car(r);c.steerTo(45);await c.pumpPromise;
+ r.emit(cancellation());await c.pumpPromise;
+ assert.equal(c.targetLateral,13.5);assert.equal(c.forceLane,true);
+ assert.equal(r.sent.length,1,'cancellation itself never retries');
+ c.steerTo(45);await c.pumpPromise;assert.equal(r.sent.length,2);
+ r.emit(cancellation());c.nudge(1);await c.pumpPromise;
+ assert.equal(c.targetLateral,45,'next nudge uses reported offset, not cancelled 45 mm target');
+});
+
+test('moving cancellation opens shared pit for browser, phone, gamepad and CPU without retry',async()=>{
+ const {Game}=await import('./game.mjs');
+ const data=n=>JSON.parse(readFileSync(new URL('./data/'+n+'.json',import.meta.url)));
+ for(const control of ['browser','phone','gamepad','bot']) {
+  const g=new Game({pieces:piecesData,weapons:data('weapons'),vehicles:data('vehicles'),clock:()=>100});
+  const r=radio(),d=g.addCar(r,{control}),other=g.addCar(radio(),{control:'browser'});
+  await d.car.pumpPromise;await other.car.pumpPromise;
+  d.input={throttle:1,lane:45};d.car.setSpeed(240);d.car.steerTo(45);other.car.setSpeed(200);await d.car.pumpPromise;
+  r.emit(cancellation());await d.car.pumpPromise;await other.car.pumpPromise;
+  assert.equal(g.halted,true);assert.match(g.pitReason,/Lane change cancelled/);
+  assert.equal(d.input.lane,null);assert.equal(d.car.speed,0);assert.equal(other.car.speed,0);
+  const lanes=r.sent.filter(b=>b[1]===0x25).length;g.tick(0.1,200);await d.car.pumpPromise;
+  assert.equal(r.sent.filter(b=>b[1]===0x25).length,lanes);
+ }
+});

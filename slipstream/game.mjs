@@ -52,6 +52,12 @@ export class Game {
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
+    if (message.type === 'laneChange' && message.cancelled) {
+      driver.input.lane = null;
+      // Continuous phone/CPU input must not silently retry a rejected command.
+      // Reuse the shared recovery flow when the cancellation occurs in motion.
+      if (driver.car.speed > 0) { this.requestPit(driver, 'Lane change cancelled by car'); return; }
+    }
     if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
     if (this.phase === 'scanning' && driver === this.scanner) {
       if (message.type === 'position') {

@@ -162,3 +162,19 @@ ours (350); this is a candidate for a separately supervised one-variable test,
 not proof of a fix. Do not automatically retry a firmware-cancelled lane request.
 Sources: https://github.com/anki/drive-sdk and
 https://github.com/MasterAirscrachDev/Anki-Partydrive .
+
+## 13 November — repairs prepared after Groundshock capture
+
+Software regression checks pass after repairing special-piece offset calibration
+and cancelled steering state: 552 Node tests (including the existing mode/car-count
+fault matrix), 38 Python tests, CWE lab, dependency lab, zero npm audit advisories.
+Node 22.23.5 and Python 3.14.7. Captured-byte tests failed for both defects before
+repair. A moving lane cancellation now requests a shared pit stop for every driver
+control type, instead of allowing continuous input to retry it.
+
+The host interface identifies piece 57 as the unverified Power Zone and displays
+special-code observations without activating an effect or satisfying a watchdog.
+No car commands or live-browser reload were performed. The repaired branch still
+needs to be loaded on the stopped host before supervised steering acceptance.
+Physical left/right, Power Zone lane detection, stopping after the new cancellation
+path, phone/iPad controls, and one-to-four-car race/attack acceptance remain open.

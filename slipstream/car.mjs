@@ -150,8 +150,24 @@ export class Car {
         this.telemetry.lastPositionAt=now;
       } else if(m.type==='transition') this.telemetry.transitions++;
       else if(m.type==='other') this.telemetry.unknown++;
-      else if(m.type==='laneChange') this.telemetry.laneChange={...m,at:now};
+      else if(m.type==='laneChange') {
+        this.telemetry.laneChange={...m,at:now};
+        if (m.cancelled) {
+          // The requested target was not reached. Drop queued steering; the
+          // reported offset is an estimate, not newly verified track geometry.
+          this.pending.delete('lane');
+          this.targetLateral = m.offsetKnown && Math.abs(m.currentOffset) <= LANE_LIMIT
+            ? this.offsetSign * m.currentOffset : this.lateral;
+          this.forceLane = true;
+        }
+      }
       else if(m.type==='ping') this.telemetry.lastPongAt=now;
+      else if(m.type==='supercode' || m.type==='zoneSupercode') {
+        // Observation only: a code is not a validated attack, location or heartbeat.
+        const key = m.type === 'zoneSupercode' ? 'zoneCodes' : 'supercodes';
+        this.telemetry[key] = (this.telemetry[key] ?? 0) + 1;
+        this.telemetry.lastSpecialCode = {type:m.type,code:m.code,rawTag:m.rawTag,at:now};
+      }
       if (m.type === 'position' || m.type === 'transition') this.lastTrackAt = now;
       if (m.type === 'carInit') this.firmwareInitialization = m;
       else if (m.type === 'battery') this.millivolts = m.millivolts;
@@ -167,8 +183,15 @@ export class Car {
   // The printed code says exactly which lane the car is in. Use it to (a) tell the
   // car its true offset and (b) learn which sign the car uses for left and right.
   #lane(m, now) {
+    const definition = this.pieces?.get(m.pieceId);
+    if (!definition || definition.unverified) {
+      this.lastPair = null;
+      this.telemetry.calibrationBlocked = {pieceId:m.pieceId,at:now,reason:'Unverified piece geometry'};
+      return;
+    }
     const spot = this.pieces?.locate(m.pieceId, m.locationId, m.reverse);
-    if (!spot) return;
+    if (!spot) { this.lastPair = null; return; }
+    this.telemetry.calibrationBlocked = null;
     this.lateral = spot.lateral;
     if (this.lastPair && m.offset !== 654321) {
       const dTruth = spot.lateral - this.lastPair.lateral, dCar = m.offset - this.lastPair.offset;

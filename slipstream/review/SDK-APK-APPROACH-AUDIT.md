@@ -4,6 +4,17 @@ Reviewed Slipstream commit `52eb492`. This is an offline review: no car commands
 controller reload, APK execution or firmware execution. Findings below distinguish
 reproduced defects, observed compatibility failures and hypotheses.
 
+## Repair follow-up
+
+A1 and A2 were reproduced with tests using the attached capture, then repaired.
+Unverified/unknown geometry no longer calibrates or supplies sign-learning pairs.
+Cancellation clears pending steering and the unachieved target; moving cancellation
+opens the existing shared pit so controller loops cannot silently retry. Four
+controller types are covered. Full final checks: 552 Node tests, 38 Python tests,
+CWE lab, dependency lab and zero npm audit advisories. These software results do
+not resolve the original firmware reason for cancellation or validate real steering.
+The numbered findings below preserve the pre-repair evidence.
+
 ## Evidence
 
 - Official SDK checkout `410352617b8660338746a6bb2b2dd173afb1b91a`, especially

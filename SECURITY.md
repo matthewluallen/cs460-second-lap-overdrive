@@ -361,3 +361,24 @@ now expose this status; they retain the raw byte and do not treat it as position
 watchdog freshness or physical steering success. No command retries or movement
 settings were added. Hardware trace replay also confirms special piece 57 remains
 quarantined despite successful map closure.
+
+## 13 November 2026 — track trust and cancelled steering
+
+Special/unverified piece definitions (53, 54, 57) and unknown pieces no longer
+participate in automatic steering-offset calibration or sign learning. Entering
+one also breaks the learning pair so the next ordinary piece cannot compare
+against untrusted geometry. Raw position telemetry still reaches the mapper and
+existing watchdog; scoring restrictions remain unchanged.
+
+A car-reported lane cancellation drops pending steering and resets the unachieved
+target to a bounded reported offset (or the existing lateral estimate when unknown).
+It does not send a retry. During commanded motion, the game opens the shared pit,
+stops all cars and clears controller input through the existing recovery flow.
+This prevents continuous browser/phone/gamepad/CPU input from silently retrying.
+The stop is a request, not proof that hardware stopped.
+
+Recorded Groundshock packets reproduced both prior faults before repair. Regression
+coverage includes all four controller types, shared stopping, fresh explicit
+steering, and special-code diagnostics that never refresh the track watchdog.
+552 Node tests and 38 Python tests pass; npm audit reports zero advisories. Physical
+steering and Power Zone activation remain unverified. No live host was reloaded.

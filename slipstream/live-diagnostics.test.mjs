@@ -34,3 +34,13 @@ test('live exports preserve profile, bounded annotations and replay compatibilit
  const snapshot=JSON.parse(JSON.stringify(rec.toJSON()));assert.equal(rec.active,true);assert.equal(snapshot.cars[0].profile,'fast-furious');assert.equal(snapshot.markers.length,1000);assert.equal(snapshot.markersDropped,6);assert.equal(validate(snapshot),snapshot);
  r.emit(bytes('01 17'));assert.equal(snapshot.events.length,1);assert.equal(rec.events.length,2);
 });
+
+test('Power Zone observations remain bounded diagnostics and never refresh track watchdog',()=>{
+ const {r,c,time}=rig();time(100);
+ for(let i=0;i<200;i++)r.emit(bytes('06 53 f9 75 00 00 01'));
+ r.emit(bytes('06 4f db 27 00 00 02'));
+ const d=c.diagnostics();assert.equal(d.zoneCodes,200);assert.equal(d.supercodes,1);
+ assert.deepEqual(d.lastSpecialCode,{type:'supercode',code:0x27db,rawTag:2,at:100});
+ assert.equal(c.lastTrackAt,undefined);assert.equal(c.lastPosition,undefined);
+ assert.equal(c.speed,0);assert.equal(r.sent.length,0);assert.equal(d.physicalStopVerified,false);
+});

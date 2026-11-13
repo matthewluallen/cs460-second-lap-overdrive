@@ -105,3 +105,22 @@ ARM recovered signatures/types are imperfect. Key functions and configuration
 were read manually; this is not formal verification. Proprietary exports stay
 outside the repository. This documentation-only review reran the trace inspector,
 not the full test suite; the prior 548-test result is not a fresh run.
+
+## Repair-pass protocol follow-up
+
+Additional read-only native exports inspected `ResetZoneTrigger` (`008a2a74`):
+it clears the per-vehicle trigger flag. Its exact invocation timing is still
+unresolved in this export; indirect dispatch prevents claiming a complete call
+chain from static reference enumeration alone.
+
+The `0x50` message's named accessors (`006b6bcc` through `006b6bea`) expose four
+options: transition-update-v2, steering diagnostics, each barrier code, and cycle
+timing statistics. None is named a Power Zone enable switch. This does not prove
+that barrier diagnostics cannot affect observations, but there is insufficient
+evidence to send guessed notification-enabling flags to the live car.
+
+The repair pass adds bounded live counts for `0x4f` and `0x53`, the last unsigned
+code/tag/timestamp, and a map notice explaining why Power Zone attacks are disabled.
+These observations issue no commands, supply no position, and never refresh the
+track watchdog. This is the evidence collection path for the next supervised
+marked-lane/adjacent-lane comparison; it is not an attack implementation.

@@ -500,6 +500,10 @@ function pushState(snapshot, now) {
 // --- loops ---------------------------------------------------------------------------
 const PHASE = {garage: 'Garage', scanning: 'Scanning', ready: 'Track ready', battle: 'Battle'};
 function refresh(snapshot = game.snapshot()) {
+  const hasPowerZone = game.track?.pieces.some(p=>p.id===57);
+  $('powerZoneStatus').hidden = !hasPowerZone;
+  $('powerZoneStatus').textContent = 'Power Zone detected · brown track section. Attack activation is unverified and disabled. Scored rounds remain blocked on this circuit.';
+
   const scanOptions=game.drivers.filter(d=>d.car.connected),scanKey=scanOptions.map(d=>d.id+':'+d.car.name).join('|');
   if($('scanCar').dataset.key!==scanKey){const selected=$('scanCar').value;$('scanCar').replaceChildren(...scanOptions.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));if(scanOptions.some(d=>String(d.id)===selected))$('scanCar').value=selected;$('scanCar').dataset.key=scanKey;}
 
@@ -513,7 +517,10 @@ function refresh(snapshot = game.snapshot()) {
       'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
       'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+'\n'+
       'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
-      (x.laneChange?.cancelled?'\nLane change: car reported cancellation; steering not confirmed.':'');
+      (x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
+      (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+
+      '\nPower Zone signals: '+(x.zoneCodes??0)+' · other special codes: '+(x.supercodes??0)+' · effects disabled'+
+      (x.lastSpecialCode?' · last code 0x'+x.lastSpecialCode.code.toString(16)+' ('+seconds(performance.now()-x.lastSpecialCode.at)+')':'');
   }).join('\n\n') || 'Connect a car to see telemetry health.';
   $('saveTrace').disabled=recorder.cars.length===0;
   if(recorder.active)$('traceNote').textContent='Recording · '+recorder.events.length+' messages · '+recorder.dropped+' dropped · '+recorder.markersDropped+' annotations dropped. Save anytime without stopping.';
