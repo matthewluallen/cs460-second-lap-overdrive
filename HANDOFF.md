@@ -1,3 +1,7 @@
+# Supervised batch stopped on firmware collision signal
+
+At 10:04 America/Chicago on 13 November, the first of up to three authorized 150 mm/s pulses received 0x4d after 339 ms. STOP and shared pit activated; remaining pulses were cancelled. Operator confirms stopped and stayed on track with no visible impact. The cumulative trace and replay regression are retained; see [bounded test evidence](slipstream/review/GROUNDSHOCK-BOUNDED-STRAIGHT.md). Collision-signal accuracy and optical localization remain unresolved; do not bypass the pit. No driving-policy change.
+
 # First bounded straight hardware result — 13 November 2026
 
 Groundshock on SDK firmware 11866 completed one supervised 150 mm/s / 500 ms diagnostic on build ceb863c. The operator confirmed movement, staying on track, and physical stop. The timer requested STOP after 501 ms; the recorded STOP write completed 551 ms after the motion write completed. No optical codes or steering occurred. Collision packets around/after STOP remain unresolved; this is not localization, steering, race or full-system acceptance. See [the evidence report](slipstream/review/GROUNDSHOCK-BOUNDED-STRAIGHT.md) and its original 26-event fixture. No runtime change in this update.

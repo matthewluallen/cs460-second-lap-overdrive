@@ -33,3 +33,13 @@ Collision notifications around/after STOP remain unexplained. Their presence dur
 Before increasing duration, inspect car tires/sensor/track joints and establish whether the original app drives/maps this same charged car and circuit. Preserve its comparison observations and supported Bluetooth capture if available. A further Slipstream attempt should change one variable, retain an automatic deadline, and have fresh supervised readiness. Longer free drive, steering, scan, race and attacks remain separate acceptance gates. Do not repeat the previous five-second unlocalized trial.
 
 Validation: existing offline trace inspector accepts the recording. Documentation/fixture-only change; no controller or safety behavior changed.
+
+## Supervised batch follow-up, 10:04 America/Chicago
+
+Operator authorized up to three pulses on the clear test track. The first attempt triggered the collision stop; attempts two and three were cancelled, with no recovery/rearm performed. Operator confirmed **stopped; stayed on track without a visible impact**. Original cumulative capture: `../fixtures/groundshock-sdk-batch-collision.json` (38 events, zero dropped). Its operatorNotes still describe the earlier test; this paragraph records the separate follow-up observation without modifying captured evidence.
+
+Fresh battery: 4074 mV. Motion write completed at 462647 ms. At 462986 ms (339 ms later), firmware sent `03 4d 01 00`; the shared pit latched and STOP write completed in the same rounded millisecond. At 463047 ms, firmware reported desired speed zero, actual field 181. A second collision packet arrived at 463507 ms. No new optical position/transition, off-road or recovery packet arrived. Existing on-track status was stale and is not evidence about this attempt.
+
+The native export `CarMsgCollisionDetected` constructors (006b6ee0, 006b6f14) identify message 0x4d; its ToString (006b6fb0) labels the two payload bytes as collision fields. Thus a packet-ID mismatch is not supported by the available app evidence. Why firmware reports a collision without an operator-observed impact remains unresolved; possible physical or firmware mechanisms are hypotheses, not findings. Do not bypass the latch to complete the batch.
+
+An offline replay regression checks this exact captured timing, shared-pit stop, refusal of another pulse, and no restart from the cancelled deadline. It validates host handling, not firmware collision accuracy or optical localization.

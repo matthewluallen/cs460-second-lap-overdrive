@@ -71,3 +71,24 @@ test('aging cannot clear a known low-battery or charger warning',async()=>{
   assert.throws(()=>game.startDiagnostic(driver),/charging or low battery/);
  }
 });
+
+// Hardware capture includes an earlier pulse; replay only the batch attempt.
+test('Groundshock batch capture latches pit at 339 ms and refuses remaining pulses',async()=>{
+ const trace=JSON.parse(readFileSync(new URL('./fixtures/groundshock-sdk-batch-collision.json',import.meta.url)));
+ const {game,driver,radio,time,timers}=await rig();
+ game.startDiagnostic(driver);await settle();
+ const start=462647;
+ for(const [at,,direction,hex] of trace.events){
+  if(at<start || direction!=='rx')continue;
+  time(at-start);radio.emit(hex.split(' ').map(b=>parseInt(b,16)));await settle();
+  if(at===462986){
+   assert.equal(driver.car.speed,0);assert.match(game.pitReason,/Collision during diagnostic/);
+   assert.equal(game.diagnostic,null);
+  }
+ }
+ timers[0].fn();await settle();
+ assert.throws(()=>game.startDiagnostic(driver),/clear the pit/);
+ assert.deepEqual(speeds(radio).filter(v=>v>0),[150]);
+ assert.equal(speeds(radio).at(-1),0);
+ assert.equal(driver.car.telemetry.positions,0);
+});
