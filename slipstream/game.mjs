@@ -91,6 +91,7 @@ export class Game {
   #stopDrivers(offTrack = null) {
     if (this.diagnostic) { this.unschedule(this.diagnostic.timer); this.diagnostic = null; }
     for (const d of this.drivers) {
+      d.car.diagnosticMotion = false;
       d.cpuArmed = false; d.armed = false; d.gamepadArmed = false; d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
       if (d.pad) { d.pad.throttle = 0; d.pad.seen = 0; d.pad.attack = d.pad.support = d.pad.special = false; }
       d.car.safetyStop(d === offTrack ? 'Off track' : d.car.safetyReason || 'Host stopped');
@@ -196,10 +197,10 @@ export class Game {
     const c = driver.car, d = c.diagnostics();
     if (c.safetyReason && c.safetyReason !== 'Host stopped') throw new Error('Recover the car first');
     if (d.batteryAgeMs === null || d.batteryAgeMs > 30000) throw new Error('Refresh the battery reading before the diagnostic');
-    if (d.statusAgeMs !== null && d.statusAgeMs <= 30000 && (d.status.onCharger || d.status.lowBattery)) throw new Error('Car reports charging or low battery');
+    if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
     this.stopAll(); c.recover();
     const pulse = {driver, until:this.clock()+500, timer:null};
-    this.diagnostic = pulse;
+    this.diagnostic = pulse; c.diagnosticMotion = true; c.diagnosticUntil = pulse.until;
     pulse.timer = this.schedule(() => {
       if (this.diagnostic !== pulse) return;
       this.stopAll(); this.log('Diagnostic deadline: STOP requested; confirm physical stop');

@@ -530,6 +530,7 @@ function refresh(snapshot = game.snapshot()) {
       'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
       'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+' ('+seconds(x.batteryAgeMs)+')\n'+
       'Car status ('+seconds(x.statusAgeMs)+'): '+(x.statusAgeMs===null?'unknown':('on track '+x.status.onTrack+' · charging '+x.status.onCharger+' · low battery '+x.status.lowBattery))+'\n'+
+      'Firmware recovery: entered '+(x.recoveryEntered??0)+' · succeeded '+(x.recoverySucceeded??0)+' (diagnostic only)\n'+
       'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
       (x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+

@@ -44,3 +44,13 @@ test('Power Zone observations remain bounded diagnostics and never refresh track
  assert.equal(c.lastTrackAt,undefined);assert.equal(c.lastPosition,undefined);
  assert.equal(c.speed,0);assert.equal(r.sent.length,0);assert.equal(d.physicalStopVerified,false);
 });
+
+test('native delocalization recovery packets remain diagnostic and never restart motion',()=>{
+ const {r,c,time}=rig();time(100);r.emit(bytes('01 43'));time(200);r.emit(bytes('01 44'));
+ assert.equal(decode(bytes('01 43'))[0].type,'delocRecoveryEntered');
+ assert.equal(decode(bytes('01 44'))[0].type,'delocRecoverySucceeded');
+ assert.equal(decode(bytes('02 43 00'))[0].type,'other');
+ const d=c.diagnostics();assert.equal(d.recoveryEntered,1);assert.equal(d.recoverySucceeded,1);
+ assert.equal(d.lastRecoveryEvent.type,'delocRecoverySucceeded');assert.equal(c.lastTrackAt,undefined);
+ assert.equal(c.speed,0);assert.equal(r.sent.length,0);
+});

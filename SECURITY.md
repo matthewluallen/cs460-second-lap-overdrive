@@ -395,3 +395,7 @@ This change is not a hardware-validated fix for steering cancellation.
 ### 2026-11-13: supervised diagnostic control
 
 A one-shot diagnostic uses a 500 ms host deadline and existing STOP/latch behavior; controller inputs cannot extend it. Pending motion is removed on expiry, collision triggers the shared pit, and driver changes cancel the diagnostic. Battery/status ages are surfaced to avoid treating stale samples as fresh. This does not provide autonomous firmware stopping on browser suspension or Bluetooth failure. Physical acceptance remains pending.
+
+### 2026-11-13: diagnostic review follow-up
+
+Check diagnostic deadlines at the transport boundary as well as the host timer. Preserve known negative battery/charger status until cleared. Suppress automatic steering calibration during speed-only diagnostics. Startup notification buffering fails initialization on overflow rather than concealing lost startup evidence. Recovery-success notifications never authorize host motion.

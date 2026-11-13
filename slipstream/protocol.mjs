@@ -6,6 +6,7 @@ const uuid = n => 'be15' + n + '-6186-407e-8381-0bd89c4d8df4';
 export const UUIDS = Object.freeze({service: uuid('beef'), notify: uuid('bee0'), write: uuid('bee1')});
 
 export const ID = Object.freeze({
+  DELOC_RECOVERY_ENTERED: 0x43, DELOC_RECOVERY_SUCCEEDED: 0x44,
   DISCONNECT: 0x0d, PING: 0x16, PING_REPLY: 0x17, VERSION: 0x18, VERSION_REPLY: 0x19,
   CAR_INIT: 0x23, BATTERY: 0x1a, BATTERY_REPLY: 0x1b, LIGHTS: 0x1d, SPEED: 0x24, CHANGE_LANE: 0x25,
   CANCEL_LANE_CHANGE: 0x26, POSITION: 0x27, TRANSITION: 0x29, INTERSECTION: 0x2a,
@@ -130,6 +131,10 @@ function decodeOne(m) {
       return {id, type: 'intersection', pieceIndex: v.getInt8(2), offset: v.getFloat32(3, true),
         code: v.getUint8(7), exiting: v.getUint8(8) !== 0};
     }
+    // Native F&F CarMsgDelocAutoRecoveryEntered/Succeeded: exact two-byte frames.
+    // Diagnostic only; success is not permission to resume host commands.
+    case ID.DELOC_RECOVERY_ENTERED: if (size !== 1) break; return {id,type:'delocRecoveryEntered'};
+    case ID.DELOC_RECOVERY_SUCCEEDED: if (size !== 1) break; return {id,type:'delocRecoverySucceeded'};
     case ID.DELOCALIZED: return {id, type: 'delocalized'};      // the app calls this CarOffRoad
     // The next four are not in the public SDK; ids and sizes are from the app (ANALYSIS.md).
     // Native 006aed3c and independent Partydrive decoder: diagnostic only.

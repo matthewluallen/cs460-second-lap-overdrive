@@ -49,3 +49,25 @@ test('diagnostics preserve independent battery and status sample ages',async()=>
  const d=driver.car.diagnostics();assert.equal(d.batteryAgeMs,1000);assert.equal(d.statusAgeMs,900);assert.equal(d.status.lowBattery,true);assert.equal(d.positionAgeMs,null);
  d.status.lowBattery=false;assert.equal(driver.car.status.lowBattery,true);
 });
+
+test('optical telemetry during straight diagnostic cannot trigger automatic offset writes',async()=>{
+ const {game,driver,radio}=await rig();game.startDiagnostic(driver);await settle();
+ radio.emit([16,0x27,0x0e,0x12,0x10,0xbf,0x1f,0x49,0x3d,1,7,0xff,0xff,0,0,0x2c,1]);await settle();
+ assert.equal(driver.car.telemetry.positions,1);
+ assert.equal(radio.sent.some(b=>[0x25,0x2c].includes(b[1])),false);
+ game.stopAll();await settle();
+});
+
+test('expired clock rejects motion even when transport completion beats timer callback',async()=>{
+ const {game,driver,radio,time}=await rig();let release,first=true;
+ radio.block=()=>{if(first){first=false;return new Promise(r=>release=r);}};
+ game.startDiagnostic(driver);await settle();time(600);release();await settle();await settle();
+ assert.equal(speeds(radio).includes(150),false);
+ assert.equal(driver.car.speed,0);
+});
+test('aging cannot clear a known low-battery or charger warning',async()=>{
+ for(const flag of [[0,1],[1,0]]){
+  const {game,driver,radio,time}=await rig();radio.emit([5,0x3f,0,...flag,0]);time(30001);radio.emit([3,0x1b,0,16]);
+  assert.throws(()=>game.startDiagnostic(driver),/charging or low battery/);
+ }
+});

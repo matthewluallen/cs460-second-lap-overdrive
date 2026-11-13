@@ -1,3 +1,7 @@
+# Independent advisory and follow-up repairs
+
+Read [REVERSE-ENGINEERING-ADVISORY.md](slipstream/review/REVERSE-ENGINEERING-ADVISORY.md) for three independent AI reverse-engineering reviews and reproduced repairs. The unknown0x43 incident packet is firmware delocalization-recovery entry. This is newly identified evidence, not a proven physical cause. Scan-reference overwrite, diagnostic auto-calibration, expired-motion race, negative-status aging and startup-notification capture are repaired with regressions. No physical commands in this review pass.
+
 # Recovery implementation: bounded diagnostic and fresh health readings
 
 Added an explicitly supervised three-second countdown / 500 ms diagnostic host window, capped at requested 150 mm/s, with no steering or normal driver commands. Deadline, STOP, collision, reassignment and delayed-write queue cleanup have regression coverage. It is best-effort browser timing, not a firmware failsafe or proof of physical stop. Fresh battery sample (within 30 seconds) is required; recent charger/low-battery reports block the pulse. Unknown/stale status remains explicitly unknown/stale, not a health certificate.

@@ -81,3 +81,10 @@ test('SDK cancellation drops the queued offset reference as well as the lane com
   assert.equal(c.pending.has('lane-offset'), false);
   assert.equal(c.telemetry.laneChange.cancelled, true);
 });
+
+test('SDK scan-start operator reference survives the first steering preamble', async () => {
+  const r=radio('sdk'),c=new Car(r);c.initializing=false;
+  c.calibrateScanStart(22.5);c.steerTo(22.5);await c.pumpPromise;
+  assert.deepEqual(r.sent.filter(b=>b[1]===ID.SET_OFFSET).map(f32),[-22.5,-22.5]);
+  assert.equal(c.lastTrackAt,undefined,'operator placement must not invent optical telemetry');
+});

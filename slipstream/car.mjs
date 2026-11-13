@@ -30,6 +30,7 @@ export class Car {
   async start() {
     if (this.transport.initializationProfile) {
       try {
+        this.transport.drainNotifications?.();
         for (const phase of initializationPhases(this.transport.initializationProfile)) {
           if (!this.connected || this.closing || this.faulted) throw new Error('Connection closed during initialization');
           this.initializationStatus = phase.name;
@@ -90,11 +91,17 @@ export class Car {
   }
   async #write(bytes) {
     let timer; const writeStarted = this.clock();
+    const deadline = this.diagnosticMotion && bytes[1] === 0x24 && (bytes[2] || bytes[3]) ? this.diagnosticUntil : undefined;
     this.telemetry.lastWriteAttempt={at:writeStarted,id:bytes[1],bytes:[...bytes],status:'pending'};
     // A timeout is NOT completion of the browser's GATT operation. Callers must
     // close the link rather than start another write when this deadline fires.
     try {
-      await Promise.race([Promise.resolve().then(() => this.transport.write(bytes)), new Promise((_, reject) => {
+      await Promise.race([Promise.resolve().then(() => {
+        // A ready GATT promise can run before an overdue timer callback.
+        // Check the captured deadline at the last host boundary before motion.
+        if (deadline !== undefined && this.clock() >= deadline) throw new Error('Diagnostic motion expired before write');
+        return this.transport.write(bytes);
+      }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
       })]);
       this.telemetry.lastWriteAttempt.status='completed';
@@ -163,6 +170,10 @@ export class Car {
           this.forceLane = true;
         }
       }
+      else if(m.type==='delocRecoveryEntered' || m.type==='delocRecoverySucceeded') {
+        const key=m.type==='delocRecoveryEntered'?'recoveryEntered':'recoverySucceeded';
+        this.telemetry[key]=(this.telemetry[key]??0)+1; this.telemetry.lastRecoveryEvent={type:m.type,at:now};
+      }
       else if(m.type==='collision') { this.telemetry.collisions=(this.telemetry.collisions??0)+1; this.telemetry.lastCollision={...m,at:now}; }
       else if(m.type==='ping') this.telemetry.lastPongAt=now;
       else if(m.type==='supercode' || m.type==='zoneSupercode') {
@@ -184,7 +195,7 @@ export class Car {
       else if (m.type === 'version') this.version = m.version;
       else if (m.type === 'status') { this.status = m; this.telemetry.statusAt = now; }
       else if (m.type === 'delocalized') this.delocalized = true;
-      else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; this.#lane(m, now); }
+      else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; if (!this.diagnosticMotion) this.#lane(m, now); }
       else if (m.type === 'speed') { this.telemetry.speedReport={...m,at:now}; this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
       this.localizer?.feed(m, now);
       for (const fn of this.listeners) fn(m, this);
@@ -202,7 +213,7 @@ export class Car {
     const spot = this.pieces?.locate(m.pieceId, m.locationId, m.reverse);
     if (!spot) { this.lastPair = null; return; }
     this.telemetry.calibrationBlocked = null;
-    this.lateral = spot.lateral;
+    this.lateral = spot.lateral; this.lateralEstimate = {source:'printed-code',at:now,signVerified:false};
     if (this.lastPair && m.offset !== 654321) {
       const dTruth = spot.lateral - this.lastPair.lateral, dCar = m.offset - this.lastPair.offset;
       // A clear move the wrong way round means our assumed sign is wrong: with the
@@ -224,19 +235,22 @@ export class Car {
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
   calibrateScanStart(lateral) {
     if (!Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) throw new Error('Starting lane must be within 68 mm of track centre');
-    if (this.speed || this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) throw new Error('Stop and recover the car before calibration');
+    if (this.diagnosticMotion || this.speed || this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) throw new Error('Stop and recover the car before calibration');
     const offset=this.offsetSign*lateral;
     this.startingCalibration={source:'operator',lateral,offset,at:this.clock(),signVerified:false};
+    this.lateral=lateral; this.lateralEstimate={source:'operator',at:this.clock(),signVerified:false};
     this.lastPair=null; this.forceLane=true;
     this.send('offset',encode.setOffset(offset));
   }
   diagnostics(now=this.clock()) {
     const age=at=>at===undefined?null:Math.max(0,Math.round(now-at));
     return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
+      startupNotifications:{buffered:this.transport.earlyDelivered??0,dropped:this.transport.earlyDropped??0,timestampBasis:'buffered packets timestamped on drain'},
       connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,
       requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
       batteryAgeMs:age(this.telemetry.batteryAt),statusAgeMs:age(this.telemetry.statusAt),status:{...this.status},
       millivolts:this.millivolts,notificationAgeMs:age(this.telemetry.lastNotificationAt),positionAgeMs:age(this.telemetry.lastPositionAt),
+      lateralEstimate:this.lateralEstimate?{...this.lateralEstimate}:null,diagnosticMotion:!!this.diagnosticMotion,
       ...this.telemetry,counts:{...this.telemetry.counts},startingCalibration:this.startingCalibration??null,
       scanAllowanceRequested:this.scanDelocalizationAllowance,physicalStopVerified:false};
   }
@@ -264,7 +278,7 @@ export class Car {
   }
   // Lateral target, mm, positive to the left of travel.
   steerTo(lateral, speed = 350) {
-    if (this.initializing || this.safetyReason || this.closing || this.faulted) return;
+    if (this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return;
     const target = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, lateral));
     if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return;
     this.forceLane = false; this.targetLateral = target;
@@ -290,7 +304,7 @@ export class Car {
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;
     this.steerTo(lanes * LANE_STEP);
   }
-  uturn() { if (this.initializing || this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
+  uturn() { if (this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
   stop() {
     // A pending lane request may be discarded below, or the car may be moved
     // during recovery. The next steering target must reach the vehicle.
