@@ -3,6 +3,15 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## SDK/app approach faults identified
+
+Read [SDK-APK-APPROACH-AUDIT.md](slipstream/review/SDK-APK-APPROACH-AUDIT.md).
+Fresh targeted Ghidra review plus captured-byte probes reproduced two unresolved
+faults: unverified piece 57 still drives offset calibration, and cancelled steering
+retains an unachieved target. The packet layout is SDK-consistent; the reason for
+firmware cancellation is not yet proved. No live commands or runtime edits were
+made in this review. Repair these state/trust gaps before another steering trial.
+
 ## Hardware trace now replayed
 
 The attached Groundshock capture is preserved and replays to an 11-piece map.
