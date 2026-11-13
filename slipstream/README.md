@@ -317,3 +317,16 @@ Slow Story/Precision missions on intersection maps are blocked pending validatio
 under the unchanged 2-second watchdog. IDs 53, 54 and 57 remain special/unverified
 and cannot enter scored rounds. See [the review response](review/PR4-REVIEW-RESPONSE.md)
 for evidence and outstanding hardware and security work.
+
+### Diagnosing a real scan
+
+**Live car checks** separates requested speed from reported speed, shows packet
+counts and freshness, and identifies unknown lateral offsets. **Save trace** works
+while recording and includes your **Physical observations**, scan settings and
+stop events. Scan attempts automatically start capture if needed.
+
+Optional **Scan-start calibration** accepts a measured starting position on a
+straight piece, with separate confirmation. Leave it blank for an unchanged
+baseline; never guess that the centre is zero when the car is on another lane.
+Left/right hardware sign remains unverified. Follow the controlled comparison in
+[Live diagnostics](review/LIVE-DIAGNOSTICS.md).

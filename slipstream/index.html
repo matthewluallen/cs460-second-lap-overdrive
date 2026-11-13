@@ -29,6 +29,11 @@
     </div>
     <button id="demo" class="demo">Try a two-car simulation →</button>
     <label class="field">Car to scan<select id="scanCar"></select></label>
+    <details><summary>Scan-start calibration (experimental)</summary>
+      <p class="note">Only on a straight piece: measure the car's centre from the track centre, looking in its driving direction. Left is positive; right is negative. Leave blank for no calibration. Left/right hardware sign is still unverified.</p>
+      <label class="field">Starting position (mm)<input id="scanLateral" type="number" min="-68" max="68" step="0.5" placeholder="Unchanged"></label>
+      <label><input id="scanCalibrationConfirmed" type="checkbox"> I measured this starting position; car is stationary</label>
+    </details>
     <label><input id="scanClear" type="checkbox"> Track clear; other cars removed before scanning</label>
     <p id="bleNote" class="note"></p>
     <label class="field">Practice layout (simulated cars)
@@ -91,6 +96,11 @@
       <button id="closeRoom">Close room</button>
     </div>
     <p id="roomNote" class="note"></p>
+    </section>
+    <section class="side-block"><h2>Live car checks</h2>
+      <div id="liveDiagnostics" class="note" style="white-space:pre-line">Connect a car to see telemetry health.</div>
+      <label class="field">Physical observations<textarea id="operatorNotes" maxlength="2000" placeholder="Did it move? Which starting lane and track pieces? Lights, stops, battery changes…"></textarea></label>
+      <p class="note">Requested speed is a command, not proof of movement. Save a trace during or after a test to include these observations and live checks.</p>
     </section>
     <details class="diagnostics"><summary>Recording &amp; session log</summary><h2>Trace</h2>
     <div class="row"><button id="record">Record</button><button id="saveTrace" disabled>Save trace</button></div>

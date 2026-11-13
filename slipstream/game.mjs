@@ -103,9 +103,10 @@ export class Game {
   }
 
   // --- track -----------------------------------------------------------------
-  startScan(driver = this.drivers.find(d => d.car.connected)) {
+  startScan(driver = this.drivers.find(d => d.car.connected), {startingLateral = null} = {}) {
+    if (startingLateral !== null && (!Number.isFinite(startingLateral) || Math.abs(startingLateral)>68)) throw new Error('Starting lane must be within 68 mm of track centre');
     if (!driver) throw new Error('Connect a car first');
-    if (driver.car.initializing || !driver.car.connected) throw new Error('Wait for car initialization to complete');
+    if (driver.car.initializing || !driver.car.connected || driver.car.closing || driver.car.faulted) throw new Error('Wait for car initialization to complete');
     if (driver.car.safetyReason === 'Off track') throw new Error('Return the car to the track and recover it before scanning');
     if(this.pitReason) throw new Error('Pit stop: complete shared recovery before scanning');
     this.stopAll(); this.halted=false; if(driver.car.safetyReason==='Host stopped')driver.car.recover(); this.stopBattle();
@@ -114,6 +115,7 @@ export class Game {
     this.track = null; for (const d of this.drivers) d.car.useTrack(null);
     // Scan on a printed lane: intersections have strips at ±18/±54 mm,
     // so the geometric center has no localization codes to identify them.
+    if (startingLateral !== null) driver.car.calibrateScanStart(startingLateral);
     driver.car.beginScanDelocalization();
     const ceiling = driver.car.transport.initializationProfile === 'fast-furious' ? 300 : this.scanSpeed;
     driver.car.steerTo(LANE_STEP); driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed, ceiling));

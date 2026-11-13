@@ -353,3 +353,18 @@ test('M2 an unmapped gamepad cannot arm through assumed standard buttons', () =>
  navigator.getGamepads=()=>[pad];pad.buttons[0].pressed=true;readControls(.04);pad.buttons[0].pressed=false;readControls(.04);pad.buttons[7].value=.8;readControls(.04);`);
  assert.equal(h.run('d.input.throttle'),0);assert.match(h.run('d.gamepadWarning'),/Non-standard/);
 });
+
+test('scan calibration needs explicit measurement confirmation, snapshots selection and clears it',async()=>{
+ const h=host();h.node('addSim').click();h.node('scanCar').value='1';h.node('scanClear').checked=true;
+ h.node('scanLateral').value='22.5';h.node('scan').click();assert.equal(h.run('countdown'),null);
+ h.node('scanCalibrationConfirmed').checked=true;h.node('scan').click();
+ assert.equal(h.run('countdown.startingLateral'),22.5);assert.equal(h.node('scanLateral').value,'');assert.equal(h.node('scanCalibrationConfirmed').checked,false);
+ h.node('scanLateral').value='-22.5';h.tick(3000);await settle();assert.equal(h.run('game.scanner.car.startingCalibration.lateral'),22.5);
+});
+test('live diagnostic export includes observations and scan evidence while recording continues',async()=>{
+ const h=host();h.node('addSim').click();h.node('scanCar').value='1';h.node('scanClear').checked=true;h.node('operatorNotes').value='Car stayed on track';
+ h.node('scan').click();h.tick(3000);await settle();
+ const x=h.run('sessionTrace()');assert.equal(x.diagnostics.operatorNotes,'Car stayed on track');assert.equal(x.diagnostics.schema,'slipstream-diagnostics-v1');
+ assert.ok(x.markers.some(m=>m.kind==='scan-start'));assert.equal(h.run('recorder.active'),true);assert.equal(h.node('saveTrace').disabled,false);
+ assert.match(h.node('liveDiagnostics').textContent,/Requested/);
+});

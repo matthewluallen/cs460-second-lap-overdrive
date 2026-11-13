@@ -22,6 +22,7 @@ export class Car {
     this.firmwareInitialization = null;
     this.millivolts = null; this.version = null; this.status = {};
     this.lightKey = ''; this.lastSpeedSent = -1; this.delocalized = false; this.rx = 0; this.tx = 0;
+    this.telemetry = {counts:{},malformed:0,positions:0,transitions:0,unknown:0,maxPositionGapMs:0,lastWriteMs:null,maxWriteMs:0};
     this.unsubscribe = transport.onNotify(bytes => this.#receive(bytes));
   }
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
@@ -87,14 +88,22 @@ export class Car {
     finally { this.pumping = false; }
   }
   async #write(bytes) {
-    let timer;
+    let timer; const writeStarted = this.clock();
+    this.telemetry.lastWriteAttempt={at:writeStarted,id:bytes[1],bytes:[...bytes],status:'pending'};
     // A timeout is NOT completion of the browser's GATT operation. Callers must
     // close the link rather than start another write when this deadline fires.
     try {
       await Promise.race([Promise.resolve().then(() => this.transport.write(bytes)), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
       })]);
+      this.telemetry.lastWriteAttempt.status='completed';
+      this.telemetry.lastWriteMs = Math.max(0,this.clock()-writeStarted);
+      this.telemetry.maxWriteMs = Math.max(this.telemetry.maxWriteMs,this.telemetry.lastWriteMs);
       this.tx++; this.tap?.('tx', bytes);
+    } catch (error) {
+      this.telemetry.lastWriteAttempt.status='failed';
+      this.telemetry.lastWriteFailure={at:this.clock(),id:bytes[1],error:String(error.message??error).slice(0,200)};
+      throw error;
     } finally { clearTimeout(timer); }
   }
   async #failSafe(error) {
@@ -124,10 +133,25 @@ export class Car {
   }
   #receive(bytes) {
     this.tap?.('rx', bytes);
+    const now = this.clock(); this.telemetry.lastNotificationAt = now;
+    this.telemetry.lastRaw = [...bytes].slice(0,64).map(b=>b.toString(16).padStart(2,'0')).join(' ');
     let messages;
-    try { messages = decode(bytes); } catch { return; }
-    const now = this.clock(); this.rx++;
+    try { messages = decode(bytes); } catch { this.telemetry.malformed++; return; }
+    this.rx++;
+    for (let at=0;at<bytes.length;at+=bytes[at]+1) {
+      const key = '0x'+bytes[at+1].toString(16).padStart(2,'0')+'/'+(bytes[at]+1);
+      // Protocol bounds limit possible keys; retain a smaller fixed diagnostic budget.
+      if (key in this.telemetry.counts || Object.keys(this.telemetry.counts).length<128) this.telemetry.counts[key]=(this.telemetry.counts[key]??0)+1;
+    }
     for (const m of messages) {
+      if (m.type === 'position') {
+        this.telemetry.positions++;
+        if (this.telemetry.lastPositionAt !== undefined) this.telemetry.maxPositionGapMs=Math.max(this.telemetry.maxPositionGapMs,now-this.telemetry.lastPositionAt);
+        this.telemetry.lastPositionAt=now;
+      } else if(m.type==='transition') this.telemetry.transitions++;
+      else if(m.type==='other') this.telemetry.unknown++;
+      else if(m.type==='laneChange') this.telemetry.laneChange={...m,at:now};
+      else if(m.type==='ping') this.telemetry.lastPongAt=now;
       if (m.type === 'position' || m.type === 'transition') this.lastTrackAt = now;
       if (m.type === 'carInit') this.firmwareInitialization = m;
       else if (m.type === 'battery') this.millivolts = m.millivolts;
@@ -146,7 +170,7 @@ export class Car {
     const spot = this.pieces?.locate(m.pieceId, m.locationId, m.reverse);
     if (!spot) return;
     this.lateral = spot.lateral;
-    if (this.lastPair) {
+    if (this.lastPair && m.offset !== 654321) {
       const dTruth = spot.lateral - this.lastPair.lateral, dCar = m.offset - this.lastPair.offset;
       // A clear move the wrong way round means our assumed sign is wrong: with the
       // wrong sign every lane command drives the car away from its target.
@@ -156,7 +180,7 @@ export class Car {
         if (this.signVotes < 0) { this.offsetSign = -this.offsetSign; this.signVotes = 0; this.lastCalibration = -1e9; this.forceLane = true; }
       }
     }
-    this.lastPair = {lateral: spot.lateral, offset: m.offset};
+    this.lastPair = m.offset === 654321 ? null : {lateral: spot.lateral, offset: m.offset};
     const expected = this.offsetSign * spot.lateral;
     if (Math.abs(m.offset - expected) > 9 && now - this.lastCalibration > 700) {
       this.send('offset', encode.setOffset(expected));
@@ -165,6 +189,23 @@ export class Car {
     }
   }
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
+  calibrateScanStart(lateral) {
+    if (!Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) throw new Error('Starting lane must be within 68 mm of track centre');
+    if (this.speed || this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) throw new Error('Stop and recover the car before calibration');
+    const offset=this.offsetSign*lateral;
+    this.startingCalibration={source:'operator',lateral,offset,at:this.clock(),signVerified:false};
+    this.lastPair=null; this.forceLane=true;
+    this.send('offset',encode.setOffset(offset));
+  }
+  diagnostics(now=this.clock()) {
+    const age=at=>at===undefined?null:Math.max(0,Math.round(now-at));
+    return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
+      connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,
+      requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
+      millivolts:this.millivolts,notificationAgeMs:age(this.telemetry.lastNotificationAt),positionAgeMs:age(this.telemetry.lastPositionAt),
+      ...this.telemetry,counts:{...this.telemetry.counts},startingCalibration:this.startingCalibration??null,
+      scanAllowanceRequested:this.scanDelocalizationAllowance,physicalStopVerified:false};
+  }
   beginScanDelocalization() {
     if (this.transport.initializationProfile !== 'fast-furious') return false;
     if (this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) return false;

@@ -298,3 +298,9 @@ Regression: `public live session exposes only Slipstream pages and authenticated
   watchdogs and scan budgets remain. Lost links and hung writes cannot guarantee a
   firmware reset; no autonomous firmware timeout is claimed. Tests cover restoration
   races, settled write faults, disconnect, off-track and shared-pit handling.
+
+- Live diagnostics/scan calibration: lane-change feedback and manual offset
+  calibration never satisfy the track watchdog. Calibration is bounded, requires a
+  stopped car and explicit measured-placement confirmation in the UI, and is not
+  silently reused. Capture and annotations are bounded and exports remain local.
+  Unknown-offset feedback does not count as measured motion or steering-sign evidence.

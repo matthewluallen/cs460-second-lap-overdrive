@@ -3,6 +3,12 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Live diagnostics and optional calibration
+
+See [LIVE-DIAGNOSTICS.md](slipstream/review/LIVE-DIAGNOSTICS.md) for the new live
+readout, replay-compatible diagnostic export, measured starting-lane calibration
+and the next one-variable-at-a-time physical test. No hardware success is claimed.
+
 ## Latest research
 
 [Community/APK protocol cross-check](slipstream/review/COMMUNITY-PROTOCOL-REVIEW.md)

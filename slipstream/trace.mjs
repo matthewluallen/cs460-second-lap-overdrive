@@ -11,7 +11,7 @@ const MAX_EVENTS = 200000;
 
 export class Recorder {
   constructor(clock = () => performance.now()) { this.clock = clock; this.active = false; this.reset(); }
-  reset() { this.generation = (this.generation ?? 0) + 1; this.attached = new WeakSet(); this.cars = []; this.events = []; this.started = 0; this.dropped = 0; }
+  reset() { this.generation = (this.generation ?? 0) + 1; this.attached = new WeakSet(); this.cars = []; this.events = []; this.markers = []; this.markersDropped=0; this.started = 0; this.dropped = 0; }
   start(drivers, note = '') {
     this.reset(); this.active = true; this.started = this.clock(); this.note = note; this.wall = new Date().toISOString();
     for (const driver of drivers) this.add(driver);
@@ -21,7 +21,7 @@ export class Recorder {
     const index = this.cars.length, car = driver.car, generation = this.generation;
     if (this.attached.has(car)) return;
     this.attached.add(car);
-    const info = {name: car.name, model: car.model, simulated: !!car.simulated, firmware: car.version ?? null};
+    const info = {driverId:driver.id??null,name: car.name, model: car.model, simulated: !!car.simulated, firmware: car.version ?? null, profile:car.transport?.initializationProfile??null};
     this.cars.push(info);
     car.tap = (direction, bytes) => {
       if (!this.active || generation !== this.generation) return;
@@ -32,10 +32,15 @@ export class Recorder {
       this.events.push([Math.round(this.clock() - this.started), index, direction, hex(bytes)]);
     };
   }
+  mark(kind, details={}) {
+    if (!this.active) return;
+    if (this.markers.length>=1000) {this.markersDropped++;return;}
+    this.markers.push({timeMs:Math.round(this.clock()-this.started),kind,details});
+  }
   stop() { this.active = false; return this.toJSON(); }
   toJSON() {
     return {format: TRACE_FORMAT, recorded: this.wall, note: this.note, source: this.cars.length === 0 ? 'unknown' : this.cars.every(c => c.simulated) ? 'simulator' : this.cars.some(c => c.simulated) ? 'mixed' : 'hardware',
-      cars: this.cars, dropped: this.dropped, events: this.events};
+      cars: this.cars, dropped: this.dropped, events: this.events, markers:this.markers, markersDropped:this.markersDropped};
   }
 }
 

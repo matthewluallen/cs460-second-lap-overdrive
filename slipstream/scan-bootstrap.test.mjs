@@ -88,3 +88,9 @@ test('disconnect still restores zero when first-position restoration was queued 
  assert.deepEqual(limits(radio),[300,0]);
  assert.equal(radio.sent.at(-1)[1],0x0d);
 });
+test('optional starting calibration precedes scanner lane and speed commands',async()=>{
+ const {game,driver,radio}=await setup();game.startScan(driver,{startingLateral:-22.5});await driver.car.pumpPromise;
+ const offset=radio.sent.findIndex(b=>b[1]===0x2c),lane=radio.sent.findIndex(b=>b[1]===0x25);
+ assert.ok(offset>=0&&offset<lane);assert.equal(driver.car.startingCalibration.lateral,-22.5);
+ assert.equal(driver.car.lastTrackAt,undefined);
+});

@@ -127,6 +127,14 @@ function decodeOne(m) {
     }
     case ID.DELOCALIZED: return {id, type: 'delocalized'};      // the app calls this CarOffRoad
     // The next four are not in the public SDK; ids and sizes are from the app (ANALYSIS.md).
+    // Native 006aed3c and independent Partydrive decoder: diagnostic only.
+    case ID.LANE_CHANGE_UPDATE: {
+      if (size !== 14) break;
+      const currentOffset = v.getFloat32(2,true), targetOffset = v.getFloat32(6,true);
+      if (!Number.isFinite(currentOffset) || !Number.isFinite(targetOffset)) break;
+      return {id,type:'laneChange',currentOffset,targetOffset,offsetKnown:currentOffset !== 654321 && targetOffset !== 654321,
+        horizontalSpeed:v.getUint16(10,true),verticalSpeed:v.getInt16(12,true),laneChangeId:m[14]};
+    }
     case ID.SPEED_UPDATE: if (!has(7)) break; return {id, type: 'speed', desired: v.getInt16(2, true), accel: v.getInt16(4, true), actual: v.getInt16(6, true)};
     case ID.COLLISION: if (!has(3)) break; return {id, type: 'collision', a: m[2], b: m[3], wasSideOnCollision: !!m[2], wasFrontBackCollision: !!m[3]};
     case ID.JUMP_RESULT: if (!has(4)) break; return {id, type: 'jump', value: v.getInt16(2, true), result: m[4], launchSpeed: v.getInt16(2, true), jumpFailed: !!m[4]};

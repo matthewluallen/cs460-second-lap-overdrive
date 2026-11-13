@@ -28,6 +28,7 @@ let activeMission = null, activeExperience = 'arcade', recordEligible = true;
 window.slipstream = {game, world, recorder, get transport() { return room?.link.transport ?? null; }};                        // for the browser console and tests
 
 function log(text) {
+  recorder.mark('log',{text:String(text).slice(0,1000)});
   const list = $('log');
   list.prepend(el('li', {textContent: new Date().toLocaleTimeString() + '  ' + text}));
   while (list.children.length > 60) list.lastChild.remove();
@@ -132,7 +133,7 @@ $('connect').onclick = async event => {
     if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
     const driver = game.addCar(link, {model, name: model ? vehicles.models[String(model)].name : 'Unidentified car', control: 'none', beforeStart: d => {
       if (!recorder.active) recorder.start(game.drivers.filter(x=>!x.car.simulated), 'Hardware connection and initialization');
-      recorder.add(d); $('record').textContent='Stop recording'; $('saveTrace').disabled=true; $('traceNote').textContent='Recording from initialization…';
+      recorder.add(d); $('record').textContent='Stop recording'; $('saveTrace').disabled=false; $('traceNote').textContent='Recording from initialization…';
     }});
     link.onClose(() => driver.car.connectionLost());
     addCard(driver);
@@ -145,7 +146,7 @@ $('connect').onclick = async event => {
 // --- top bar ---------------------------------------------------------------------
 $('scan').onclick = () => {
   if (game.phase === 'scanning') return halt('Scan cancelled');
-  try { requireVisible(); if(countdown || game.pitReason) throw new Error('Complete or cancel the current start/recovery first'); const driver=game.drivers.find(d=>d.id===Number($('scanCar').value)); if(!driver || !driver.car.connected) throw new Error('Choose the car to scan'); if(!$('scanClear').checked) throw new Error('Confirm the track is clear and other cars are removed'); endRound('Track scan'); game.stopAll(); countdown={kind:'scan',scanner:driver.id,until:performance.now()+3000}; $('scanClear').checked=false; $('roundHelp').textContent='Scanning with '+driver.car.name+' after the countdown. Other cars remain stopped.';renderRound(); } catch (error) { log(error.message); }
+  try { requireVisible(); if(countdown || game.pitReason) throw new Error('Complete or cancel the current start/recovery first'); const driver=game.drivers.find(d=>d.id===Number($('scanCar').value)); if(!driver || !driver.car.connected) throw new Error('Choose the car to scan'); if(!$('scanClear').checked) throw new Error('Confirm the track is clear and other cars are removed'); const raw=$('scanLateral').value.trim(); const startingLateral=raw===''?null:Number(raw); if(startingLateral!==null && (!Number.isFinite(startingLateral)||Math.abs(startingLateral)>68||!$('scanCalibrationConfirmed').checked))throw new Error('Measure a starting position within 68 mm and confirm it, or leave calibration blank'); if(!recorder.active){recorder.start(game.drivers,'Scan attempt');$('record').textContent='Stop recording';} endRound('Track scan'); game.stopAll(); countdown={kind:'scan',scanner:driver.id,startingLateral,until:performance.now()+3000}; recorder.mark('scan-request',{carId:driver.id,startingLateral,profile:driver.car.transport.initializationProfile??null,safety:{...game.safety},ceiling:game.topSpeed}); $('scanLateral').value='';$('scanCalibrationConfirmed').checked=false; $('scanClear').checked=false; $('roundHelp').textContent='Scanning with '+driver.car.name+' after the countdown. Other cars remain stopped.';renderRound(); } catch (error) { log(error.message); }
 };
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
@@ -223,7 +224,7 @@ function tickRound(now) {
       const ready = countdown; countdown = null; $('countdown').hidden = true;
       try {
         requireVisible();
-        if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');game.startScan(scanner);return; }
+        if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');recorder.mark('scan-start',{carId:scanner.id,startingLateral:ready.startingLateral});game.startScan(scanner,{startingLateral:ready.startingLateral??null});return; }
         if(ready.kind==='pit') {game.resumeFromPit();game.armComputers();session.resume(now);return;}
         if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
         game.resume(); game.armComputers(); if (ready.kind === 'free') { log('Free drive armed after countdown'); return; } if (ready.mode === 'battle') game.startBattle();
@@ -502,6 +503,19 @@ function refresh(snapshot = game.snapshot()) {
   const scanOptions=game.drivers.filter(d=>d.car.connected),scanKey=scanOptions.map(d=>d.id+':'+d.car.name).join('|');
   if($('scanCar').dataset.key!==scanKey){const selected=$('scanCar').value;$('scanCar').replaceChildren(...scanOptions.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));if(scanOptions.some(d=>String(d.id)===selected))$('scanCar').value=selected;$('scanCar').dataset.key=scanKey;}
 
+  const seconds=ms=>ms===null?'none yet':(ms/1000).toFixed(1)+'s ago';
+  $('liveDiagnostics').textContent=game.drivers.map(d=>{
+    const x=d.car.diagnostics();
+    const offset=x.laneChange ? (x.laneChange.offsetKnown?'reported '+x.laneChange.currentOffset.toFixed(1)+' mm':'UNKNOWN — lane calibration needed') : 'not reported';
+    return d.car.name+' · firmware '+(x.firmware??'waiting')+' · '+x.profile+'\n'+
+      (x.connected?'Connected':'Disconnected')+' · '+(x.safetyReason??x.initialization)+'\n'+
+      'Requested '+x.requestedSpeed+' mm/s; car reported '+x.reportedSpeed+' mm/s ('+seconds(x.reportedSpeedAgeMs)+')\n'+
+      'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
+      'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+'\n'+
+      'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms';
+  }).join('\n\n') || 'Connect a car to see telemetry health.';
+  $('saveTrace').disabled=recorder.cars.length===0;
+  if(recorder.active)$('traceNote').textContent='Recording · '+recorder.events.length+' messages · '+recorder.dropped+' dropped · '+recorder.markersDropped+' annotations dropped. Save anytime without stopping.';
   renderRound();
   const busy = session.status === 'running' || session.status === 'paused' || !!countdown;
   $('carCount').textContent = game.drivers.length + ' / 4 cars';
@@ -583,10 +597,11 @@ try { $('hostCode').value = sessionStorage.getItem('slipstream.hostCode') || '';
 $('record').onclick = () => {
   if (recorder.active) { recorder.stop(); $('record').textContent = 'Record'; $('saveTrace').disabled = false; $('traceNote').textContent = recorder.events.length + ' messages recorded from ' + recorder.cars.length + ' car(s).'; return; }
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
-  $('record').textContent = 'Stop recording'; $('saveTrace').disabled = true; $('traceNote').textContent = 'Recording…';
+  $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-12-live-diagnostics-1',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
-  const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(recorder.toJSON())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
+  const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 };
 refresh();
