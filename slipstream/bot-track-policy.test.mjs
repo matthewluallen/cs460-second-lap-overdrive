@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Bot} from './battle.mjs';
 import {Game} from './game.mjs';
 import {ID} from './protocol.mjs';
-import {Pieces, Localizer, traversal} from './track.mjs';
+import {Pieces, Track, Localizer, traversal} from './track.mjs';
 import {buildTrack, LAYOUTS} from './sim.mjs';
 const data=name=>JSON.parse(readFileSync(new URL('./data/'+name+'.json',import.meta.url)));
 const pieces=new Pieces(data('pieces'));
@@ -12,7 +12,7 @@ const input=()=>({throttle:1,lane:22.5});
 function rig({id=36,progress=.1,lateral=-22.5,direction=1,active=false}={}){
   const e={located:true,index:0,progress,lateral,direction};
   const track={pieces:[{...traversal(pieces,id,false),length:500},traversal(pieces,39,false)]};
-  const localizer={seenCode:true,lastId:id,speed:300,laps:0,estimate:()=>e};
+  const localizer={seenCode:true,lastId:id,speed:300,laps:0,sectionVisit:0,estimate:()=>e};
   const car={pieces,localizer,speed:300,lastAccel:1000,telemetry:{lastPositionAt:1000,
     speedCommand:{at:900,speed:300,accel:1000},speedReport:{at:950,desired:300,accel:1000}},motionSince:900};
   const battle={active,track};return {bot:new Bot(car,battle),car,localizer,e,battle};
@@ -51,16 +51,56 @@ test('reverse-travel remaining distance uses Localizer progress in travel direct
   i=input();assert.equal(bot.applyTrackPolicy(1000,i,{topSpeed:450})*450,300);assert.equal(i.lane,null,'near exit in reverse must not steer');
 });
 
-test('free CPU lane targets alternate once per piece encounter, direction and lap',()=>{
+test('free CPU lane targets alternate once per section visit and direction, independently of laps',()=>{
   const r=rig();let i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,22.5);
   assert.equal(r.bot.confirmTrackLane(1000,i,300),true);
   i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,null,'same piece cannot retry every tick');
   r.e.index=1;r.localizer.lastId=39;i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,-22.5);
   assert.equal(r.bot.confirmTrackLane(1000,i,300),true);
-  r.localizer.laps=1;i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,22.5);
+  r.localizer.laps=1;i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,null,'lap counter changes alone do not create a section visit');
+  r.localizer.sectionVisit++;i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,22.5);
   assert.equal(r.bot.confirmTrackLane(1000,i,300),true);
   r.e.direction=-1;i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,-22.5);
   assert.equal(r.bot.confirmTrackLane(1000,i,300),true);
+});
+
+test('one-straight circuits admit each new optical section visit independently of completed laps',()=>{
+  for(const omitCurveCode of [false,true]){
+    const track=new Track([34,33,18,20,36,17,23].map(id=>traversal(pieces,id,false)));
+    assert.equal(track.closed,true);
+    const localizer=new Localizer(track,pieces);
+    const car={pieces,localizer,speed:300,lastAccel:1000,motionSince:0,telemetry:{
+      speedCommand:{at:0,speed:300,accel:1000},speedReport:{at:1,desired:300,accel:1000}}};
+    const bot=new Bot(car,{active:false,track});let now=0;
+    const feed=id=>{
+      const locationId=id===36?30:Number(Object.keys(pieces.get(id).locs)[0]);
+      localizer.feed({type:'position',pieceId:id,locationId,reverse:false,speed:300},now+=100);
+      car.telemetry.lastPositionAt=now;
+    };
+    const attempt=()=>{const i=input();bot.applyTrackPolicy(now,i,{topSpeed:300});
+      return {confirmed:bot.confirmTrackLane(now,i,300,1000),lane:i.lane};};
+    const revisit=()=>{
+      for(const id of [17,23,34,33])feed(id);
+      if(omitCurveCode){localizer.feed({type:'transition'},now+=100);localizer.feed({type:'transition'},now+=100);}
+      else feed(18);
+      feed(20);feed(36);
+    };
+    for(const id of [34,33,18,20,36])feed(id);
+    const first=attempt();assert.equal(first.confirmed,true);
+    const firstVisit=localizer.sectionVisit;
+    feed(36);assert.deepEqual(attempt(),{confirmed:false,lane:null},'another optical reading on the same section cannot repeat steering');
+    assert.equal(localizer.sectionVisit,firstVisit);
+    revisit();
+    assert.equal(localizer.laps,0,'the first map-boundary crossing only starts lap evidence');
+    assert.ok(localizer.sectionVisit>firstVisit);
+    const second=attempt();assert.deepEqual(second,{confirmed:true,lane:-first.lane});
+    const secondVisit=localizer.sectionVisit;
+    feed(36);assert.deepEqual(attempt(),{confirmed:false,lane:null});
+    assert.equal(localizer.sectionVisit,secondVisit);
+    revisit();
+    assert.equal(localizer.laps,omitCurveCode?0:1,'missing optical section coverage cannot earn a completed lap');
+    assert.deepEqual(attempt(),{confirmed:true,lane:first.lane},'new section visits remain eligible even without a completed lap');
+  }
 });
 
 test('active Battle policy only reduces throttle and admits existing safe lane intent once',()=>{
@@ -111,7 +151,7 @@ test('waiting for matching speed and a later printed position neither consumes t
   assert.equal(i.lane,22.5,'waiting retains the original intended direction');
   assert.equal(r.bot.confirmTrackLane(1001,i,300),true);assert.equal(r.bot.freeLaneTarget,22.5);
   i=input();r.bot.applyTrackPolicy(1001,i);assert.equal(i.lane,null,'only successful confirmation consumes this encounter');
-  r.localizer.laps++;i=input();r.bot.applyTrackPolicy(1001,i);assert.equal(i.lane,-22.5);
+  r.localizer.sectionVisit++;i=input();r.bot.applyTrackPolicy(1001,i);assert.equal(i.lane,-22.5);
 });
 
 test('CPU steering rejects unconfirmed speed changes, stale or mismatched reports, and unfinished acceleration',()=>{

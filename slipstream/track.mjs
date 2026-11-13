@@ -169,13 +169,17 @@ export class TrackMapper {
 // as soon as the car has driven past a distinguishing piece.
 export class Localizer {
   constructor(track, pieces) { this.track = track; this.piecesTable = pieces; this.reset(); }
-  reset() { this.candidates = null; this.index = -1; this.direction = 1; this.progress = 0; this.lateral = 0; this.speed = 0; this.stamp = 0; this.positionStamp = undefined; this.reference = null; this.lossReason = 'No optical reference'; this.located = false; this.laps = 0; this.seenCode = false; this.lastId = -1; }
+  reset() { this.candidates = null; this.index = -1; this.direction = 1; this.progress = 0; this.lateral = 0; this.speed = 0; this.stamp = 0; this.positionStamp = undefined; this.reference = null; this.lossReason = 'No optical reference'; this.located = false; this.laps = 0; this.seenCode = false; this.lastId = -1; this.sectionVisit=(this.sectionVisit??0)+1; this.#resetLapEvidence(); }
+  #resetLapEvidence() { this.lapStarted=false; this.lapDirection=null; this.lapPieces=new Set(); }
   // Simulator placement only. Hardware placement must be established by codes.
   seed(index, direction, now) {
+    this.#resetLapEvidence();
+    this.sectionVisit++;
     this.candidates = [{index, direction}]; this.progress = 0.3; this.stamp = this.positionStamp = now; this.speed = 0; this.seenCode = true; this.lastId = this.track.pieces[index].id; this.lossReason = null; this.#settle();
     this.reference = {source:'simulator-seed',pieceId:this.lastId,locationId:null,reverse:direction>0?this.track.pieces[index].reverse:!this.track.pieces[index].reverse,index,direction,at:now,unverified:!!this.track.pieces[index].unverified};
   }
   invalidate(reason = 'Location lost') {
+    this.#resetLapEvidence();
     this.located = false; this.candidates = null; this.seenCode = false;
     this.reference = null; this.positionStamp = undefined; this.lastId = -1;
     this.speed = 0; this.lossReason = reason;
@@ -191,6 +195,7 @@ export class Localizer {
     // cannot inherit a formerly unique instance, and transition-only traffic
     // cannot carry that expired context around the map or manufacture laps.
     if (['position','transition'].includes(message.type) && this.candidates && !this.#fresh(now)) {
+      this.#resetLapEvidence();
       this.candidates=null; this.located=false; this.seenCode=false; this.lastId=-1; this.speed=0;
     }
     if (message.type === 'position') {
@@ -201,24 +206,26 @@ export class Localizer {
       if (this.candidates && this.seenCode && this.lastId !== message.pieceId) {
         const allowed = new Set(matches.map(key));
         if (this.candidates.some(c=>allowed.has(key(this.#step(c))))) this.#advance(now);
-        else { this.candidates=null; this.located=false; this.seenCode=false; }
+        else { this.candidates=null; this.located=false; this.seenCode=false; this.#resetLapEvidence(); }
       }
       this.lastId = message.pieceId;
       if (this.candidates && !this.seenCode) {
         const allowed = new Set(matches.map(key));
         const kept = this.candidates.filter(c => allowed.has(key(c)));
+        if (!kept.length) this.#resetLapEvidence();
         this.candidates = kept.length ? kept : matches;
       } else if (!this.candidates) this.candidates = matches;
       else {
         const allowed = new Set(matches.map(key));
         const kept = this.candidates.filter(c => allowed.has(key(c)));
         if (kept.length) this.candidates = kept;
-        else this.candidates = matches;      // lost: re-localise from this piece
+        else { this.#resetLapEvidence(); this.candidates = matches; } // lost: re-localise from this piece
       }
       this.seenCode = true;
       if (spot) { this.progress = spot.progress; this.lateral = spot.lateral; }
       this.speed = message.speed; this.stamp = this.positionStamp = now; this.lossReason = null;
       this.#settle();
+      if (this.located && this.lapStarted && this.direction===this.lapDirection) this.lapPieces.add(this.index);
       this.reference = {source:'printed-code',pieceId:message.pieceId,locationId:message.locationId,reverse:message.reverse,index:this.located?this.index:null,direction:this.located?this.direction:null,at:now,unverified:!!this.piecesTable.get(message.pieceId)?.unverified};
     } else if (message.type === 'transition') {
       this.#advance(now); this.stamp = now;
@@ -231,9 +238,15 @@ export class Localizer {
       const before = this.candidates[0];
       this.candidates = this.candidates.map(c => this.#step(c));
       const after = this.candidates[0];
-      if (this.located && this.seenCode && this.candidates.length === 1 && this.#fresh(now)) {
-        const wrapped = before.direction > 0 ? after.index < before.index : after.index > before.index;
-        if (wrapped) { this.laps++; this.onLap?.(this.laps); }
+      const wrapped = before.direction > 0 ? after.index < before.index : after.index > before.index;
+      if (wrapped) {
+        if (this.located && this.seenCode && this.candidates.length === 1 && this.#fresh(now)) {
+          // The first crossing starts a lap. A subsequent crossing earns one
+          // only after every mapped section was optically identified in the
+          // same continuous, unambiguous traversal. A map wrap is not a lap.
+          if (this.lapStarted && this.lapDirection===before.direction && this.lapPieces.size===this.track.count) { this.laps++; this.onLap?.(this.laps); }
+          this.lapStarted=true; this.lapDirection=before.direction; this.lapPieces.clear();
+        } else this.#resetLapEvidence();
       }
     }
     this.seenCode = false; this.progress = 0;
@@ -247,9 +260,15 @@ export class Localizer {
     return {state,trusted,reason,reference:this.reference?{...this.reference,ageMs:Math.max(0,Math.round(now-this.reference.at)),fresh}:null};
   }
   #settle() {
-    if (!this.candidates || !this.candidates.length) { this.located = false; return; }
+    if (!this.candidates || !this.candidates.length) { this.located = false; this.#resetLapEvidence(); return; }
+    const wasLocated=this.located, previousIndex=this.index, previousDirection=this.direction;
     this.index = this.candidates[0].index; this.direction = this.candidates[0].direction;
     this.located = this.candidates.length === 1;
+    // A section visit is independent of verified circuit completion. Repeated
+    // codes within this section keep the same generation; new section/direction
+    // or unique re-acquisition starts another. CPU geometry still needs a code.
+    if (this.located && (!wasLocated || this.index!==previousIndex || this.direction!==previousDirection)) this.sectionVisit++;
+    if (!this.located) this.#resetLapEvidence();
   }
   // Dead-reckon between codes so motion on screen is smooth.
   estimate(now) {

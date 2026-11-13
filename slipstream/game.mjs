@@ -245,7 +245,7 @@ export class Game {
     if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
     this.stopAll();this.resume();
     const started=this.clock();
-    c.localizer.reset();c.lockSteering('Acquiring start/finish reference');
+    c.localizer.reset();driver.bot.resetTrackManeuvers();c.lockSteering('Acquiring start/finish reference');
     const comparison={driver,cancelled:false,started,stage:'acquiring-reference',reference:null,expectedIndex:null,transitions:0,referenceUntil:started+this.safety.firstTrackMs,referenceTimer:null};
     this.laneCancellationComparison=comparison;
     c.telemetry.laneCancellationComparison={active:true,cancelled:false,started,stage:comparison.stage,referenceUntil:comparison.referenceUntil};

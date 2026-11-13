@@ -21,6 +21,10 @@ The operator approved one diagnostic comparison in which a firmware lane-cancell
 
 The latest physical comparison left the track before steering; its cause remains unknown. Map markers now require a fresh, unambiguous position and disappear on loss, negative on-track status, recovery entry or disconnection. Transition reports cannot extend the freshness of an old optical code. The next explicit comparison resets localization and locks steering/calibration until a unique start/finish code and consistent follow-up arrive; mismatch or a five-second acquisition timeout invokes the existing pit/STOP. This is a stricter host precondition, not a changed firmware protocol or validation of physical recovery. See the retained trace and [hardware report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Existing default cancellation stops and scan watchdogs remain.
 
+## Lap and comparison state integrity — 13 November 2026
+
+The 13 November reference-confirmation trial subsequently spun on the track before a telemetry stop. The retained trace and operator observation are documented in the hardware report; this is not accepted stable driving. Follow-up bookkeeping repairs prevent a partial initial map crossing from appearing as a full lap and clear stale Bot maneuver history at a fresh explicit comparison. They do not change firmware packets, arming, speed limits, cancellation behavior, or stop/watchdog policy. No security vulnerability is inferred from this physical symptom.
+
 ## Vulnerability summary
 
 | # | Weakness | Where | Status |

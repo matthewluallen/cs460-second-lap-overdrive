@@ -1,6 +1,18 @@
-# Latest physical result: reference mismatch stopped safely on track
+# Latest physical result: start reference confirmed, but forward driving spun
+
+On `79f9350`, the repositioned Groundshock read start section **34/code12 → 34/code13** and passed the reference gate. It then lost position/transition telemetry; the unchanged two-second watchdog requested STOP. The operator confirms **stopped; stayed on track, but spun around a couple of times before reaching the end of the start/stop section**. This is a failed stable-forward-driving trial, not a successful Computer run. The car was disconnected after the observation. No further motion was attempted.
+
+The 29-event raw recording is preserved as `slipstream/fixtures/groundshock-sdk-reference-spin.json`. It contains only battery requests and speed/STOP writes: **no lane, offset, turn, mode change or direct-motor command**. It began after connection, so retained firmware state is not ruled out. The requested 300 mm/s packet exactly matches the successful scan's packet. Unlike that scan, the acquisition lock suppressed calibration on both reference packets; no later optical packet arrived to trigger calibration after unlock. That is an observed sequence difference, not a proven cause. Native correction also has conditional adjustment/sentinel paths, so replaying a guessed finite offset would not establish parity. See [the evidence, native audit and next steps](slipstream/review/COMPUTER-DRIVER-HARDWARE.md#start-reference-confirmed-spinning-before-telemetry-stop).
+
+This pass also repairs two reproduced host bookkeeping errors: the first partial crossing of the map boundary must not count as a completed lap, and a new explicit comparison must not inherit its Bot's prior lane encounter/target history. Neither repair explains the spinning or changes firmware packets, stop policy, watchdog thresholds or calibration behavior. Full validation results are recorded in the hardware report. **Do not repeat the unchanged physical trial or claim original-app parity.**
+
+Validation: **664/664 Node tests**, **38 Python tests**, CWE/dependency checks pass and `npm audit` reports0 vulnerabilities. CPU section visits now use their own generation, so conservative lap evidence does not suppress a later valid straight encounter. Seven new regressions cover the trace, partial laps, comparison reset and this integration.
+
+# Previous physical result: reference mismatch stopped safely on track
 
 On `79f9350`, charged Groundshock initially emitted continuous recovery/off-track messages while requested speed stayed zero. This stopped after the operator fully power-cycled it. The subsequent authorized comparison requested300 mm/s; the first optical reading was **curve18/code8**, not start/finish. The new gate sent STOP1 ms after that reading and sent **no lane or offset command**. Operator confirms **stopped; stayed on track**. The test did not establish the required reference or enable Computer steering. See the latest sections of [the hardware report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Do not rerun unchanged: resolve why start/finish was not read, including actual sensor placement and readable lane, before another attempt. No firmware recovery policy was changed. Both raw recordings and four replay tests are retained; the full Node suite now passes **657/657**. This evidence update changes no runtime code.
+
+The operator subsequently confirmed that this run physically stopped on **the first curve after start/finish**. That observation is consistent with curve18 at index1 in the exported map. Telemetry alone still cannot distinguish its two occurrences at indices1 and9, and no start/finish code was captured. The raw fixture remains unchanged; this adds an operator observation, not a successful reference acquisition or a new trial result.
 
 # Previous physical result: off track before steering; reference gate required
 

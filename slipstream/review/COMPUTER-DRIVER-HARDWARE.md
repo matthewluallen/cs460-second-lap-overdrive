@@ -103,8 +103,56 @@ The operator selected the power-cycled Groundshock and the same approved compari
 
 Recording `fixtures/groundshock-sdk-start-reference-mismatch.json`, from `slipstream-trace-2026-11-13T18-27-04-919Z.json`, contains32 events, zero dropped. The sole motion write was300 at107009 ms; on-track status followed107393, transition107994, and the first position108635 reported18/code8, forward,301 mm/s, unknown-offset sentinel654321 and lane ACKs255/255. The reference gate sent STOP108636:1 ms after the position and1627 ms after the motion write. The following speed reply desired0/actual306 is not physical-stop proof. The operator separately confirmed **“Stopped; stayed on track.”**
 
+The operator subsequently clarified that the car physically stopped on **the first curve after start/finish**. This is consistent with curve18 at index1 in the exported map. The optical packet by itself still permits either occurrence of18, at indices1 and9; the physical observation supplies context that the recorded telemetry does not. No start/finish optical code was captured, and this clarification does not explain why those codes were missed or establish successful reference acquisition. The fixture is preserved verbatim, with this later observation recorded only here and in the handoff.
+
 No lane or offset command was sent, and no0x43/0x2b recovery/delocalization occurred in this second capture. The contrast supports investigating retained recovery state, but does not prove a firmware cause. The start/finish precondition correctly failed; Computer steering and cancellation-continuation were never exercised. No start/finish code was observed, and the map marker remained hidden rather than choosing one of the two curve18 instances.
 
 The next step is to reconcile actual placement, the sensor's approach to printed codes, and readable lane with the first reported curve. Placing a car at the visible line does not guarantee it crosses a complete start/finish code row. This is a setup hypothesis, not a finding that the operator placed it incorrectly or that the tables are correct. Do not repeat the unchanged comparison or bypass the new reference gate. Completed reference acquisition, repeated laps and completed autonomous steering remain unaccepted.
 
 Evidence-only follow-up verification: **657/657 Node tests pass**, including the four new startup/reference-trace checks. No runtime code or dependencies changed after `79f9350`; the earlier38 Python checks, CWE/dependency checks and clean audit remain the last run for those unchanged components. The second fixture is also byte-identical to its download (SHA256 `ec4337b21927751386e51a7347bbce88dc813551e7b3a2901e14d4d09400110f`).
+
+## Start reference confirmed: spinning before telemetry stop
+
+The operator repositioned Groundshock near the entrance seam of the full start/finish straight and authorized another reference-first check. Runtime remained `79f9350`, SDK mode, firmware11866, on the same connection as the preceding mismatch trial. Battery was refreshed to3947 mV. After STOP, the operator reported **“stopped, it stayed on the track but it also spun around a couple of times before reaching the end of the start / stop section.”** This fails stable forward-driving acceptance. The car was disconnected after that observation; no further hardware movement was attempted in this pass.
+
+The raw29-event recording, zero dropped, is retained verbatim as `fixtures/groundshock-sdk-reference-spin.json`, downloaded as `slipstream-trace-2026-11-13T18-48-52-620Z.json`. SHA256: `5fc4874e54b87ff19e14b2b1f4b89eb1b8ac40eed7425d9316e80a1a92eee758`. Its operator notes contain this observation. The export's `physicalStopVerified:false` is an application field; the operator independently confirmed the physical stop afterward. Diagnostic counters cover the connection, whereas the event list covers only this recording.
+
+| Recorder time, ms | Evidence |
+|---|---|
+|31729|Only positive speed write: `06 24 2c 01 e8 03 00`, requested300 mm/s, acceleration1000.|
+|31771|Speed reply desired300, actual0; receipt alone is not movement evidence.|
+|31952|Transition; firmware offset unknown (`654321`), lane ACKs255/255.|
+|32551|Start34/code12, forward, reported308 mm/s; first reference accepted.|
+|33061|Start34/code13, forward, reported312 mm/s; distinct consistent reference confirmed.|
+|33121|Last transition, still unknown offset; predicted map boundary10→0.|
+|33481,35052|Side-collision notifications. These do not by themselves prove physical impacts.|
+|35145,35146|Telemetry watchdog marker, then completed STOP write1 ms later,2025 ms after the last transition. This is command timing, not measured braking latency.|
+|35223|Speed reply desired0, actual0.|
+|44702|Late intersection0x2a, sentinel-like offset654312. This is not a new position heartbeat or proof of movement after STOP.|
+
+Only battery requests and speed/STOP writes occur in the recording. There is **no0x25 lane change,0x2c/0x34 offset change,0x32 turn,0x35/0x37 state change, SDK-mode change or direct-motor write**. No0x43 recovery entry or0x2b delocalization appears. Thus a new host steering command during this capture is ruled out; prior firmware state, the car's own behavior, mechanical/optical trouble and unobserved startup history are not. The two optical readings map to progress0.294→0.765 on the340 mm start section, unchanged printed lateral+13.5 mm: about160 mm over510 ms, consistent with reported speeds. They validate that short segment, not the later trajectory or sustained following. Wheel distances in the first transition may include earlier session travel and are not evidence that the car covered that distance since the current speed write.
+
+### Successful scan comparison and native audit
+
+The previously accepted repaired scan and this attempt use byte-identical forward speed commands. The accepted scan's first33/code5 was immediately followed by finite SET_OFFSET−22.5 and later finite-offset telemetry. In this attempt, the acquisition steering lock suppressed automatic calibration on both reference readings. Unlock occurs after the second reading's calibration opportunity, and no subsequent optical position arrived. All recorded positions/transitions therefore retain offset654321. This is a **confirmed sequence difference**, not proof that missing calibration caused spinning. The recordings also differ in connection history, battery and starting section; this is not a controlled single-variable comparison.
+
+Read-only native analysis used the local F&F `libDriveEngine.so` (SHA256 `0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f`) and drive-sdk revision `410352617b8660338746a6bb2b2dd173afb1b91a`:
+
+- SDK option1 is explicitly `OVERRIDE_LOCALIZATION`; published documentation requires it for speed/lane commands. The SDK vehicle-tool speed action sends0x24 alone. Our SDK initialization is unchanged from the accepted scan, so changing that flag is not an evidence-backed repair.
+- Native `ProcessPositionUpdate`0071bdc0 can report successful acquisition. Caller assembly0071b3ae–0071b3cc passes an output pointer omitted by Ghidra's rendered call; decompiled text alone was insufficient here.
+- Native correction gate0071b5a2–0071b60a also checks direction, scan state and a0.15-second interval. The unknown host-offset branch0071b62e–0071b63a sends SET_OFFSET0x2c with sentinel654321. The finite adjustment branch0071b97e–0071b9a2 sends OFFSET_ADJUST0x34. This does **not** establish that native acquisition always sends a finite0x2c or justify blindly replaying our calibration after unlocking.
+- Native full-stop007a9ce8 / exit007a9d28 pair0x35 true/false. Their absence from our lifecycle remains a separate difference, not an established cause. Recovery-success handling can resume a remembered driving intention, so copying one state command without the complete lifecycle is insufficient.
+
+No proprietary APK, firmware, binary or decompiled function bodies are published. The source-derived findings above are bounded interoperability observations. No calibration, SDK flag, recovery command, cancellation policy or watchdog was changed from this evidence alone.
+
+### Reproduced host defects and next acceptance gate
+
+Replaying this trace reproduced a false first lap: a single prediction from final map section10 to0 incremented the old raw lap counter. A map-array wrap is not a completed circuit. The corrected counter establishes a baseline at the first crossing and credits subsequent laps only after fresh, continuous, unambiguous optical coverage of every mapped section in the same direction. Loss, contradictory evidence and stale/ambiguous localization discard partial coverage. Completed totals remain, and transition-only skipped sections cannot earn a lap. Scored rounds have their own circuit-progress accounting; this repair addresses the raw Localizer count used by the display and other consumers.
+
+A separate regression reproduced stale Bot encounter, candidate and alternating-target history when starting another explicit comparison after resetting localization. A new comparison now clears that maneuver history while preserving the driver and reference/safety gates. Neither host defect caused a steering packet in this physical trace. They are repaired independently from the unresolved spinning.
+
+Integration review also found that the Bot used completed laps to distinguish repeat visits to a straight. That would suppress a later maneuver when a partial or incompletely observed circuit correctly earned no lap. It now identifies section visits independently of completed laps. Repeated readings on the same section still cannot repeat a maneuver; a later section visit remains subject to all existing fresh-code, speed-confirmation and geometry checks. The regression exercises a real Localizer with one ordinary straight, both complete optical circuits and a missing-code circuit.
+
+Before further movement, the remaining work is to model the original correction and full-stop/rearm state transitions explicitly, including units, coordinate ownership and unknown sentinels, then test packet order under connection reuse, reference acquisition, stop, recovery and reconnect. The retained successful/failed trace comparison is a regression baseline, not a fake firmware oracle. A proposed physical change must name the evidence-backed state transition it changes; do not repeat the unchanged trial, guess an offset, or widen the watchdog. The next hardware acceptance must first demonstrate stable forward following with observed physical position matching fresh optical codes. Repeated laps, completed right steering, racing/attacks and whole-app parity remain unaccepted.
+
+Final software validation for this pass: Node22.23.5/npm11.9.0 **664/664 tests pass** (657 baseline plus7 new regressions); Python3.14.7 **38 tests pass**; CWE and dependency regression checks pass; `npm audit` reports **0 vulnerabilities**. The downloaded trace and committed fixture have identical SHA256 hashes. Browser verification shows STOPPED,0/4 cars and the telemetry-timeout shared pit after disconnect. No further physical trial, changed recovery/calibration policy or hardware acceptance is implied.

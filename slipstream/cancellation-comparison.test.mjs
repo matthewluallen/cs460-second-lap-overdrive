@@ -78,6 +78,33 @@ test('explicit comparison cancellation keeps forward speed and locks queued, man
   assert.equal(game.laneCancellationComparison,null);
 });
 
+test('a new comparison resets CPU maneuver history and still waits for a new optical reference',async()=>{
+  const r=await rig(),{game,driver,radio,time}=r;await r.start();
+  const bot=driver.bot,firstEncounter=bot.trackLaneEncounter;
+  assert.equal(bot.freeLaneTarget,22.5);assert.equal(radio.sent.filter(p=>p[1]===ID.CHANGE_LANE).length,1);
+  time(150);radio.emit(position());game.tick(.04,150);await settle();
+  assert.equal(radio.sent.filter(p=>p[1]===ID.CHANGE_LANE).length,1,'same trial does not repeat its accepted encounter');
+  // Leave a candidate from another ordinary straight waiting for dispatch.
+  time(160);radio.emit(position({piece:39}));bot.applyTrackPolicy(160,{throttle:1,lane:null},{topSpeed:300});
+  assert.ok(bot.trackLaneCandidate);game.stopAll();await settle();
+  time(200);game.startLaneCancellationComparison(driver);
+  assert.equal(driver.bot,bot,'the driver settings stay intact');
+  assert.equal(bot.trackLaneEncounter,undefined,'old encounter is cleared for the new comparison');
+  assert.equal(bot.trackLaneCandidate,null,'old pending candidate cannot survive the new comparison');
+  assert.equal(bot.freeLaneTarget,undefined,'new trial chooses from its new observed lane');
+  assert.equal(driver.car.steeringLocked,true);assert.equal(driver.car.speed,0);
+  time(300);game.tick(.04,300);await settle();time(310);radio.emit(speedReport());
+  assert.equal(radio.sent.filter(p=>p[1]===ID.CHANGE_LANE).length,1,'reset history alone cannot authorize steering');
+  time(320);radio.emit(position({piece:34,location:20}));time(330);radio.emit(position({piece:34,location:21}));
+  assert.equal(game.laneCancellationComparison.stage,'driving');
+  time(340);radio.emit(position());game.tick(.04,340);await settle();
+  assert.notEqual(bot.trackLaneEncounter,firstEncounter,'fresh confirmation receives a new section visit even at lap zero');
+  assert.equal(bot.freeLaneTarget,22.5,'new observation, not old alternation, selects the first lane');
+  assert.equal(radio.sent.filter(p=>p[1]===ID.CHANGE_LANE).length,2);
+  time(350);game.tick(.04,350);await settle();assert.equal(radio.sent.filter(p=>p[1]===ID.CHANGE_LANE).length,2);
+  game.stopAll();await settle();
+});
+
 test('comparison never exceeds 300 despite a higher slider or boosted limiter output and preserves lower requested speed',async()=>{
   const r=await rig(),{game,driver,radio,time}=r;game.topSpeed=900;await r.start({lane:false});
   game.topSpeed=1400;

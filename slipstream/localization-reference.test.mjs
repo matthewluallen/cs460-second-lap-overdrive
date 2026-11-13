@@ -128,7 +128,7 @@ test('an unexpected fresh road code cannot create a lap while re-localizing acro
   const route=new Track([34,18,39].map(id=>traversal(pieces,id,false)));
   for(const next of [
     {pieceId:18,locationId:9,index:1,laps:0},
-    {pieceId:34,locationId:20,index:0,laps:1}
+    {pieceId:34,locationId:20,index:0,laps:0}
   ]){
     const localizer=new Localizer(route,pieces);
     localizer.feed({...optical,pieceId:39,locationId:30},100);
@@ -136,6 +136,26 @@ test('an unexpected fresh road code cannot create a lap while re-localizing acro
     localizer.feed({...optical,pieceId:next.pieceId,locationId:next.locationId},200);
     assert.equal(localizer.index,next.index);
     assert.equal(localizer.laps,next.laps,
-      'a position-implied wrap must agree with the observed next road before it earns a lap');
+      'neither a contradictory code nor the initial partial wrap earns a completed lap');
   }
+});
+
+test('laps require a complete optically identified circuit after the initial boundary crossing',()=>{
+  const route=new Track([34,18,39].map(id=>traversal(pieces,id,false)));
+  const code={34:20,18:9,39:30};
+  for(const direction of [1,-1]) {
+    const l=new Localizer(route,pieces);let at=0,notified=0;l.onLap=()=>notified++;
+    const feed=id=>l.feed({...optical,pieceId:id,locationId:code[id],reverse:direction<0},at+=100);
+    const cycle=direction>0?[39,34,18,39,34]:[34,39,18,34,39];
+    feed(cycle[0]);feed(cycle[1]);assert.equal(l.laps,0,'first crossing establishes the start');
+    for(const id of cycle.slice(2))feed(id);
+    assert.equal(l.laps,1);assert.equal(notified,1);
+    l.feed({type:'delocalized'},at+=100);
+    for(const id of cycle.slice(0,2))feed(id);
+    assert.equal(l.laps,1,'recovery crossing is not another completed circuit');
+  }
+  const l=new Localizer(route,pieces);let at=0;
+  const feed=id=>l.feed({...optical,pieceId:id,locationId:code[id]},at+=100);
+  feed(39);feed(34);l.feed({type:'transition'},at+=100);l.feed({type:'transition'},at+=100);feed(39);feed(34);
+  assert.equal(l.laps,0,'transition-only passage through road18 cannot earn an optically verified circuit');
 });

@@ -389,6 +389,9 @@ export class Battle {
 // A simple computer driver: cruise, line up on the nearest car ahead, shoot when it can.
 export class Bot {
   constructor(car, battle, {skill = 0.7} = {}) { this.car = car; this.battle = battle; this.skill = skill; this.nextLane = 0; this.cruise = 0.55 + Math.random() * 0.2; this.mineAt = 0; }
+  resetTrackManeuvers() {
+    this.trackLaneEncounter=undefined; this.trackLaneCandidate=null; this.freeLaneTarget=undefined;
+  }
   // Slipstream CPU policy, not a reconstruction of the native app's planner.
   // Require a fresh printed-code match on this exact piece; a transition-only
   // prediction must not authorize automatic lateral movement.
@@ -401,7 +404,7 @@ export class Bot {
     const ordinaryStraight=!!(fresh && localizer?.seenCode && localizer.lastId===piece?.id && definition?.kind==='straight' && !definition.unverified && !piece.inferred && !piece.unverified && Number.isFinite(estimate.progress) && estimate.progress>=0 && estimate.progress<=1 && Number.isFinite(piece.length) && piece.length>0);
     const remaining=ordinaryStraight ? (1-estimate.progress)*piece.length : 0;
     const safeLane=ordinaryStraight && remaining>=250 && Number.isFinite(localizer.speed) && localizer.speed>0 && Number.isFinite(estimate.lateral) && Math.abs(estimate.lateral)<=LANE_LIMIT;
-    const encounter=safeLane ? estimate.index+':'+estimate.direction+':'+localizer.laps : null;
+    const encounter=safeLane ? estimate.index+':'+estimate.direction+':'+localizer.sectionVisit : null;
     return {ordinaryStraight,remaining,safeLane,encounter,estimate,positionAt};
   }
   applyTrackPolicy(now, input, {objective=false,topSpeed=300} = {}) {
