@@ -31,3 +31,20 @@ test('received/executed ACK remains diagnostic and never retries or overrides a 
  assert.equal(c.telemetry.laneAcknowledgment.executed,1);assert.equal(c.telemetry.laneRequest.id,1);
  assert.equal(c.speed,0);assert.equal(c.safetyReason,'Host stopped');assert.equal(r.sent.length,count);
 });
+
+test('Groundshock hardware: command 1 is cancelled in 41 ms and STOP is recorded immediately',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const capture=JSON.parse(readFileSync(new URL('./fixtures/groundshock-numbered-steering-cancelled.json',import.meta.url)));
+ const bytes=s=>Uint8Array.from(s.split(' ').map(x=>parseInt(x,16)));
+ const lane=capture.events.find(e=>e[2]==='tx'&&bytes(e[3])[1]===0x25);
+ const packet=bytes(lane[3]);assert.equal(packet[11],1);assert.equal(new DataView(packet.buffer).getFloat32(6,true),-22.5);
+ const reply=capture.events.find(e=>e[2]==='rx'&&bytes(e[3])[1]===0x41);
+ const m=decode(bytes(reply[3]))[0];assert.equal(reply[0]-lane[0],41);assert.equal(m.cancelled,true);
+ assert.equal(m.laneChangeId,128,'cancellation report does not echo requested ID 1');
+ const stop=capture.events.find(e=>e[0]>=reply[0]&&e[2]==='tx'&&bytes(e[3])[1]===0x24);
+ assert.equal(stop[0],reply[0]);assert.equal(new DataView(bytes(stop[3]).buffer).getInt16(2,true),0);
+ assert.equal(capture.events.some(e=>e[2]==='tx'&&bytes(e[3])[1]===0x2c),false,'no calibration write explains this cancellation');
+ const positions=capture.events.filter(e=>e[2]==='rx').flatMap(e=>decode(bytes(e[3]))).filter(m=>m.type==='position'||m.type==='transition');
+ assert.equal(positions.length,11);
+ for(const p of positions){assert.equal(p.lastReceivedLaneChangeId,255);assert.equal(p.lastExecutedLaneChangeId,129);assert.equal(p.desiredLaneSpeed,70);}
+});

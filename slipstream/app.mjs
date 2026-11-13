@@ -520,7 +520,7 @@ function refresh(snapshot = game.snapshot()) {
       (x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+
       (x.laneRequest?'\nSteering request #'+x.laneRequest.id+': target '+x.laneRequest.offset.toFixed(1)+' mm, sideways '+x.laneRequest.horizontalSpeed+' mm/s':'')+
-      (x.laneAcknowledgment?'\nCar steering ACK: received #'+x.laneAcknowledgment.received+', executed #'+x.laneAcknowledgment.executed+', requested sideways '+x.laneAcknowledgment.desiredLaneSpeed+' mm/s ('+seconds(performance.now()-x.laneAcknowledgment.at)+'); not proof of lane completion':'')+
+      (x.laneAcknowledgment?'\nSDK-layout ACK (firmware semantics unverified): received #'+x.laneAcknowledgment.received+', executed #'+x.laneAcknowledgment.executed+', requested sideways '+x.laneAcknowledgment.desiredLaneSpeed+' mm/s ('+seconds(performance.now()-x.laneAcknowledgment.at)+'); not proof of lane completion':'')+
       '\nPower Zone signals: '+(x.zoneCodes??0)+' · other special codes: '+(x.supercodes??0)+' · effects disabled'+
       (x.lastSpecialCode?' · last code 0x'+x.lastSpecialCode.code.toString(16)+' ('+seconds(performance.now()-x.lastSpecialCode.at)+')':'');
   }).join('\n\n') || 'Connect a car to see telemetry health.';

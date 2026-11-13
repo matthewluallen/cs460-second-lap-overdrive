@@ -220,3 +220,30 @@ wrap/deduplication, and stop preservation. All 556 Node tests pass. Physical ste
 with numbered commands remains untested. The newest browser trace has been saved
 through the UI but has not yet been imported as a local byte fixture; these repeat
 observations are from live diagnostics and the operator, not a new byte-level replay.
+
+## Imported numbered-command hardware capture
+
+The operator supplied `groundshock-numbered-steering-cancelled.json`, preserved
+unchanged. It resolves the previous raw-fixture gap:
+
+- At 32780 ms the host sends `0b 25 5e 01 e8 03 00 00 b4 c1 00 01`:
+  350 mm/s sideways speed, 1000 mm/s² acceleration, -22.5 mm target, hop 0, tag 1.
+- At 32821 ms the car returns `0e 41 00 00 58 c1 00 00 58 c1 00 00 f0 00 80`:
+  current and target offsets -13.5 mm, sideways speed zero, forward speed 240,
+  cancellation ID 0x80. It does not echo requested ID 1.
+- STOP is recorded at that same 32821 ms. This measures recorded event order,
+  not physical braking latency. The operator confirms stopped and no leftward shift.
+- There are no 0x2c offset writes anywhere in the trial. Special-piece calibration
+  is therefore not an explanation for this particular cancellation.
+- Seven positions and four transitions retain SDK-interpreted IDs 255/129 and
+  desired sideways speed 70 before and after the command. Field placement agrees
+  with the SDK header and the reviewed app serializer, but firmware interpretation
+  and reserved values remain unverified. No claim of accepted/executed ID 1 is valid.
+- Target -22.5 differs only 9 mm from the reported -13.5 offset. This is the
+  controller's absolute target, not evidence of a physical 22.5 mm shift.
+
+A fixture regression now locks these facts; all 557 Node tests pass. The live UI
+label is changed to explicitly qualify the fields as SDK-layout interpretation.
+Next isolation step: operator power cycle followed by SDK-only initialization,
+without sending app-mode configuration. No new steering parameters are inferred
+from the constant acknowledgment bytes.

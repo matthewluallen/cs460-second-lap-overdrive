@@ -59,3 +59,13 @@ piece 57, which remains unverified for scoring. The later -45 mm lane request
 receives a stationary 0x80 cancellation report after 53 ms; no steering success
 is claimed. Original Unidentified-car metadata is retained. See MVP-ACCEPTANCE.md
 for source hash, timings and limitations. No host or player credentials are present.
+
+`groundshock-numbered-steering-cancelled.json` is the unchanged operator-supplied
+13 November 14:17:51Z export (SHA-256
+`762dc54ff8d315b7e075f9aa056edf2eeaec106f9cc83b9a0dac414cee7a6e3c`).
+Groundshock firmware 11866, SDK, build 6c16578. Command #1 is followed 41 ms later
+by cancellation 0x80 and same-recorded-millisecond STOP. No offset calibration
+writes occur. Received/executed SDK fields stay 255/129 with sideways speed 70;
+they do not acknowledge ID 1. Operator confirms stopped with no leftward shift.
+The recording's initial model is unknown; operatorNotes and diagnostics identify
+Groundshock. This is not proof of stop latency or valid ACK semantics on this firmware.
