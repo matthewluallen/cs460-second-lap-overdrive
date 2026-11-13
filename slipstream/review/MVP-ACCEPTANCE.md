@@ -89,3 +89,33 @@ rounds now advance every simulation update through the entire 90-second round,
 instead of jumping from the first 30 seconds to the deadline. The ordinary simulator
 track and its configured speeds are software test conditions, not hardware tuning.
 Physical multi-car behavior and actual phone sensor inputs remain open gates.
+
+## First operator-confirmed SDK track discovery — 13 November 2026
+
+Groundshock, operator-identified, firmware 11866, on the operator's ordinary
+closed circuit. Fast & Furious initialization completed but a 300 mm/s scan
+produced no positions/transitions, timed out after five seconds, and the operator
+reported no physical movement. The first car's green LED is explicitly commanded
+by Slipstream; it is not evidence of the active firmware driving mode.
+
+Reconnected the same car with **Classic SDK connection**, battery 4.09 V. With
+calibration blank and the requested speed ceiling still 300 mm/s, scanning began
+at 07:39:37 America/Chicago and completed at 07:40:10. The UI reported **11 pieces,
+4.88 m, 45 position messages and 22 transitions**. Automatic STOP was logged at
+completion; the operator explicitly confirmed: “it is stopped and it mapped
+correctly.” STOP was also reasserted at 07:40:15. This is one successful physical
+scan and observed stop, not repeatability or multi-car acceptance.
+
+One displayed speed sample was 372 mm/s despite a 300 mm/s request (others observed:
+291, 293, 320 and 296). Do not equate the command ceiling with a physically measured
+speed bound. No external speed measurement exists. The last speed report remained
+296 mm/s with an increasing age after stopping, while the operator confirmed stop;
+stale speed display must not be interpreted as ongoing motion.
+
+The active browser recording contains both profile attempts, with 144 captured
+messages at export request and operator notes. Save trace was invoked; the exported
+file has not yet been retrieved and independently replayed by the agent. No raw
+trace fixture is claimed for this run. Steering, repeatable discovery, phone/iPad
+controls, scored physical rounds and 2–4 car operation remain open. The F&F app
+profile remains unresolved; SDK success applies only to this observed car/firmware
+and track, and does not establish MXT or special-tile compatibility.

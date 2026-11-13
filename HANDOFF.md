@@ -3,6 +3,15 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## First physical SDK scan
+
+On 13 November, Groundshock firmware 11866 successfully scanned an 11-piece circuit
+using Classic SDK connection; the operator confirmed the map was correct and the
+car physically stopped. F&F initialization on the same car produced no movement or
+positions. See the final section of [MVP acceptance](slipstream/review/MVP-ACCEPTANCE.md)
+for the comparison, observed speed discrepancy and remaining physical gates.
+Historical statements below that scanning is unproven predate this single test.
+
 ## Classroom access preflight
 
 `npm run slipstream:preflight` checks anonymous live readiness, controller delivery
