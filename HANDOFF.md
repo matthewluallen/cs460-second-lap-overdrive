@@ -3,6 +3,15 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Power Zone lane behavior reviewed
+
+Read [POWER-ZONE-AUDIT.md](slipstream/review/POWER-ZONE-AUDIT.md). Fresh Ghidra
+and F&F configuration review identifies a direction-aware attack lane that
+disables eligible nearby opponents, with cooldown and repeat-hit protection.
+The successful Groundshock capture maps piece 57 but contains no zone-supercode
+events. Physical lane activation and attack behavior remain unverified; no
+runtime changes or car commands were made, and special-piece scoring stays gated.
+
 ## SDK/app approach faults identified
 
 Read [SDK-APK-APPROACH-AUDIT.md](slipstream/review/SDK-APK-APPROACH-AUDIT.md).
