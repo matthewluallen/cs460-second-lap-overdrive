@@ -134,8 +134,11 @@ export class RoundSession {
       ? 'Scan: center lane, ' + speedCue + ', through the beacon at 12% of the circuit.' : phase === 'carry'
         ? 'Carry: ' + (targetLane < 0 ? 'right' : 'left') + ' lane, ' + speedCue + ', steady for 35% of the circuit.'
         : 'Deliver: center lane, ' + speedCue + ', through the dock at 80% of the circuit.';
+    // The CPU may need another circuit before a safe straight permits its next
+    // lane. Use the upper part of the existing task speed band, retaining 5%
+    // headroom; scoring limits, round deadlines and host safety caps stay fixed.
     return {phase, label: phase === 'complete' ? 'Complete' : phase[0].toUpperCase() + phase.slice(1), cue,
-      targetLane, targetSpeedRatio: phase === 'complete' ? 0 : phase === 'carry' ? 0.4 : 0.275,
+      targetLane, targetSpeedRatio: phase === 'complete' ? 0 : 0.95 * maxSpeed / racer.speedLimit,
       minSpeed, maxSpeed, gateProgress: phase === 'scan' ? 0.125 : phase === 'deliver' ? 0.8 : null,
       completed: racer.tasksCompleted, total: this.mission.goalPerCar * 3,
       deliveries: racer.deliveries, requiredDeliveries: this.mission.goalPerCar,

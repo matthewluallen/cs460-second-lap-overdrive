@@ -1,9 +1,13 @@
 // One car: command queue, lane calibration, localisation and light helpers.
 // The transport is either a Bluetooth link (ble.mjs) or a SimCar (sim.mjs); both
 // expose write(bytes), onNotify(fn) and close().
-import {encode, decode, rgb, EFFECT, TURN, MAX_SPEED} from './protocol.mjs';
+import {encode, decode, rgb, EFFECT, TURN, MAX_SPEED, offsetIsKnown} from './protocol.mjs';
 import {initializationPhases} from './initialization.mjs';
-import {Localizer, LANE_LIMIT} from './track.mjs';
+import {Localizer, LANE_LIMIT, POSITION_MAX_AGE_MS} from './track.mjs';
+
+const lateralCommand = bytes => [0x25,0x2c,0x32,0x34].includes(bytes[1]);
+const offsetCommand = bytes => [0x2c,0x34].includes(bytes[1]);
+const driveCommand = bytes => lateralCommand(bytes) || ([0x24,0x37].includes(bytes[1]) && (bytes[2] || bytes[3]));
 
 export const LANE_STEP = 22.5;
 
@@ -18,7 +22,9 @@ export class Car {
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
     this.laneCommandId = 0;
-    this.steeringLocked = false; this.steeringLockVersion = 0;
+    this.steeringLocked = false; this.steeringLockVersion = 0; this.driveEpoch = 0;
+    this.physicalLaneReference = null; this.physicalLanePackets = new WeakMap();
+    this.opticalCalibrationReference = null; this.opticalCalibrationPackets = new WeakMap();
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
     this.scanDelocalizationAllowance = false; this.scanDelocalizationUsed = false;
     this.firmwareInitialization = null;
@@ -77,7 +83,12 @@ export class Car {
   send(key, bytes) {
     if (!this.connected || this.closing || this.faulted) return;
     if (this.steeringLocked && [0x25,0x2c,0x32,0x34].includes(bytes[1])) return;
-    this.pending.delete(key); this.pending.set(key, bytes);
+    if (offsetCommand(bytes)) this.lastPair=null;
+    if (bytes[1]===0x24 && !bytes[2] && !bytes[3]) {
+      // A restart is a later intention, never a replacement for an undelivered
+      // STOP. Keep the barrier first, independent of the coalesced speed key.
+      this.pending.delete('stop'); this.pending=new Map([['stop',bytes],...this.pending]);
+    } else { this.pending.delete(key); this.pending.set(key, bytes); }
     if (!this.pumping) this.pumpPromise = this.#pump();
   }
   async #pump() {
@@ -93,7 +104,8 @@ export class Car {
   }
   async #write(bytes) {
     let timer; const writeStarted = this.clock();
-    const lateralCommand=[0x25,0x2c,0x32,0x34].includes(bytes[1]), lockVersion=this.steeringLockVersion;
+    const lateral=lateralCommand(bytes), lockVersion=this.steeringLockVersion, driveEpoch=this.driveEpoch;
+    this.activeWrite=bytes;
     let suppressed=false;
     const trialMotion = (bytes[1] === 0x24 && (bytes[2] || bytes[3])) || (this.diagnosticSteering && [0x25,0x2c].includes(bytes[1]));
     const deadline = this.diagnosticMotion && trialMotion ? this.diagnosticUntil : undefined;
@@ -102,10 +114,22 @@ export class Car {
     // close the link rather than start another write when this deadline fires.
     try {
       await Promise.race([Promise.resolve().then(() => {
-        if (lateralCommand && (this.steeringLocked || lockVersion!==this.steeringLockVersion)) { suppressed=true; return; }
+        // Dequeueing is not entry into the radio. STOP may run before this
+        // microtask; an explicit restart must not revive that older command.
+        if (driveCommand(bytes) && (driveEpoch!==this.driveEpoch || this.closing || this.faulted || !this.connected || this.safetyReason)) { suppressed=true; return; }
+        if (lateral && (this.steeringLocked || lockVersion!==this.steeringLockVersion)) { suppressed=true; return; }
         // A ready GATT promise can run before an overdue timer callback.
         // Check the captured deadline at the last host boundary before motion.
         if (deadline !== undefined && this.clock() >= deadline) throw new Error('Diagnostic motion expired before write');
+        const reference=this.physicalLanePackets.get(bytes);
+        if (reference && !this.#laneReferenceReady(reference)) { this.forceLane=true; suppressed=true; return; }
+        const calibration=this.opticalCalibrationPackets.get(bytes), now=this.clock();
+        if (calibration && (calibration!==this.opticalCalibrationReference || now<calibration.at || now-calibration.at>POSITION_MAX_AGE_MS)) {
+          suppressed=true; return;
+        }
+        // An unsent correction must not consume the throttle for a newer code.
+        // Entry into the transport is still not firmware measurement or ACK.
+        if (calibration) this.lastCalibration=now;
         return this.transport.write(bytes);
       }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
@@ -119,10 +143,11 @@ export class Car {
       this.telemetry.lastWriteAttempt.status='failed';
       this.telemetry.lastWriteFailure={at:this.clock(),id:bytes[1],error:String(error.message??error).slice(0,200)};
       throw error;
-    } finally { clearTimeout(timer); }
+    } finally { clearTimeout(timer); if(this.activeWrite===bytes)this.activeWrite=null; }
   }
   async #failSafe(error) {
     const wasMoving = this.speed > 0;
+    this.#invalidateDriveCommands();
     this.faulted = true; this.safetyReason = 'Connection fault'; this.speed = 0; this.pending.clear();
     // A rejected, settled command may leave a perfectly live radio and a moving
     // car. Try STOP once before releasing the link; never retry motion.
@@ -144,6 +169,7 @@ export class Car {
   }
   connectionLost(reason = 'Bluetooth link lost') {
     if (!this.connected) return;
+    this.#invalidateDriveCommands();
     const wasMoving=this.speed>0;this.faulted=true;this.safetyReason='Connection fault';this.speed=0;
     this.#finishClose(new Error(reason),wasMoving);
   }
@@ -161,6 +187,9 @@ export class Car {
     }
     for (const m of messages) {
       if (m.type === 'position') {
+        // Every optical observation supersedes the prior calibration basis,
+        // including unreadable/special codes and positions during diagnostics.
+        this.opticalCalibrationReference={at:now};
         this.telemetry.positions++;
         if (this.telemetry.lastPositionAt !== undefined) this.telemetry.maxPositionGapMs=Math.max(this.telemetry.maxPositionGapMs,now-this.telemetry.lastPositionAt);
         this.telemetry.lastPositionAt=now;
@@ -173,6 +202,7 @@ export class Car {
           // reported offset is an estimate, not newly verified track geometry.
           this.pending.delete('lane');
           this.pending.delete('lane-offset');
+          this.steeringLockVersion++; this.lastPair=null;
           this.targetLateral = m.offsetKnown && Math.abs(m.currentOffset) <= LANE_LIMIT
             ? this.offsetSign * m.currentOffset : this.lateral;
           this.forceLane = true;
@@ -205,14 +235,18 @@ export class Car {
       else if (m.type === 'delocalized') this.delocalized = true;
       else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; if (!this.diagnosticMotion || (this.diagnosticSteering && now < this.diagnosticUntil)) this.#lane(m, now); }
       else if (m.type === 'speed') { this.telemetry.speedReport={...m,at:now}; this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
+      if (m.type==='delocalized' || m.type==='delocRecoveryEntered' || (m.type==='status' && !m.onTrack)) {
+        this.lastPair=null; this.physicalLaneReference=null; this.opticalCalibrationReference=null;
+      }
       this.localizer?.feed(m, now);
       if (this.safetyReason==='Off track') this.localizer?.invalidate('Off track; recover before acquiring a new reference');
       for (const fn of this.listeners) fn(m, this);
     }
   }
-  // The printed code says exactly which lane the car is in. Use it to (a) tell the
-  // car its true offset and (b) learn which sign the car uses for left and right.
+  // Verified piece geometry maps a printed code to a lateral estimate. Use that
+  // estimate for offset calibration and same-frame sign-learning evidence.
   #lane(m, now) {
+    this.physicalLaneReference=null;
     const definition = this.pieces?.get(m.pieceId);
     if (!definition || definition.unverified) {
       this.lastPair = null;
@@ -223,8 +257,15 @@ export class Car {
     if (!spot) { this.lastPair = null; return; }
     this.telemetry.calibrationBlocked = null;
     this.lateral = spot.lateral; this.lateralEstimate = {source:'printed-code',at:now,signVerified:false};
+    if (Number.isFinite(spot.lateral) && Math.abs(spot.lateral)<=LANE_LIMIT && Number.isFinite(m.speed) && m.speed>0 && this.speed>0 &&
+        Number.isFinite(this.motionSince) && now>=this.motionSince && !this.safetyReason && !this.initializing && !this.closing && !this.faulted) {
+      this.physicalLaneReference={lateral:spot.lateral,at:now,epoch:this.driveEpoch};
+    }
     if (this.steeringLocked || this.safetyReason || this.initializing || this.closing || this.faulted) { this.lastPair=null; return; }
-    if (this.lastPair && m.offset !== 654321) {
+    const offsetBusy=offsetCommand(this.activeWrite??[]) || [...this.pending.values()].some(offsetCommand);
+    const known=offsetIsKnown(m.offset), previous=this.lastPair;
+    const comparable=previous && known && !offsetBusy && previous.pieceId===m.pieceId && previous.reverse===m.reverse && now>=previous.at && now-previous.at<=POSITION_MAX_AGE_MS;
+    if (comparable) {
       const dTruth = spot.lateral - this.lastPair.lateral, dCar = m.offset - this.lastPair.offset;
       // A clear move the wrong way round means our assumed sign is wrong: with the
       // wrong sign every lane command drives the car away from its target.
@@ -234,15 +275,20 @@ export class Car {
         if (this.signVotes < 0) { this.offsetSign = -this.offsetSign; this.signVotes = 0; this.lastCalibration = -1e9; this.forceLane = true; }
       }
     }
-    this.lastPair = m.offset === 654321 ? null : {lateral: spot.lateral, offset: m.offset};
+    this.lastPair = known && !offsetBusy ? {lateral:spot.lateral,offset:m.offset,pieceId:m.pieceId,reverse:m.reverse,at:now} : null;
     const expected = this.offsetSign * spot.lateral;
     if (Math.abs(m.offset - expected) > 9 && now - this.lastCalibration > 700) {
-      this.send('offset', encode.setOffset(expected));
-      // The car's reading jumps to "expected" without the car moving.
-      this.lastCalibration = now; this.lastPair = {lateral: spot.lateral, offset: expected};
+      const packet=encode.setOffset(expected);
+      this.opticalCalibrationPackets.set(packet,this.opticalCalibrationReference);
+      this.send('offset', packet);
+      // Calibration changes the reported coordinate reference. This packet alone
+      // requests no lane change; its effect on an existing target is unverified.
+      // Queuing a correction is not a firmware measurement or confirmation.
+      // Start a new comparison pair only from a later reported offset.
+      this.lastPair = null;
     }
   }
-  useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
+  useTrack(track) { this.lastPair=null; this.physicalLaneReference=null; this.opticalCalibrationReference=null; this.localizer = track ? new Localizer(track, this.pieces) : null; }
   calibrateScanStart(lateral) {
     if (!Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) throw new Error('Starting lane must be within 68 mm of track centre');
     if (this.steeringLocked || this.diagnosticMotion || this.speed || this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) throw new Error('Stop and recover the car before calibration');
@@ -280,7 +326,7 @@ export class Car {
   }
   setSpeed(mmPerSec, accel = 1000) {
     const speed = this.initializing || this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
-    if (speed === 0) this.endScanDelocalization();
+    if (speed === 0) { this.#invalidateDriveCommands(); this.endScanDelocalization(); }
     if (speed > 0 && this.speed === 0) { this.motionSince = this.clock(); this.stopRequestedAt = null; }
     if (speed === 0 && this.speed > 0) this.stopRequestedAt = this.clock();
     this.speed = speed;
@@ -293,18 +339,34 @@ export class Car {
   // Lateral target, mm, positive to the left of travel.
   steerTo(lateral, speed = 350) {
     if (this.steeringLocked || this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return;
-    this.#steerTo(lateral,speed);
+    return this.#steerTo(lateral,speed);
   }
   // Only the bounded trial may authorize one steering request. Ordinary controls
   // still use steerTo(), which remains blocked throughout any diagnostic.
   steerDiagnosticOnce(lateral, speed = 350) {
     if (this.steeringLocked || !this.diagnosticMotion || !this.diagnosticSteering || this.diagnosticLaneSent || this.clock() >= this.diagnosticUntil || this.initializing || this.safetyReason || this.closing || this.faulted || !this.connected || !Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) return false;
-    this.diagnosticLaneSent = true; this.forceLane = true;
-    this.#steerTo(lateral,speed); return true;
+    this.forceLane = true;
+    if (!this.#steerTo(lateral,speed)) return false;
+    this.diagnosticLaneSent = true; return true;
+  }
+  // Native VehicleState::ChangeLane refuses invalid localization. Its state
+  // flag is cleared on loss; it has no equivalent 2 s age test. Here the existing
+  // optical freshness limit additionally protects our absolute SDK reference.
+  #laneReferenceReady(reference=this.physicalLaneReference) {
+    if (this.simulated || !['sdk','fast-furious'].includes(this.transport.initializationProfile)) return true;
+    const now=this.clock();
+    if (!reference || reference!==this.physicalLaneReference || reference.epoch!==this.driveEpoch ||
+        this.speed<=0 || !Number.isFinite(this.motionSince) || reference.at<this.motionSince ||
+        now<reference.at || now-reference.at>POSITION_MAX_AGE_MS) {
+      this.telemetry.steeringBlocked={at:now,reason:'Waiting for a fresh ordinary printed-code lane reference during this drive'};
+      return false;
+    }
+    this.telemetry.steeringBlocked=null; return true;
   }
   #steerTo(lateral, speed) {
+    if (!this.#laneReferenceReady()) return false;
     const target = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, lateral));
-    if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return;
+    if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return false;
     this.forceLane = false; this.targetLateral = target;
     // F&F VehicleState::IncrementLaneChangeID (007bd20e): 7-bit sequence.
     // The upper bit is reserved for cancellation in car reports. An ACK is
@@ -315,14 +377,19 @@ export class Car {
       offset:absolute,horizontalSpeed:speed,acceleration:1000};
     // Experimental SDK reference-before-lane sequence. The reference tool uses
     // a zero reference for relative movement; that does not prove our absolute
-    // coordinate strategy. lateral is a code-derived estimate, initially zero,
-    // not an independent current measurement. Hardware acceptance remains open.
+    // coordinate strategy. Hardware calls require a fresh printed-code estimate;
+    // an operator estimate or initial zero cannot supply this reference.
+    const reference=this.physicalLaneReference;
+    const lane=encode.changeLane(absolute, speed, 1000, this.laneCommandId);
+    if (reference) this.physicalLanePackets.set(lane,reference);
     if (this.transport.initializationProfile === 'sdk') {
-      const reference = this.offsetSign * this.lateral || 0;   // normalise -0 to 0 on the wire
-      this.telemetry.laneReference = {offset:reference,at:this.clock()};
-      this.send('lane-offset', encode.setOffset(reference));
+      const offset = this.offsetSign * (reference?.lateral??this.lateral) || 0; // normalise -0
+      const packet=encode.setOffset(offset);
+      if (reference) this.physicalLanePackets.set(packet,reference);
+      this.telemetry.laneReference = {offset,at:this.clock()};
+      this.send('lane-offset', packet);
     }
-    this.send('lane', encode.changeLane(absolute, speed, 1000, this.laneCommandId));
+    this.send('lane', lane); return true;
   }
   nudge(direction) {   // +1 left, -1 right
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;
@@ -338,16 +405,21 @@ export class Car {
   }
   // Releasing an acquisition lock cannot revive commands discarded while locked.
   unlockSteering() { this.steeringLocked=false; this.lastPair=null; this.forceLane=true; }
+  #invalidateDriveCommands() {
+    this.driveEpoch++; this.lastPair=null; this.physicalLaneReference=null; this.opticalCalibrationReference=null;
+    for (const [key,bytes] of this.pending) if (driveCommand(bytes)) this.pending.delete(key);
+  }
   stop() {
     // A pending lane request may be discarded below, or the car may be moved
     // during recovery. The next steering target must reach the vehicle.
     if (this.speed > 0) this.stopRequestedAt = this.clock();
-    this.forceLane = true;
+    this.#invalidateDriveCommands(); this.forceLane = true;
     this.scanDelocalizationAllowance = false;
     this.pending.delete('scan-delocalization');
     for (const key of ['speed', 'lane', 'lane-offset', 'offset', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
-    this.pending = new Map([['speed', encode.speed(0, 2500)],
+    this.pending.delete('stop');
+    this.pending = new Map([['stop', encode.speed(0, 2500)],
       ...(this.scanDelocalizationUsed ? [['scan-delocalization', encode.maxDelocalizedSpeed(0)]] : []), ...this.pending]);
     this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
     this.telemetry.speedCommand={at:this.clock(),speed:0,accel:2500};
@@ -360,7 +432,7 @@ export class Car {
   safetyStop(reason) { this.safetyReason = reason; if(reason==='Off track')this.localizer?.invalidate('Off track; recover before acquiring a new reference'); this.stop(); }
   recover() {
     if (!this.connected || this.closing || this.faulted) return false;
-    this.safetyReason = null; this.lastSpeedSent = -1; return true;
+    this.lastPair=null; this.physicalLaneReference=null; this.opticalCalibrationReference=null; this.safetyReason = null; this.lastSpeedSent = -1; return true;
   }
   setLights(r, g, b, effect = EFFECT.STEADY, cycles = 0) {
     const key = [r, g, b, effect, cycles].join();
@@ -373,6 +445,7 @@ export class Car {
   pose(now = this.clock()) { return this.localizer?.pose(now) ?? null; }
   close() {
     if (this.closePromise) return this.closePromise;
+    this.#invalidateDriveCommands();
     this.closing = true; this.scanDelocalizationAllowance = false; this.pending.clear(); this.speed = 0;
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     return this.closePromise = (async () => {

@@ -60,7 +60,10 @@ def piece(path):
         if kind == "curve":
             radius = abs(ey)
             progress = (sum(p[2] for p in pts) / len(pts)) / (math.pi / 2)
-            lateral = radius - math.hypot(x, y - radius)
+            # Code bits lie along an arc. Its centroid lies inside the arc, so
+            # measuring that centroid invents an inward lane displacement.
+            # Convert each point to the road frame before averaging offsets.
+            lateral = sum(radius - math.hypot(p[0], p[1] - radius) for p in pts) / len(pts)
         else:
             progress = (x - x0) / ex if ex else 0.0
             lateral = y

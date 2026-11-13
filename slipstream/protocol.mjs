@@ -15,6 +15,9 @@ export const ID = Object.freeze({
   COLLISION: 0x4d, JUMP_RESULT: 0x4e, SUPERCODE: 0x4f, ZONE_SUPERCODE: 0x53, TRANSITION2: 0x51, CYCLE_OVERTIME: 0x86, SDK_MODE: 0x90
 });
 export const MAX_SPEED = 1400;                 // mm/s hard ceiling for anything this code sends
+// Native CarMsg::ConvertOffsetFromRoadCenter_mm2m uses a range, not equality
+// with 654321. Keep the raw float for diagnostics; unknown is not a lane.
+export const offsetIsKnown = mm => Number.isFinite(mm) && mm <= 500000;
 export const LIGHT = Object.freeze({RED: 0, TAIL: 1, BLUE: 2, GREEN: 3, FRONTL: 4, FRONTR: 5});
 export const EFFECT = Object.freeze({STEADY: 0, FADE: 1, THROB: 2, FLASH: 3, RANDOM: 4});
 export const TURN = Object.freeze({NONE: 0, LEFT: 1, RIGHT: 2, UTURN: 3, UTURN_JUMP: 4});
@@ -142,7 +145,7 @@ function decodeOne(m) {
       if (size !== 14) break;
       const currentOffset = v.getFloat32(2,true), targetOffset = v.getFloat32(6,true);
       if (!Number.isFinite(currentOffset) || !Number.isFinite(targetOffset)) break;
-      return {id,type:'laneChange',currentOffset,targetOffset,offsetKnown:currentOffset !== 654321 && targetOffset !== 654321,
+      return {id,type:'laneChange',currentOffset,targetOffset,offsetKnown:offsetIsKnown(currentOffset) && offsetIsKnown(targetOffset),
         horizontalSpeed:v.getUint16(10,true),verticalSpeed:v.getInt16(12,true),laneChangeId:m[14],
         // F&F Localization::ProcessLaneChangeUpdate (0071bbd8) treats the
         // high bit as cancellation in its stationary-horizontal branch.

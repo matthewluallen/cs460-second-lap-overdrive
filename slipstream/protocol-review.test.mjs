@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {encode, decode, hex, ID} from './protocol.mjs';
+import {encode, decode, hex, ID, offsetIsKnown} from './protocol.mjs';
+
+test('native offset classification uses a strict upper range and preserves raw diagnostics', () => {
+  for (const [value,known] of [[-22.5,true],[0,true],[500000,true],[500001,false],[654312,false],[654321,false],[NaN,false],[Infinity,false]]) {
+    assert.equal(offsetIsKnown(value),known,String(value));
+    if (!Number.isFinite(value)) continue;
+    const packet=new Uint8Array(15), view=new DataView(packet.buffer);
+    packet[0]=14;packet[1]=ID.LANE_CHANGE_UPDATE;
+    view.setFloat32(2,value,true);view.setFloat32(6,-22.5,true);
+    const message=decode(packet)[0];
+    assert.equal(message.offsetKnown,known);assert.equal(message.currentOffset,value,'raw value is not normalized away');
+    view.setFloat32(2,-22.5,true);view.setFloat32(6,value,true);
+    assert.equal(decode(packet)[0].offsetKnown,known,'unknown target is also not a known lane');
+  }
+});
 
 // Generated independently by compiling the pinned official C SDK. These are
 // interoperability facts, not simulator-produced or physical-car observations.

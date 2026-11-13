@@ -25,6 +25,12 @@ The latest physical comparison left the track before steering; its cause remains
 
 The 13 November reference-confirmation trial subsequently spun on the track before a telemetry stop. The retained trace and operator observation are documented in the hardware report; this is not accepted stable driving. Follow-up bookkeeping repairs prevent a partial initial map crossing from appearing as a full lap and clear stale Bot maneuver history at a fresh explicit comparison. They do not change firmware packets, arming, speed limits, cancellation behavior, or stop/watchdog policy. No security vulnerability is inferred from this physical symptom.
 
+## Drive-state and calibration audit — 13 November 2026
+
+The APK/SDK comparison reproduced a last-microtask STOP race and a separate queue race that could replace an undelivered STOP with a fresh speed request. Motion generations now invalidate older work immediately before transport entry, and STOP has an independent priority queue key. Already-entered GATT writes remain uncancellable; the next serial command is STOP. Tests explicitly distinguish entry from completion and cover STOP/recovery/restart, closing, and queued lateral work.
+
+Calibration evidence now requires recent comparable reported samples, never an enqueued desired value or samples spanning STOP, loss, map change or opposite code frames. Unsent automatic corrections recheck their optical observation before transport entry; newer observations or invalidation discard the old correction, and discarded work cannot throttle its replacement. Native unknown-offset range handling and 228 biased curve coordinates are corrected. Physical lane requests need a fresh verified printed reference from the current drive, including a second check before queued packet dispatch. The exact-source comparison, known protocol differences and hardware limitations are in [DRIVE-APK-PARITY-AUDIT.md](slipstream/review/DRIVE-APK-PARITY-AUDIT.md). Existing countdowns, neutral arming, shared pit, watchdog thresholds and default cancellation STOP remain; no firmware 0x35 or speculative recovery behavior was added.
+
 ## Vulnerability summary
 
 | # | Weakness | Where | Status |

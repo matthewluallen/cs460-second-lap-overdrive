@@ -1,183 +1,80 @@
-## Superseding update — 13 November 2026, successful left shift
+# Groundshock driving and steering handoff
 
-Read [GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md](GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md) first. Operator confirmed stopped and clearly shifted left after one normal Free-drive maneuver on loaded build08fe678. The accepted recording and three replay checks preserve firmware ACKs and code-derived lateral movement separately from physical observation. Earlier failures below remain historical evidence, not current acceptance status. Rightward/repeated computer steering and scored races remain open. The existing race Computer driver now has a conservative track-aware policy; this is custom gameplay, not native-app reconstruction.
-
-## Second pre-steering trial recorded
-
-See GROUNDSHOCK-PRESTEERING-OFFTRACK.md: 150 mm/s also left the track per operator. Cumulative second fixture retains raw evidence. No new off-road message, no optical telemetry, no steering; watchdog STOP after 5002 ms. Operator confirmed physically stopped. No further physical trials pending diagnosis and an app-owned bounded diagnostic test.
-
-## Latest hardware evidence — 2026-11-13 15:03 UTC export
-
-The 5b3816d trial spun off before any steering command. See [pre-steering incident analysis](GROUNDSHOCK-PRESTEERING-OFFTRACK.md) and the committed `groundshock-sdk-presteering-offtrack.json` fixture. Exactly one nonzero speed command requested 240 mm/s; zero position/transition messages; off-road at +2155 ms; STOP recorded 1 ms later. The subsequent raw speed field decodes as 1802, but physical speed/firmware semantics remain unverified. No 0x25 or 0x2c occurred, so the offset-before-lane hypothesis remains untested. Operator confirmed spin-off; do not mistake the UI stopped state for physical stop verification. New capture assertion passes with the five existing steering-ACK tests. No runtime changes or further hardware run in this analysis.
-
-# Next-agent handoff — 13 November 2026
-
-## Task
-
-Make real Groundshock steering work without weakening stop, pit, arming or
-watchdog behavior. Resolve the packet/reference-frame/firmware mismatch before
-attempting Power Zone effects or scored races. Hardware scanning has succeeded;
-physical lane changes have repeatedly failed. Tests passing is not hardware proof.
+13 November 2026. Current priority is **repeatable stable forward following before additional lane tests**. Read root HANDOFF.md and [COMPUTER-DRIVER-HARDWARE.md](COMPUTER-DRIVER-HARDWARE.md) first. [STEERING-ROOT-CAUSE.md](STEERING-ROOT-CAUSE.md) is now a corrected evidence report; its historical filename does not assert a known root cause.
 
 Repository: https://github.com/matthewluallen/cs460-second-lap-overdrive
+
 PR: https://github.com/matthewluallen/cs460-second-lap-overdrive/pull/4
-Branch: `slipstream-and-security-hardening`.
 
-Start with root HANDOFF.md, then review/SDK-APK-APPROACH-AUDIT.md,
-review/POWER-ZONE-AUDIT.md, review/MVP-ACCEPTANCE.md and SECURITY.md (paths relative
-to slipstream except the root files). Read the complete current files before edits.
+Branch: `slipstream-and-security-hardening`. Do not merge main.
 
-## Saved changes and exact evidence
+## Current evidence and limits
 
-- `1e19867`: prevents unknown/special-piece geometry from automatic calibration;
-  clears cancelled targets and queued steering; moving cancellation opens shared pit.
-- `6c16578`: seven-bit steering IDs and SDK-layout acknowledgment diagnostics.
-  This was deployed and tested; it did NOT fix physical steering.
-- `e4930da`: unchanged numbered-trial fixture and regression; ACK UI explicitly
-  labels firmware interpretation unverified. This label update was not loaded
-  into the connected browser at the end of the session.
-- `fixtures/groundshock-sdk-scan-steering.json`: original SDK scan and cancelled
-  steering capture. Operator confirmed the 11-piece map, including Power Zone 57.
-- `fixtures/groundshock-numbered-steering-cancelled.json`: full operator export
-  from 14:17:51Z, SHA-256
-  `762dc54ff8d315b7e075f9aa056edf2eeaec106f9cc83b9a0dac414cee7a6e3c`.
-  Request at 32780 ms: `0b 25 5e 01 e8 03 00 00 b4 c1 00 01`.
-  Reply at 32821 ms: `0e 41 00 00 58 c1 00 00 58 c1 00 00 f0 00 80`.
-  STOP recorded at 32821 ms. No offset writes anywhere in this trial.
-  Operator confirms stopped, no visible leftward shift. Physical stop latency unknown.
-- Hardware fixture metadata starts with unidentified model; operator notes identify
-  Groundshock. Preserve original bytes and distinguish operator identification.
+One left shift was physically confirmed on08fe678; see [GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md](GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md). Repeated Computer lanes later cancelled, including after settled speed. The latest79f9350 reference-first run read start34/code12→13, then the two-second telemetry watchdog stopped it. The operator confirmed stopped and on the track, but reported spinning. Its29-event fixture is `fixtures/groundshock-sdk-reference-spin.json`.
 
-## Latest cold-start trial — not yet a raw-byte fixture
+That last capture contains no lane, turn or offset write. The earlier successful repaired scan did send finite0x2c after its first code. Reference acquisition deliberately suppresses calibration until its confirming callback finishes; no later code arrived in the spin run. This is a known sequence difference, not a demonstrated physical cause. Do not claim fixed steering, repeated laps, racing, attacks or native-app parity from software tests.
 
-Operator fully switched Groundshock off/on and put it on start/finish, then selected
-it again. Browser SDK initialization succeeded at 08:20:13 America/Chicago:
-firmware 11866, battery about 3.82 V. Only SDK initialization was used after restart.
-After the recovery countdown, requested 240 mm/s; eight position messages and four
-transitions arrived. Left command #1 targeted -22.5 mm with 350 mm/s sideways speed.
-Cancellation occurred at 08:21:30; shared pit sent STOP. STOP reasserted at 08:21:34.
-Operator: **stopped, no sideways shift**.
+The operator authorized one explicit cancellation comparison that locks further lateral requests after cancellation while forward driving continues at ceiling300. It retains all other stop/pit protections and applies only when deliberately started. It is not the default policy and is not authorization to weaken other stops. Recent failed forward runs never exercised a lane-cancellation exception.
 
-SDK-interpreted acknowledgment fields changed from pre-cycle 255/129/70 to
-post-cycle 255/255/0 and stayed there around the request. Cancellation offset was
-about -25.6 mm. Power Zone signals: zero. The displayed requested target was thus
-only about 3.1 mm away from the cancellation offset; do not assume that this is a
-measured physical displacement or that the first 'one lane' click means 22.5 mm
-relative movement. Earlier larger requests also cancelled.
+At the last recorded physical handoff the operator confirmed stopped, the car was disconnected, and the page remained in a telemetry-timeout pit. Verify current session state rather than assuming that historical state or readiness persists.
 
-Evidence screenshots are in `review/evidence/`. The cold-start recording was saved
-through the browser UI, but its download was not accessible as a local file and
-has NOT been added as a byte fixture. Ask the operator for the newest trace when
-needed. Do not fabricate it from screenshots or claim all raw captures are saved.
-The preceding 14:17:51Z trace IS committed. Screenshots and these notes preserve the
-later observations, with this explicit limitation.
+## What to investigate next
 
-## Known state at handoff
+1. Compare current scan and reference-acquisition behavior with the same recorded optical input, including exact command order, unknown/finite offsets, STOP and connection reuse.
+2. Keep coordinate ownership explicit. SDK vehicle-tool resets offset to zero for relative steering; native Vehicle::ChangeLane derives targets from drivable-section geometry. Slipstream's printed-code-derived reference plus absolute target is a distinct strategy. “Current measured offset” is not an accurate description of that estimate.
+3. Native offset conversion classifies values greater than500000 as unknown654321. Native0x34 adjustment and0x2c reset/setting are distinct operations. Do not infer one from the other's name or copy only a serializer.
+4. Do not infer a rejection cause from recvID0xFF. CheckForDroppedCommand tests executed ID and the host's saved/current request state before a timed retry; it does not establish the old “missing0x2c caused rejection” claim. High-bit IDs also have special semantics.
+5. Preserve STOP priority across calibration/lane multi-write sequences; stale measurements, cancellation, reference loss and reassignments must not revive discarded lateral work.
+6. The next physical baseline should retain startup-inclusive recording and the accepted scan policy. A later forward-only mapped trial should suppress lane/turn intent while preserving the intended calibration policy. Explain any changed variable and use the current operator/session readiness; this handoff itself does not authorize movement.
 
-Groundshock physically stopped (operator confirmed); host in shared pit. No future
-movement is authorized by this handoff. Browser URL:
-https://curly-giggle-449vvxwxrj43jr67-3000.app.github.dev/slipstream/
+The ordinary-curve extractor correction now removes chord-centroid bias from228 lateral values on IDs17,18,20,23,24,27. Progress and other geometry remain unchanged. The new synthetic-circle and independent lane-record tests are numerical evidence, not hardware proof. No speculative0x35, SDK flag or watchdog change follows from that repair.
 
-Codespace: `curly-giggle-449vvxwxrj43jr67`.
-Remote checkout: `/workspaces/cs460-second-lap-overdrive`.
-Connected browser and deployed control code: `6c16578`, SDK, command ceiling 300.
-Preserve the saved map and recording before reload; reconnect requires the human
-Bluetooth chooser. Do not print host codes or commit private managed state.
-No server restart, port-visibility change, merge, APK execution or firmware execution
-is needed for the next offline investigation.
+## Historical chronology
 
-## Next reasoning steps
+| Stage | Evidence and scope |
+|---|---|
+|1e19867|Blocked unverified/special geometry from automatic calibration; moving cancellation opens the default shared pit.|
+|6c16578 / e4930da|Added seven-bit request IDs and ACK diagnostics, then retained the numbered cancellation fixture. Numbering did not establish physical steering.|
+|14:17:51Z export|Bare0x25 at32780ms, cancellation-state0x41 and STOP at32821ms, no offset write. Operator: stopped, no leftward shift. Fixture SHA256 `762dc54ff8d315b7e075f9aa056edf2eeaec106f9cc83b9a0dac414cee7a6e3c`.|
+|Historical cold start|Operator power-cycled at approximately08:20 America/Chicago; SDK firmware11866, about3.82V. UI recorded8 positions/4 transitions, then cancelled laneID1 with no observed shift. The raw download was not retained as a committed byte fixture; screenshots/notes must not be represented as complete wire evidence.|
+|5b3816d|Added keyed SDK-only0x2c→0x25 with a code-derived absolute reference. Six new tests;563-test software checkpoint. The claim that omission caused firmware rejection was a hypothesis, not a confirmed root cause.|
+|15:03 and15:09 exports|Pre-steering spin-offs occurred without new lane or offset writes. See [GROUNDSHOCK-PRESTEERING-OFFTRACK.md](GROUNDSHOCK-PRESTEERING-OFFTRACK.md).|
+|08fe678|Accepted11-piece scan and one physically confirmed left shift. ACK/code observations and operator confirmation are retained separately.|
+|Later Computer trials|Partial lateral motion followed by cancellation persisted despite ID and speed-confirmation changes. See the complete hardware chronology.|
+|ae3012b|Comparison attempt left track before any lane request; one automatic curve offset occurred. Cancellation policy was not exercised.|
+|79f9350|Reference-first acquisition and untrusted-marker fixes; latest start34-only run spun without any new offset/lane/turn command.|
+|c148060|Preserved spin trace, repaired false first-lap counting and stale CPU encounter state. Neither host defect emitted a steering packet in that capture.664-test software checkpoint.|
 
-1. Reproduce the saved capture and inspect exact fields; distinguish car-generated
-   cancellation from STOP-induced events. Retain the pit behavior regardless.
-2. Trace original app steering reference/offset setup and SDK example behavior.
-   SDK header describes zeroing offset before RELATIVE lane changes; the app uses
-   tracked ABSOLUTE offsets. Do not insert zero resets into absolute steering
-   without explicitly handling the frame and calibration interaction.
-3. Determine why IDs are not acknowledged and whether 255/high-bit values are
-   sentinel, cancellation, unsupported fields or other firmware state. Do not
-   infer command execution from GATT write completion or an ACK alone.
-4. Inspect native command gating, hop intent, target resolution and initialization.
-   Packet layout currently agrees with SDK and app; numbering and power cycling
-   alone failed. Do not keep repeating unchanged physical trials.
-5. Any candidate must have offline tests covering queue ordering, STOP during a
-   multi-command operation, no automatic retry, unchanged watchdogs, unknown
-   geometry and stale acknowledgments. Keep speculative behavior explicit and
-   bounded; ask for a product decision if changing control or stop policy.
-6. Get fresh supervised readiness before physical movement; one variable per trial.
-   Record raw commands, responses, UI state, observed lateral movement and stop.
+The original SDK scan fixture includes an earlier F&F connection before SDK. The later repaired-scan fixture contains SDK startup. Avoid conflating these connection histories. Raw trace TX times are recorded write completions, not proof of over-air receipt or physical braking latency.
 
-## Artifacts and tools
+## Artifacts and independent tools
 
-Local working checkout used during this session:
+Working checkout:
 `/Users/matthewluallen/.codex/.chatgpt-projects/g-p-6aac4813500c8191b52bc463fbd70382/slipstream-work`.
 
-Public SDK checkout: `/tmp/slipstream-independent-review/drive-sdk`, revision
+SDK checkout: `/tmp/slipstream-independent-review/drive-sdk`, revision
 `410352617b8660338746a6bb2b2dd173afb1b91a`.
-F&F library: `/tmp/slipstream-independent-review/foxtrot/libDriveEngine.so`, SHA-256
+
+F&F library: `/tmp/slipstream-independent-review/foxtrot/libDriveEngine.so`, SHA256
 `0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f`.
-Extracted configuration: `/tmp/slipstream-independent-review/foxtrot/config`.
-Provenance and third-party acquisition limits: review/FAST-FURIOUS-REVIEW.md.
-Native exports remain local and are not licensed source code to redistribute.
-Do not upload APKs, OBBs, firmware, proprietary exports, or licensed artwork.
+Configuration: `/tmp/slipstream-independent-review/foxtrot/config`.
+Provenance: [FAST-FURIOUS-REVIEW.md](FAST-FURIOUS-REVIEW.md).
 
-Fresh review scripts are committed under `slipstream/tools/`: ExportSteeringAudit,
-ExportPowerZone, ExportPowerZoneFlow, ExportZoneReceiver, ZoneReferences,
-ZoneThumbReferences and ZoneDispatch (Java). Last two reference walks yielded
-little additional evidence; empty reference results do not prove no callers.
-
-Ghidra 12.2 executable:
+Ghidra12.2:
 `/tmp/slipstream-independent-review/ghidra_12.2_PUBLIC/support/analyzeHeadless`.
 Project directory `/tmp/slipstream-independent-review/ghidra-project`, project
-`foxtrot`, program `libDriveEngine.so`. Use `-readOnly -noanalysis` and a post-script
-from the committed tools with an output path outside the repo. Requires Java 25:
-`JAVA_HOME=/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home`.
-Temporary local artifacts may disappear; verify existence and hashes, don't claim
-fresh decompilation if absent. Use committed reports and request original artifacts.
+`foxtrot`, program `libDriveEngine.so`. Use read-only/noanalysis scripts with output outside the repo. Java25:
+`/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home`.
 
-## Verification
+Independent Thumb instruction checks use LLVM `/usr/bin/objdump` with
+`--triple=thumbv7`; ELF addresses are Ghidra addresses minus0x10000 for this image.
+Check symbols/segments before mapping other regions. Decompiler argument recovery is imperfect: assembly exposed a missing final output-pointer argument in the optical-acquisition call.
 
-Last full suite: **557 Node tests passed**, Node 22.23.5. Latest changes were packet
-instrumentation, UI wording, fixture/tests and documentation. Earlier unchanged
-Python suite: **38 passed**, Python 3.14.7; CWE and dependency labs passed; npm audit
-zero advisories. Do not call these formal verification of firmware or hardware.
+No APK/firmware execution is needed for this review. Do not upload APKs, OBBs, firmware, proprietary decompiled bodies or licensed artwork. Preserve fixture bytes. Local temporary artifacts may disappear: verify existence/hash before claiming a fresh analysis.
 
-Run npm test, python3 -m unittest discover -s tests -v, python3 -m lapreturn.cwe_lab,
-npm run dependency-lab, and npm audit. Use Node >=22. Local Node 22 executable:
-`/tmp/cs460-review-node22/node_modules/node/bin/node`.
-Preserve the existing 1–4-car mode/fault matrix. Commit and push on this branch,
-update HANDOFF.md and relevant review notes with evidence and unresolved limits.
-No merging to main. No claim of world-class UI, real races or attacks until observed.
+## Verification and delivery
 
-## Update — SDK offset-precondition fix (session 011wDwgcsm)
+Use Node>=22. Run the relevant failing regressions before repair, then npm test,
+Python unittest discovery, the CWE/dependency labs and npm audit. Preserve the1–4-car mode/fault matrix. Record current counts in root HANDOFF.md rather than presenting historical counts as current.
 
-**Root cause (confirmed in software):** the SDK steering path sent `CHANGE_LANE`
-(0x25) without the preceding `SET_OFFSET_FROM_ROAD_CENTER` (0x2c). On firmware
-11866 the bare 0x25 is cancelled (0x41 reply, high-bit id 0x80, zero horizontal
-speed) and never registers (`recvID == 0xFF`). Full evidence chain, confirmed-vs-
-hypothesis split, and the decompiled references are in
-`review/STEERING-ROOT-CAUSE.md`.
-
-**Fix (shipped):** `slipstream/car.mjs` `steerTo()` now prepends a keyed
-`'lane-offset'` send of `SET_OFFSET_FROM_ROAD_CENTER` — carrying the car's **current
-measured offset**, not a blind zero — before `CHANGE_LANE`, on the `sdk` profile only.
-Non-SDK profiles (F&F, simulator, undefined) keep the bare `CHANGE_LANE` unchanged.
-Cancellation and `stop()` clear `'lane-offset'` together with `'lane'`. This honours
-the earlier warning against inserting zero resets into absolute steering without
-handling the frame. New tests: `slipstream/steering-offset.test.mjs` (6).
-
-**Still a hypothesis:** that this produces real lateral movement on firmware 11866.
-An ACK/registration is not proof of physical lane completion. Must be confirmed on the
-car via the single-variable test in `STEERING-ROOT-CAUSE.md` → "Next hardware test".
-Hardware verification is currently blocked (car in pit; remote-devices/Mac bridge
-not connected this session). Not faked, not stubbed — flagged open.
-
-**Build-env correction:** the "6 failing platform tests" reported earlier were a
-missing declared dependency only — `three@0.187.0` absent from `node_modules`,
-causing `Cannot find module 'three'` at import in four `platform/*` suites. Installing
-the declared version restores them. No code defect was involved.
-
-**Verification after this change:** full suite **563 Node tests passed** (the prior
-557 baseline plus the 6 new steering tests), Node 22. Safety invariants — command
-ordering, STOP priority, safety latches, neutral-input arming, watchdogs, shared-pit,
-1–4-car matrix — unchanged and passing.
+Keep new work on the PR branch, preserve unrelated edits, and commit/push after the authorized verification pass. No merge, deployment, port-visibility change or physical control is implied by this offline review.

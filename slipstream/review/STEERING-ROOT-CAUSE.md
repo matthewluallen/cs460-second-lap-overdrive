@@ -1,101 +1,52 @@
-> Correction, 13 November 2026: this is a steering hypothesis, not an established firmware root cause. The latest spin-offs sent neither 0x25 nor 0x2c. SDK reference-tool pairing does not prove a universal firmware precondition; the stored lateral value is a printed-code-derived estimate (initially zero), not an independently measured current offset. The causal claim below that the firmware rejected the command *because* the reference was undeclared is unproven. See SYSTEM-RECOVERY-PLAN.md before any hardware trial.
+# Groundshock steering investigation — corrected evidence
 
-# Groundshock steering root cause
+13 November 2026. The filename is historical: **no single firmware root cause has been established**. Read [COMPUTER-DRIVER-HARDWARE.md](COMPUTER-DRIVER-HARDWARE.md) for the chronological hardware evidence and [STEERING-AGENT-HANDOFF.md](STEERING-AGENT-HANDOFF.md) for current investigation scope.
 
-Firmware: Anki Groundshock **11866**. Symptom: the car scans and drives, accepts
-a left-lane command, but the command is cancelled almost immediately and no
-lateral movement is observed. This document records the diagnosis, the evidence
-behind it, what is **confirmed** versus **hypothesised**, and the fix shipped on
-`slipstream-and-security-hardening`.
+## What the recordings establish
 
-## Summary
+- Earlier SDK steering captures sent a bare CHANGE_LANE0x25 and received a cancellation-state0x41 response. They establish that sequence and outcome, not why firmware cancelled.
+- The published SDK example sends SET_OFFSET0x2c with zero before a **relative** lane request. Slipstream later added an SDK-only reference/target pair using its printed-code-derived lateral estimate. That is an experimental **absolute-frame** strategy, not an independently measured current offset or an exact copy of the example.
+- Build08fe678 produced one operator-confirmed left shift. The recording includes an offset+22.5, target−22.5/ID1, an uncancelled update and later received/executed IDs1/1. Printed codes also changed lateral position. This demonstrates one successful maneuver, not general steering reliability.
+- Later Computer requests still cancelled after motion had begun, including a request made after settled speed and fresh optical evidence. Duplicate IDs or simultaneous acceleration therefore do not explain every failure.
+- The latest reference-spin recording contains speed and battery writes only: no offset, lane or turn request. Its operator-observed spinning cannot be attributed to a new host steering packet during that capture. Prior firmware state, calibration history and physical tracking remain unresolved.
 
-The SDK steering path emitted `CHANGE_LANE` (0x25) **without** first declaring the
-offset reference with `SET_OFFSET_FROM_ROAD_CENTER` (0x2c). On firmware 11866 the
-bare 0x25 is answered with a cancellation and the command never registers. The fix
-restores the 0x2c→0x25 pairing that the open-source drive-sdk performs, declaring
-the car's current measured offset (not a blind zero) so our tracked absolute frame
-is preserved.
+The paired-reference hypothesis was neither a universal firmware precondition nor a sufficient fix. ACK fields and GATT write completion are not proof of physical lane completion.
 
-## Evidence chain
+## Independently checked source evidence
 
-1. **Authoritative SDK behaviour.** `drive-sdk` `vehicle-tool`
-   (`cmd_anki_vehicle_change_lane`, `examples/vehicle-tool/vehicle_cmd.c:607-635`)
-   writes `set_offset_from_road_center(0.0)` immediately before `change_lane` on the
-   same characteristic. The pairing is the contract, not an optional nicety.
+Source: F&F build403 `libDriveEngine.so`, SHA256
+`0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f`.
+SDK revision: `410352617b8660338746a6bb2b2dd173afb1b91a`.
+Addresses below use Ghidra's image base0x10000; LLVM objdump ELF addresses are0x10000 lower. Critical calls, constants and branches were checked in Thumb instructions because the decompiler omitted or misrepresented some soft-float arguments. These are host-app observations, not recovered firmware source.
 
-2. **The committed trace omits 0x2c.** `fixtures/groundshock-numbered-steering-cancelled.json`
-   (schema `[ms, carIndex, dir, hex]`): at **32780 ms** a lone `CHANGE_LANE` (0x25)
-   goes out with no preceding `SET_OFFSET_FROM_ROAD_CENTER` (0x2c) on the stream.
+| Evidence | Supported interpretation |
+|---|---|
+| SDK protocol.h; vehicle-tool change-lane action | Zero establishes a relative lane frame in that example. The set-speed action sends0x24 alone. No universal requirement that0x2c precede ordinary forward driving is established. |
+| ConvertOffsetFromRoadCenter_mm2m006ab828 / m2mm006ab7f4 | Ordinary values convert mm↔m; values greater than500000 map to unknown sentinel654321. Testing only exact equality to654321 is narrower than native classification. |
+| CarMsgChangeLane006ab970 | Native lane speed/acceleration/target arguments are converted from meters to millimeters for the wire. |
+| Vehicle::ChangeLane007a8b78 | Native target selection uses drivable-section lane geometry and direction. It is not the SDK example's relative zero-reference routine. |
+| IncrementLaneChangeID007bd20e | Host request IDs increment and wrap with0x7f. |
+| IsMoreOrAsRecentThanLastLaneChangeID007bf600 |0xFF is not recent; other high-bit IDs receive special treatment; ordinary IDs use wrap-aware comparison. Low seven bits of0x80 must not be interpreted as an ordinary old request0. |
+| ProcessLaneChangeUpdate0071bbd8 | Near-zero horizontal motion plus the high bit triggers lateral cancellation handling. The native threshold is0.00001m/s; with integer mm/s wire speeds, the understood layout's stationary case is zero. |
+| CheckForDroppedCommand007197d8 | It tests the **executed-ID argument**, the host's saved/current request ID, elapsed time and retry budget. The received-ID argument is logged; this body does not establish that recvID0xFF means rejection because an offset was undeclared. |
+| ProcessPositionUpdate0071bdc0; caller0071b3ae–0071b3cc | Successful localization can supply an output flag used by the same message's correction path. The caller's final pointer argument is visible in assembly but absent from Ghidra's rendered call. |
+| Correction gate0071b5a2–0071b60a | Correction also depends on direction, scan state and a0.15-second interval. Finite correction uses0x34 adjustment; unknown host-offset handling at0071b62e–0071b63a sends0x2c with654321. This does not prove an unconditional finite0x2c after the first optical code. |
+| Full-stop007a9ce8 / exit007a9d28 | Native pairs SkipAutoDriveInDeloc0x35 true/false. Slipstream's different lifecycle remains an interoperability question; isolated packet injection is not a demonstrated repair. |
 
-3. **The car reports a cancellation.** At **32821 ms** the car returns a `0x41`
-   lane-change update whose id byte has the high bit set (0x80) with current==target
-   and horizontal speed 0. The cancel semantics are confirmed from the decompiled
-   F&F app `Localization::ProcessLaneChangeUpdate` (see `re-out/steer.c`): the 0x80
-   id bit and zero horizontal speed denote a cancelled/again-dropped command.
+## Confirmed host differences and repairs
 
-4. **Firmware never registered the command.** `CheckForDroppedCommand` treats
-   `recvID == 0xFF` as "no lane-change command currently registered". The trace shows
-   recvID stuck at 0xFF across the window — the firmware did not take ownership of the
-   0x25 because its offset reference was undeclared.
+The reference-acquisition comparison locks offset commands along with lane/turn commands. Both confirming optical packets pass through Car's calibration handler while locked; Game unlocks afterward. No later position arrived in the last spin capture, so its firmware offset stayed unknown. The successful scan sent a finite calibration after its first code. This is a reproduced sequence difference, **not a controlled comparison or proof of causation**. The recordings also differ in starting section and connection history.
 
-## Confirmed vs hypothesis
+A separate extraction defect was reproduced: averaging curve-bit x/y positions before measuring their radius produced an inward chord-centroid bias. The extractor now measures each point's radial lateral offset before averaging. This corrects228 lateral values on ordinary curve IDs17,18,20,23,24,27 by2.3–3.7mm. For example, curve18/code9 changes34.7→31.5mm. Progress, track lengths, noncurve geometry and special-piece restrictions are unchanged. Independent synthetic-circle and lane-record tests fail before and pass after the repair. This numerical defect did not cause the latest straight34-only capture; no calibration was sent in that run.
 
-**Confirmed (from artifacts in-repo and decompilation I ran):**
-- 0x41 high-bit id + zero horizontal speed = cancellation (decompiled `ProcessLaneChangeUpdate`).
-- `recvID == 0xFF` = no command registered (decompiled `CheckForDroppedCommand`).
-- Our SDK path omitted 0x2c before 0x25 (source + committed trace).
-- The drive-sdk reference pairs 0x2c then 0x25 (SDK source).
+## Historical implementation record
 
-**Hypothesis (strong, NOT hardware-verified):**
-- Adding the 0x2c precondition causes firmware 11866 to register the 0x25 and
-  produce real lateral movement. An SDK ACK/registration is evidence of command
-  *processing*, never proof of physical lane completion on this firmware. This must
-  be confirmed on the car (see "Next hardware test").
+Commit5b3816d added the SDK-only keyed0x2c→0x25 pair and six queue/order regressions. STOP and cancellation clear both keys. Its563-test result was a software checkpoint, not hardware acceptance. The contemporary claim that an undeclared offset caused firmware rejection was an inference and is withdrawn.
 
-## Fix
+The contemporaneous platform-test failures were a missing declared `three@0.187.0` installation, not evidence of a platform code defect. Later suite counts and physical outcomes are recorded in HANDOFF.md and the hardware report.
 
-`slipstream/car.mjs` `steerTo()`:
-- On the `sdk` initialization profile only, send `SET_OFFSET_FROM_ROAD_CENTER` with
-  the car's **current measured offset** (`offsetSign * this.lateral`, with `-0`
-  normalised to `0` so we never write `0x80000000` on the wire) immediately before
-  `CHANGE_LANE`. We declare the real reference rather than a blind zero so the
-  absolute target still resolves to the intended destination and Slipstream's tracked
-  frame is not silently shifted. (The handoff warned explicitly against inserting zero
-  resets into absolute steering without handling the frame; this honours that.)
-- Non-SDK profiles (F&F, simulator, undefined) keep the bare `CHANGE_LANE` — their
-  reference-frame handling is unchanged and their regression coverage is preserved.
-- The lane-offset write is a keyed send (`'lane-offset'`), so dedup, latest-wins
-  ordering, cancellation and STOP all clear it as a pair with `'lane'`.
+## Next acceptance boundary
 
-Regression tests: `slipstream/steering-offset.test.mjs` (6 tests) — SDK writes
-0x2c then 0x25 in order; non-SDK profiles stay bare; reference tracks current offset;
-dedup sends neither and consumes no id; STOP clears the pair; cancellation drops both.
+First recover repeatable forward following using the accepted scan path and a startup-inclusive recording. A forward-only mapped trial must distinguish suppression of lateral intent from suppression of calibration; blanket locking both creates a different sequence. Keep current STOP, arming, pit and watchdog behavior. Investigate offset classification, calibration epochs and connection reuse offline before changing firmware lifecycle behavior.
 
-## Safety invariants preserved
-
-Command ordering, STOP priority, safety latches, neutral-input arming, watchdogs and
-shared-pit behaviour are unchanged; the full suite (563 tests) passes. The lane-offset
-send participates in the same keyed-queue discipline as every other command, so STOP
-and cancellation remain authoritative.
-
-## Build-environment note
-
-The declared dependency `three@0.187.0` was absent from this workspace's
-`node_modules`, which made four `platform/*` suites fail at import with
-`Cannot find module 'three'`. This was an install gap, not a code defect; installing
-the declared version restores all four (42 tests) and the full suite to green.
-
-## Next hardware test (single variable)
-
-Change exactly one variable from the last physical trial: enable the 0x2c precondition
-on the SDK path. With fresh supervised readiness and the car on the track:
-1. Confirm STOP and the pit exit behave normally (unchanged paths).
-2. Issue **one** left nudge.
-3. Capture the BLE stream and check: (a) 0x2c precedes 0x25; (b) the 0x41 reply's id
-   byte high bit is **clear** (not a cancel); (c) `recvID != 0xFF` (command registered);
-   (d) observed lateral movement.
-
-A cancel (0x80 set) or `recvID == 0xFF` after the fix would falsify the hypothesis and
-point to a deeper firmware-11866 difference in offset/ACK semantics. Do not repeat the
-prior unchanged trial, and change only this one variable.
+Only after stable forward laps should left/right completion, repeated Computer steering, races and attacks be accepted. Do not execute the obsolete “repeat one offset-precondition trial” instruction from earlier versions of this report. No hardware movement is authorized by this document alone.

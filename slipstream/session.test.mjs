@@ -143,13 +143,31 @@ test('story requires scan and steady carry, and stale or paused telemetry cannot
   assert.throws(()=>new RoundSession().start('team',[car()],0,{mission:'unknown'}),/valid crew/);
 });
 
+test('Story CPU pace remains inside the unchanged phase speed bands at every operator ceiling', () => {
+  for(const ceiling of [100,300,400,700,1400]) {
+    const s=new RoundSession();s.start('team',[car(1,{control:'bot',speedCeiling:ceiling})],0,{mission:'signal-run'});
+    let now=0;const phases=new Set();
+    for(const progress of [.06,.09,.12,.22,.32,.42,.52,.72,.82]) {
+      const task=s.view().rows[0].task,guidance=s.guidance(1),speed=guidance.throttle*ceiling;
+      phases.add(task.phase);
+      assert.equal(task.minSpeed,ceiling*.1);
+      assert.equal(task.maxSpeed,ceiling*(task.phase==='carry'?.6:.45));
+      assert.ok(speed>task.minSpeed&&speed<task.maxSpeed,'CPU pace retains headroom inside the task band');
+      assert.ok(guidance.throttle>0&&guidance.throttle<1,'guidance never exceeds the selected ceiling');
+      s.update([car(1,{circuitProgress:progress,lateral:guidance.lane,speed})],now+=200);
+    }
+    assert.deepEqual([...phases],['scan','carry','deliver']);
+    assert.equal(s.view().reason,'goal');assert.equal(s.view().teamTasks,3);assert.equal(s.guidance(1),null);
+  }
+});
+
 import {readFileSync} from 'node:fs';
 import {Game} from './game.mjs';
 import {SimWorld} from './sim.mjs';
 const fixtureData = name => JSON.parse(readFileSync(new URL('./data/' + name + '.json', import.meta.url)));
 test('CPU story algorithms: simulator-only 10s timing; Figure-eight excludes physical steering policy', async () => {
   const data = {pieces:fixtureData('pieces'),vehicles:fixtureData('vehicles'),weapons:fixtureData('weapons')};
-  for (const layout of ['Capsule','Figure eight']) for (const count of [1,4]) for (const mission of STORY_MISSIONS) {
+  for (const layout of ['Capsule','Figure eight']) for (const count of [1,2,3,4]) for (const mission of STORY_MISSIONS) {
     let now = 0;
     const game = new Game({...data,clock:()=>now,safety:{trackGapMs:10000}}), world = new SimWorld(game.pieces,layout);
     game.useTrack(world.track);game.topSpeed=400;

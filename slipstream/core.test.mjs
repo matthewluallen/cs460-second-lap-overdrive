@@ -261,24 +261,53 @@ test('mines, pulse ram, horn, scrambler, cannons, gravity trap, reverse drive an
   function horn() { return {type: 'horn', interaction_style: 'singleshot', base_energy_cost: 4, recharge_time_s: 3, targeter: {type: 'rectangle', half_width: 0.075, length: 0.4, single_target: true}, scripts: [{disabled_duration_s: 1.5, disabled_speed_max: 0.8, min_lanes_to_change: 4}]}; }
 });
 
-test('a full bot battle runs on every layout without losing cars, and stop halts everything', async () => {
-  for (const name of ['Capsule', 'Figure eight']) {
-    const {game, world, run, add} = rig(name);
-    const scout = add({model: 8}, {index: 2});
-    game.startScan(scout); assert.ok(await run(90, () => game.phase === 'ready'));
-    for (const model of [9, 14, 15]) add({model});
-    for (const d of game.drivers) game.setControl(d, 'bot');
-    game.startBattle(); await run(60);
-    const snap = game.snapshot();
-    assert.ok(game.drivers.every(d => d.car.localizer.located), name + ': all cars have a unique piece hypothesis');
-    // A disabled car may have no fresh codes; it must not be advertised as targetable.
-    assert.ok(snap.every(s => s.located === !!game.drivers.find(d => d.id === s.id).car.localizer.estimate(game.clock()).located));
-    assert.ok(snap.reduce((n, s) => n + s.kills, 0) >= 1, name + ': somebody scored');
-    assert.ok(world.cars.every(c => c.speed <= MAX_SPEED + 1));
-    game.stopAll(); await run(2);
-    assert.ok(world.cars.every(c => c.speed === 0), 'every car stopped');
-    assert.equal(game.phase, 'ready');
+test('seeded bot battles preserve localization trust and safety through combat and optical gaps', async t => {
+  // Include both reproduced failures of the old end-of-round assertion: seed 6
+  // stops in the intersection watchdog pit; seed 34 is briefly ambiguous after
+  // a code gap. Neither state may be forced into a unique, targetable position.
+  let randomState;
+  t.mock.method(Math, 'random', () => ((randomState = Math.imul(randomState, 1664525) + 1013904223) >>> 0) / 4294967296);
+  let pitRuns = 0, ambiguousRuns = 0;
+  for (const seed of [1, 6, 34]) {
+    randomState = seed;
+    for (const name of ['Capsule', 'Figure eight']) {
+      const {game, world, run, add} = rig(name);
+      const scout = add({model: 8}, {index: 2});
+      game.startScan(scout); assert.ok(await run(90, () => game.phase === 'ready'));
+      for (const model of [9, 14, 15]) add({model});
+      for (const d of game.drivers) game.setControl(d, 'bot');
+      const confirmed = new Set(), context = name + ', seed ' + seed;
+      game.startBattle(); await run(60, () => {
+        const now = game.clock(), snapshot = game.snapshot();
+        for (const [i, d] of game.drivers.entries()) {
+          const localizer = d.car.localizer, estimate = localizer.estimate(now), reference = localizer.diagnostics(now).reference;
+          const trusted = localizer.candidates?.length === 1 && reference?.fresh === true;
+          assert.equal(snapshot[i].located, !!trusted, context + ': only fresh unique locations are advertised');
+          if (estimate?.located && reference?.source === 'printed-code') {
+            confirmed.add(d.id);
+            assert.equal(estimate.index, world.cars[i].index, context + ': trusted piece matches simulator truth');
+            assert.equal(estimate.direction, world.cars[i].direction, context + ': trusted direction matches simulator truth');
+          }
+          for (const target of snapshot[i].targets) {
+            assert.equal(snapshot[i].located, true, context + ': unlocalized attacker cannot acquire targets');
+            assert.equal(snapshot.find(s => s.id === target).located, true, context + ': unlocalized car cannot be targeted');
+          }
+        }
+        if (game.pitReason) assert.ok(game.drivers.every(d => d.car.speed === 0), context + ': shared pit stops every commanded speed');
+      });
+      const snap = game.snapshot();
+      assert.equal(confirmed.size, 4, context + ': every car acquired a unique printed-code position during combat');
+      if (game.pitReason) pitRuns++;
+      if (game.drivers.some(d => d.car.localizer.candidates?.length > 1)) ambiguousRuns++;
+      assert.ok(snap.reduce((n, s) => n + s.kills, 0) >= 1, context + ': somebody scored');
+      assert.ok(world.cars.every(c => c.speed <= MAX_SPEED + 1));
+      game.stopAll(); await run(2);
+      assert.ok(world.cars.every(c => c.speed === 0), 'every car stopped');
+      assert.equal(game.phase, 'ready');
+    }
   }
+  assert.ok(pitRuns > 0, 'the deterministic matrix exercises the unchanged telemetry watchdog');
+  assert.ok(ambiguousRuns > 0, 'the deterministic matrix exercises duplicate-piece ambiguity');
 });
 
 test('a lost link is reported and never throws into the control loop', async () => {
@@ -296,7 +325,7 @@ import {readdirSync} from 'node:fs';
 import {Recorder, ReplayCar, validate, TRACE_FORMAT} from './trace.mjs';
 
 // Replay one car of a trace through the real decoder, mapper and localiser.
-function replayCar(trace, index) {
+async function replayCar(trace, index) {
   let now = 0;
   const transport = new ReplayCar(trace, index), car = new Car(transport, {pieces: P, clock: () => now});
   const mapper = new TrackMapper(P), seen = {position: 0, transition: 0, other: 0, pieces: new Set()};
@@ -306,7 +335,14 @@ function replayCar(trace, index) {
     else if (!car.localizer) car.useTrack(mapper.track);
   });
   const end = trace.events.length ? trace.events.at(-1)[0] : 0;
-  for (; now <= end + 20; now += 20) transport.advance(now);
+  for (; now <= end + 20; now += 20) {
+    transport.advance(now);
+    // Recorded notifications arrived over time, with completed radio writes
+    // between samples. Let the real command pump finish each replay step;
+    // synchronously feeding the entire capture invents one continuously busy
+    // calibration write and cannot reproduce measured offset/sign learning.
+    await car.pumpPromise;
+  }
   return {car, mapper, seen, transport};
 }
 
@@ -320,7 +356,7 @@ test('a recorded session replays to the same map, lane sign and commands', async
   const trace = JSON.parse(JSON.stringify(recorder.stop()));
   assert.equal(trace.format, TRACE_FORMAT); assert.equal(trace.source, 'simulator'); assert.equal(trace.dropped, 0);
   assert.ok(trace.events.some(e => e[2] === 'tx') && trace.events.some(e => e[2] === 'rx'));
-  const again = replayCar(trace, 0);
+  const again = await replayCar(trace, 0);
   assert.ok(again.mapper.done);
   assert.deepEqual(again.mapper.track.pieces.map(p => [p.id, p.turn]), world.track.pieces.map(p => [p.id, p.turn]));
   assert.equal(again.car.offsetSign, d.car.offsetSign, 'the replay learns the same left/right sign as the live run');
@@ -332,7 +368,7 @@ test('a recorded session replays to the same map, lane sign and commands', async
 // Every trace in fixtures/ must decode cleanly and map to a closed loop. Traces
 // recorded from real cars are the only test here that does not rest on the
 // simulator's assumptions; the suite says plainly when there are none.
-test('fixture traces replay through the real pipeline', t => {
+test('fixture traces replay through the real pipeline', async t => {
   const dir = new URL('./fixtures/', import.meta.url);
   const files = readdirSync(dir).filter(f => f.endsWith('.json'));
   assert.ok(files.length >= 1);
@@ -340,9 +376,9 @@ test('fixture traces replay through the real pipeline', t => {
   for (const file of files) {
     const trace = validate(JSON.parse(readFileSync(new URL(file, dir), 'utf8')));
     if (trace.source === 'hardware') hardware++;
-    trace.cars.forEach((info, index) => {
-      const {mapper, seen, car} = replayCar(trace, index);
-      if (seen.position + seen.transition === 0) return;       // a parked car
+    for (let index = 0; index < trace.cars.length; index++) {
+      const {mapper, seen, car} = await replayCar(trace, index);
+      if (seen.position + seen.transition === 0) continue;       // a parked car
       assert.ok(seen.position > 0, file + ': position updates decoded');
       for (const id of seen.pieces) assert.ok(P.get(id), file + ': piece ' + id + ' is in the table');
       if (trace.expect?.pieces) {
@@ -350,7 +386,7 @@ test('fixture traces replay through the real pipeline', t => {
         assert.equal(mapper.track.count, trace.expect.pieces, file);
       }
       if (trace.expect?.offsetSign) assert.equal(car.offsetSign, trace.expect.offsetSign, file + ': left/right sign');
-    });
+    }
   }
   t.diagnostic(hardware ? hardware + ' hardware trace(s) replayed' : 'NO HARDWARE TRACES YET: only simulator recordings were replayed');
 });
