@@ -8,9 +8,9 @@ export const TEAM_COLORS = [[0, 1, 0], [0, 0.4, 1], [1, 0.5, 0], [1, 0, 1], [0, 
 export const emptyInput = () => ({throttle: 0, lane: null, attack: false, support: false, special: false});
 
 export class Game {
-  constructor({pieces, weapons, vehicles, clock = () => performance.now(), log = () => {}, safety = {}}) {
+  constructor({pieces, weapons, vehicles, clock = () => performance.now(), log = () => {}, safety = {}, schedule = (fn,ms) => setTimeout(fn,ms), unschedule = timer => clearTimeout(timer)}) {
     this.pieces = new Pieces(pieces); this.weapons = weapons; this.vehicles = vehicles;
-    this.clock = clock; this.log = log;
+    this.clock = clock; this.log = log; this.schedule = schedule; this.unschedule = unschedule; this.diagnostic = null;
     this.safety = {firstTrackMs:5000, trackGapMs:2000, stopGraceMs:1000, scanMs:45000, scanLaps:3, ...safety};
     for (const value of Object.values(this.safety)) if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid safety limit");
     this.drivers = []; this.track = null; this.battle = null; this.mapper = null; this.scanner = null;
@@ -32,12 +32,14 @@ export class Game {
     return driver;
   }
   async removeCar(driver) {
+    if (this.diagnostic) this.stopAll();
     this.drivers = this.drivers.filter(d => d !== driver);
     this.battle?.remove(driver.car);
     if (this.scanner === driver) this.cancelScan();
     await driver.car.close();
   }
   setModel(driver, model) {
+    if (this.diagnostic) this.stopAll();
     driver.car.model = model;
     if (this.battle) { this.battle.remove(driver.car); this.battle.add(driver.car).crew = driver.crew ?? ''; }
   }
@@ -48,10 +50,12 @@ export class Game {
     const f = this.battle?.get(driver.car); if (f) f.crew = crew;
   }
   setControl(driver, control) {
+    if (this.diagnostic) this.stopAll();
     driver.gamepadBinding = null; driver.cpuArmed = false; driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
+    if (this.diagnostic?.driver === driver && message.type === 'collision') { this.requestPit(driver, 'Collision during diagnostic'); return; }
     if (message.type === 'laneChange' && message.cancelled) {
       driver.input.lane = null;
       // Continuous phone/CPU input must not silently retry a rejected command.
@@ -85,6 +89,7 @@ export class Game {
     }
   }
   #stopDrivers(offTrack = null) {
+    if (this.diagnostic) { this.unschedule(this.diagnostic.timer); this.diagnostic = null; }
     for (const d of this.drivers) {
       d.cpuArmed = false; d.armed = false; d.gamepadArmed = false; d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
       if (d.pad) { d.pad.throttle = 0; d.pad.seen = 0; d.pad.attack = d.pad.support = d.pad.special = false; }
@@ -168,6 +173,7 @@ export class Game {
     this.log('All cars stopped');
   }
   resume() {
+    if (this.diagnostic) throw new Error('Finish or stop the diagnostic first');
     if (this.pitReason) throw new Error('Pit stop: recover every off-track car, then confirm the track is clear');
     if (this.drivers.some(d => d.car.safetyReason === 'Off track')) throw new Error('Recover every off-track car before resuming');
     this.halted = false;
@@ -181,8 +187,33 @@ export class Game {
     if (recovered && this.halted) driver.car.safetyStop('Host stopped');
     return recovered;
   }
+  // One supervised pulse, bounded independently of the animation/control loop.
+  // This is a host deadline, never a guarantee across suspension or BLE loss.
+  startDiagnostic(driver) {
+    if (this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
+    if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing) throw new Error('Car is not ready');
+    if (this.drivers.some(d => d.car.speed > 0)) throw new Error('Stop all cars first');
+    const c = driver.car, d = c.diagnostics();
+    if (c.safetyReason && c.safetyReason !== 'Host stopped') throw new Error('Recover the car first');
+    if (d.batteryAgeMs === null || d.batteryAgeMs > 30000) throw new Error('Refresh the battery reading before the diagnostic');
+    if (d.statusAgeMs !== null && d.statusAgeMs <= 30000 && (d.status.onCharger || d.status.lowBattery)) throw new Error('Car reports charging or low battery');
+    this.stopAll(); c.recover();
+    const pulse = {driver, until:this.clock()+500, timer:null};
+    this.diagnostic = pulse;
+    pulse.timer = this.schedule(() => {
+      if (this.diagnostic !== pulse) return;
+      this.stopAll(); this.log('Diagnostic deadline: STOP requested; confirm physical stop');
+    },500);
+    c.setSpeed(Math.min(150,this.topSpeed));
+    this.log('Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');
+  }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
+    if (this.diagnostic) {
+      const {driver,until} = this.diagnostic;
+      if (now >= until || !driver.car.connected || driver.car.safetyReason || driver.car.speed === 0) this.stopAll();
+      return; // no human, phone, CPU or gameplay commands during the pulse
+    }
     for (const d of this.drivers) {
       const c=d.car;if (!c.connected) continue;
       if (c.speed > 0) {

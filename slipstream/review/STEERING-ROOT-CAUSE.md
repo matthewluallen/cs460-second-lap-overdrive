@@ -1,3 +1,5 @@
+> Correction, 13 November 2026: this is a steering hypothesis, not an established firmware root cause. The latest spin-offs sent neither 0x25 nor 0x2c. SDK reference-tool pairing does not prove a universal firmware precondition; the stored lateral value is a printed-code-derived estimate (initially zero), not an independently measured current offset. The causal claim below that the firmware rejected the command *because* the reference was undeclared is unproven. See SYSTEM-RECOVERY-PLAN.md before any hardware trial.
+
 # Groundshock steering root cause
 
 Firmware: Anki Groundshock **11866**. Symptom: the car scans and drives, accepts

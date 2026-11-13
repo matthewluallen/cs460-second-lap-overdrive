@@ -60,6 +60,18 @@ function addCard(driver) {
   const energy = el('i'), speed = el('i');
   const recover = el('button', {className: 'recovery', textContent: 'Car back on track · Recover', hidden: true});
   recover.onclick = () => { if (document.hidden) return; game.recoverCar(driver); driver.level = 0; if (driver.pad) driver.pad.throttle = 0; refresh(); };
+  const refreshHealth = el('button', {textContent:'Refresh battery (stopped)'});
+  refreshHealth.onclick = () => { if (game.drivers.some(d=>d.car.speed>0) || countdown || game.diagnostic) return; driver.car.refreshBattery(); log('Battery refresh requested; wait for a new sample'); };
+  const diagnostic = el('button', {textContent:'Clear track · 0.5 s straight test', title:'Supervise beside the car. Three-second countdown, then at most 150 mm/s; host timing cannot guarantee a stop after Bluetooth loss.'});
+  diagnostic.onclick = () => {
+    try {
+      requireVisible();
+      if (countdown || game.diagnostic || session.status==='running' || session.status==='paused' || game.pitReason || game.drivers.some(d=>d.car.speed>0)) throw new Error('Stop the session and clear the pit first');
+      halt('Preparing supervised diagnostic');
+      countdown={kind:'diagnostic',driverId:driver.id,until:performance.now()+3000};
+      log('Supervised diagnostic countdown: track clear, watch the car'); renderRound();
+    } catch(error) { log(error.message); }
+  };
   const throttle = el('input', {type: 'range', min: 0, max: 100, value: 0, step: 5});
   throttle.setAttribute('aria-label', driver.car.name + ' throttle');
   throttle.oninput = () => { if (driver.control === 'browser' && !game.halted && !driver.car.safetyReason) driver.level = Number(throttle.value) / 100; else throttle.value = 0; };
@@ -67,7 +79,7 @@ function addCard(driver) {
   leftButton.onclick = () => { if (!game.halted && !driver.car.safetyReason) game.nudge(driver, 1); };
   rightButton.onclick = () => { if (!game.halted && !driver.car.safetyReason) game.nudge(driver, -1); };
   const brake = el('button', {textContent: 'Brake', className: 'brake'});
-  brake.onclick = () => { driver.level = 0; driver.input.throttle = 0; throttle.value = 0; driver.car.stop(); };
+  brake.onclick = () => { if (game.diagnostic || countdown?.kind==='diagnostic') halt('Diagnostic cancelled'); driver.level = 0; driver.input.throttle = 0; throttle.value = 0; driver.car.stop(); };
   const browserControls = el('div', {className: 'browser-controls', hidden: true}, el('label', {textContent: 'Throttle'}, throttle), el('div', {className: 'row'}, leftButton, brake, rightButton));
   const fireRow = el('div', {className: 'row'});
   for (const bay of ['attack', 'support', 'special']) {
@@ -84,7 +96,7 @@ function addCard(driver) {
     el('div', {className: 'top'}, name, tag, code, remove),
     el('div', {className: 'grid'}, model, control), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
-    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, seatBox);
+    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, seatBox);
   code.onclick = async () => {
     if (!seatBox.hidden) { seatBox.hidden = true; return; }
     try {
@@ -224,6 +236,7 @@ function tickRound(now) {
       const ready = countdown; countdown = null; $('countdown').hidden = true;
       try {
         requireVisible();
+        if(ready.kind==='diagnostic') { game.startDiagnostic(game.drivers.find(d=>d.id===ready.driverId)); return; }
         if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');recorder.mark('scan-start',{carId:scanner.id,startingLateral:ready.startingLateral});game.startScan(scanner,{startingLateral:ready.startingLateral??null});return; }
         if(ready.kind==='pit') {game.resumeFromPit();game.armComputers();session.resume(now);return;}
         if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
@@ -251,10 +264,10 @@ function renderRound() {
   $('pitMessage').textContent = game.pitReason ? game.pitReason + '. Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button, clear hands and obstacles, then continue.' : '';
   $('pitResume').textContent = view.status === 'paused' ? 'Track clear · Continue round' : 'Track clear · Rearm controls';
   $('roundLabel').textContent = game.pitReason ? 'SHARED PIT · CLOCK PAUSED' : countdown ? 'TRACK CLEAR · GET READY' : running ? activeExperience.toUpperCase() + ' · ROUND LIVE' : view.status === 'finished' ? 'ROUND COMPLETE' : 'READY WHEN YOU ARE';
-  $('roundTitle').textContent = view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
+  $('roundTitle').textContent = (game.diagnostic || countdown?.kind==='diagnostic') ? 'Supervised straight test · 0.5 s' : view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
   $('roundGoal').textContent = view.objective || (view.goal ? view.teamLaps + ' / ' + view.goal + ' shared laps · every driver contributes' : view.mode === 'battle' ? '100 per knockout · 25 per assist or lap' : view.mode === 'solo' ? 'Complete a full circuit. Find your fastest clean rhythm.' : 'Complete laps. Keep your eyes on the physical track.');
   $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
-  $('roundState').textContent = countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
+  $('roundState').textContent = game.diagnostic ? 'DIAGNOSTIC · AUTO STOP' : countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
   $('countdown').hidden = !countdown; $('countdown').textContent = countdown ? $('roundClock').textContent : '';
   $('endRound').hidden = !running && !countdown;
   for (const button of document.querySelectorAll('[data-experience]')) button.disabled = running || !!countdown;
@@ -515,7 +528,8 @@ function refresh(snapshot = game.snapshot()) {
       (x.connected?'Connected':'Disconnected')+' · '+(x.safetyReason??x.initialization)+'\n'+
       'Requested '+x.requestedSpeed+' mm/s; car reported '+x.reportedSpeed+' mm/s ('+seconds(x.reportedSpeedAgeMs)+')\n'+
       'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
-      'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+'\n'+
+      'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+' ('+seconds(x.batteryAgeMs)+')\n'+
+      'Car status ('+seconds(x.statusAgeMs)+'): '+(x.statusAgeMs===null?'unknown':('on track '+x.status.onTrack+' · charging '+x.status.onCharger+' · low battery '+x.status.lowBattery))+'\n'+
       'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
       (x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+

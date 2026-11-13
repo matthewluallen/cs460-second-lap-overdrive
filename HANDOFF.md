@@ -1,3 +1,13 @@
+# Recovery implementation: bounded diagnostic and fresh health readings
+
+Added an explicitly supervised three-second countdown / 500 ms diagnostic host window, capped at requested 150 mm/s, with no steering or normal driver commands. Deadline, STOP, collision, reassignment and delayed-write queue cleanup have regression coverage. It is best-effort browser timing, not a firmware failsafe or proof of physical stop. Fresh battery sample (within 30 seconds) is required; recent charger/low-battery reports block the pulse. Unknown/stale status remains explicitly unknown/stale, not a health certificate.
+
+Battery and status ages are now visible and exported; collision and speed-report evidence is retained. A stationary battery-refresh button requests a new sample without starting the car. Steering comments and the root-cause report now qualify the unproven reference hypothesis.
+
+Validation: 572 Node tests and 38 Python tests passed; CWE regression and dependency lab passed; npm audit reports zero vulnerabilities. Local browser simulator confirmed countdown, pulse and automatic STOP. Browser testing caught and corrected timer receiver binding before hardware deployment. No real-car commands, live reload or Codespaces deployment occurred in this implementation pass.
+
+Remaining phase-1 work includes precise build/session identifiers, richer stop/write timing summaries and a successful/failed initialization comparison tool. Normal free-drive acquisition policy is unchanged; do not repeat previous hardware trials without following SYSTEM-RECOVERY-PLAN.md. Further hardware readiness is required, and physical localization/steering remain unresolved.
+
 # Current recovery plan
 
 Read [SYSTEM-RECOVERY-PLAN.md](slipstream/review/SYSTEM-RECOVERY-PLAN.md) first. It supersedes older next-trial instructions below: two pre-steering spin-offs received no optical telemetry, and physical trials are paused pending bounded diagnostics and initialization review. Recent steering changes were not exercised by those trials; causality is not established. Historical test counts below are dated records.

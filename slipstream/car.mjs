@@ -163,6 +163,7 @@ export class Car {
           this.forceLane = true;
         }
       }
+      else if(m.type==='collision') { this.telemetry.collisions=(this.telemetry.collisions??0)+1; this.telemetry.lastCollision={...m,at:now}; }
       else if(m.type==='ping') this.telemetry.lastPongAt=now;
       else if(m.type==='supercode' || m.type==='zoneSupercode') {
         // Observation only: a code is not a validated attack, location or heartbeat.
@@ -179,12 +180,12 @@ export class Car {
         }
       }
       if (m.type === 'carInit') this.firmwareInitialization = m;
-      else if (m.type === 'battery') this.millivolts = m.millivolts;
+      else if (m.type === 'battery') { this.millivolts = m.millivolts; this.telemetry.batteryAt = now; }
       else if (m.type === 'version') this.version = m.version;
-      else if (m.type === 'status') this.status = m;
+      else if (m.type === 'status') { this.status = m; this.telemetry.statusAt = now; }
       else if (m.type === 'delocalized') this.delocalized = true;
       else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; this.#lane(m, now); }
-      else if (m.type === 'speed') { this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
+      else if (m.type === 'speed') { this.telemetry.speedReport={...m,at:now}; this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
       this.localizer?.feed(m, now);
       for (const fn of this.listeners) fn(m, this);
     }
@@ -234,6 +235,7 @@ export class Car {
     return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
       connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,
       requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
+      batteryAgeMs:age(this.telemetry.batteryAt),statusAgeMs:age(this.telemetry.statusAt),status:{...this.status},
       millivolts:this.millivolts,notificationAgeMs:age(this.telemetry.lastNotificationAt),positionAgeMs:age(this.telemetry.lastPositionAt),
       ...this.telemetry,counts:{...this.telemetry.counts},startingCalibration:this.startingCalibration??null,
       scanAllowanceRequested:this.scanDelocalizationAllowance,physicalStopVerified:false};
@@ -273,16 +275,10 @@ export class Car {
     const absolute = this.offsetSign * target;
     this.telemetry.laneRequest = {id:this.laneCommandId,at:this.clock(),target,
       offset:absolute,horizontalSpeed:speed,acceleration:1000};
-    // SDK-mode lane changes require the current offset reference to be declared
-    // immediately before the move. The open-source drive-sdk vehicle-tool
-    // (cmd_anki_vehicle_change_lane) writes SET_OFFSET_FROM_ROAD_CENTER (0x2c)
-    // then CHANGE_LANE (0x25) back-to-back on the same characteristic; our SDK
-    // steering omitted the 0x2c. Firmware 11866 answered the bare 0x25 with a
-    // cancellation (0x41: current==target, horizontal speed 0, high-bit id 0x80 —
-    // the cancel semantics are confirmed by the app's Localization::ProcessLaneChangeUpdate).
-    // We declare the car's current measured offset (not a blind zero) so the
-    // absolute target resolves to the intended destination and our tracked frame
-    // is preserved. Unverified on hardware; see review/STEERING-ROOT-CAUSE.md.
+    // Experimental SDK reference-before-lane sequence. The reference tool uses
+    // a zero reference for relative movement; that does not prove our absolute
+    // coordinate strategy. lateral is a code-derived estimate, initially zero,
+    // not an independent current measurement. Hardware acceptance remains open.
     if (this.transport.initializationProfile === 'sdk') {
       const reference = this.offsetSign * this.lateral || 0;   // normalise -0 to 0 on the wire
       this.telemetry.laneReference = {offset:reference,at:this.clock()};

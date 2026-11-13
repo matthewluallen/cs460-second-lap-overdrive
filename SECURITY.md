@@ -391,3 +391,7 @@ Acknowledgments never release safety latches or prove physical lane completion.
 Cancellation still opens the shared pit while moving; no retry was added. All
 556 Node tests pass, including new packet-boundary, sequence-wrap and stop tests.
 This change is not a hardware-validated fix for steering cancellation.
+
+### 2026-11-13: supervised diagnostic control
+
+A one-shot diagnostic uses a 500 ms host deadline and existing STOP/latch behavior; controller inputs cannot extend it. Pending motion is removed on expiry, collision triggers the shared pit, and driver changes cancel the diagnostic. Battery/status ages are surfaced to avoid treating stale samples as fresh. This does not provide autonomous firmware stopping on browser suspension or Bluetooth failure. Physical acceptance remains pending.
