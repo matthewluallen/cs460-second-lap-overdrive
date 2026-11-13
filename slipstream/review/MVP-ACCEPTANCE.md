@@ -17,7 +17,7 @@ car-count, client, scanning or safety requirement.
 | Guided connect/calibrate/scan/play | Host-handler tests cover selected scan car, clear-track confirmation, countdown and other cars staying stopped | Successful repeatable scan with observed physical movement and complete telemetry; calibration remains optional, experimental |
 | Accurate track | Decoder and topology tests; unsupported special pieces remain quarantined | Compare scanned order, direction and closure with the built track; no unsupported piece accepted as verified |
 | Browser, phone and iPad human controls | Browser handler, relay and phone safety tests | Physical throttle/steer/neutral/STOP on each client; tilt permissions/calibration; visual fallback when haptics unavailable |
-| 1–4 human/CPU participants | `host.test.mjs` runs full rounds and stops at deadline for 1, 2, 3, 4 simulated cars with mixed drivers | Physical rounds at every count, including all-human, all-CPU and mixed configurations |
+| 1–4 human/CPU participants | `host.test.mjs` runs the full 90-second MVP round with all-human, all-CPU and mixed drivers at 1, 2, 3, 4 simulated cars | Physical rounds at every count, including all-human, all-CPU and mixed configurations |
 | Stops, arming and shared pit | Existing fault matrix covers silent telemetry, relay outage and late delocalization at every car count | Observed stop behavior and latency, neutral-required recovery; host-loss limitation resolved or explicitly accepted for supervised use |
 | Useful diagnostics | Live telemetry, startup recording, bounded annotated exports and replay tests | Export from successful scan and failed attempt, replay both; correlate with operator observations |
 
@@ -78,3 +78,14 @@ on the classroom network remains unverified. PR #4 is open and mergeable but has
 an initially empty check summary. Subsequent workflow history confirms successful
 run [43368273825](https://github.com/matthewluallen/cs460-second-lap-overdrive/actions/runs/43368273825)
 for `56c0ae8`. Local, Codespaces and CI results remain separately scoped evidence.
+
+## Full MVP driver-combination regression
+
+All **530 Node tests** pass on Node 22.23.5. Eight additional round cases cover
+all-human and all-CPU configurations at every car count; the existing mixed cases
+remain. Every participant must score a lap, the 3-second countdown must stay
+stopped, and STOP must reach every simulated transport at round completion. MVP
+rounds now advance every simulation update through the entire 90-second round,
+instead of jumping from the first 30 seconds to the deadline. The ordinary simulator
+track and its configured speeds are software test conditions, not hardware tuning.
+Physical multi-car behavior and actual phone sensor inputs remain open gates.

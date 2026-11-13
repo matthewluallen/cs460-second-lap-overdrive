@@ -3,6 +3,13 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Full MVP round regression
+
+All 530 Node tests pass. The 90-second MVP round is exercised through every
+simulation update with all-human, all-CPU and mixed drivers for 1–4 cars. Every
+driver must score a lap and every simulated transport must receive STOP at the
+finish. This extends software evidence; physical acceptance remains incomplete.
+
 ## Public relay deployment check
 
 `npm run slipstream:check` now verifies an isolated room through the deployment's

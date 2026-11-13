@@ -131,11 +131,12 @@ test('round deadline stops cars and displays stable finished results', async () 
 });
 
 for (const carCount of [1, 2, 3, 4]) for (const mode of carCount === 1 ? ['solo', 'team'] : ['solo', 'team', 'race', 'battle']) {
-  test(`${carCount}-car ${mode} round integrates human/CPU driving, full-loop scoring and stopped finish`, async () => {
+  for (const drivers of mode === 'solo' ? ['mixed', 'human', 'cpu'] : ['mixed'])
+  test(`${carCount}-car ${mode} ${drivers} round integrates driving, full-loop scoring and stopped finish`, async () => {
     const h = host();
     for (let i = 0; i < carCount; i++) h.node('addSim').click();
     h.run(`game.useTrack(world.track); game.topSpeed = 600;
-      for (let i = 0; i < game.drivers.length; i++) game.setControl(game.drivers[i], i % 2 ? 'bot' : 'browser');`);
+      for (let i = 0; i < game.drivers.length; i++) game.setControl(game.drivers[i], ${drivers === 'cpu' ? "'bot'" : drivers === 'human' ? "'browser'" : "i % 2 ? 'bot' : 'browser'"});`);
     await settle();
     h.node('mode').value = mode; h.node('battle').click();
     assert.equal(h.run('!!countdown'), true);
@@ -153,14 +154,18 @@ for (const carCount of [1, 2, 3, 4]) for (const mode of carCount === 1 ? ['solo'
     for (let t = 3040; t <= 33000; t += 40) { h.tick(t); await settle(); }
     const rows = JSON.parse(h.run('JSON.stringify(session.view().rows)'));
     assert.ok(rows.reduce((sum, row) => sum + row.laps, 0) > 0, 'real simulator telemetry must produce completed circuits');
-    assert.ok(rows.find(row => !row.computer).laps > 0, 'human input must complete a scored circuit');
-    assert.equal(rows.filter(row => row.computer).length, Math.floor(carCount / 2));
+    const cpuCount = drivers === 'cpu' ? carCount : drivers === 'human' ? 0 : Math.floor(carCount / 2);
+    assert.equal(rows.filter(row => row.computer).length, cpuCount);
+    for (const row of rows) assert.ok(row.laps > 0, 'every driver must complete a scored circuit: ' + row.name);
     for (const row of rows) {
       assert.equal(row.score, mode === 'battle' ? row.hits * 100 + row.laps * 25 : row.laps * 100);
       if (row.laps) assert.ok(row.bestLapMs > 0);
     }
-    // Reach the real configured deadline without waiting in wall-clock time.
-    h.tick(3000 + ROUND_MODES[mode].durationMs); await settle();
+    // MVP rounds run every update through the full 90 seconds of simulated time.
+    // Other modes retain their existing deadline check. No hardware timing claim.
+    const deadline = 3000 + ROUND_MODES[mode].durationMs;
+    if (mode === 'solo') for (let t = 33040; t < deadline; t += 40) { h.tick(t); await settle(); }
+    h.tick(deadline); await settle();
     assert.equal(h.run('session.status'), 'finished');
     assert.equal(h.run('game.halted'), true);
     assert.equal(h.run('game.drivers.every(d => d.car.speed === 0)'), true);
