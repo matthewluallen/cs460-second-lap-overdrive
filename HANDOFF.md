@@ -3,6 +3,13 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Latest research
+
+[Community/APK protocol cross-check](slipstream/review/COMMUNITY-PROTOCOL-REVIEW.md)
+identifies unknown lateral offset in Groundshock telemetry and original-app
+set-offset-before-lane-change sequencing. It does not prove the scan failure is
+fixed. Firmware-specific packet formats and unsupported short frames remain open.
+
 ## Latest real-car compatibility status
 
 Read [CAR-COMPATIBILITY-REGRESSION.md](slipstream/review/CAR-COMPATIBILITY-REGRESSION.md).

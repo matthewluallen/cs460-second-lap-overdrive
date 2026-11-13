@@ -70,8 +70,9 @@ Classes that matter for control:
 3. **`0x2b` means "car off road"**, not just "delocalised" as the SDK names it.
 4. **The inspected initialization path configures a road network.** It uploads the whole road network to each car
    (`SetRoadPieceInfoC/X`, `SetRoadNetworkInfo/Meta`, ids `0x46`–`0x49`) and the
-   car then drives itself between commands. This project uses SDK mode (`0x90`)
-   instead, which is documented, simpler, and leaves steering decisions to the host.
+   car then drives itself between commands. Slipstream now has separate SDK and
+   app-derived F&F profiles; see `review/FF-INITIALIZATION.md`. Neither profile is
+   established as a successful physical scanner by the retained hardware traces.
 5. **Track pieces are data, not code.** The main OBB holds one definition file per
    piece under `basestation/config/modularRoadPieceDefinitionFiles/racing/`. Each
    lists the piece's connector poses and the exact pose of every printed location
@@ -180,3 +181,10 @@ does not prove no app path can send it.
 - Playback sequences (`0x2f`–`0x31`), the app's scripted light and motion effects.
 - The meaning of the two bytes in the collision message; they are passed through
   undecoded.
+
+## Subsequent community and native cross-check
+
+See [COMMUNITY-PROTOCOL-REVIEW.md](review/COMMUNITY-PROTOCOL-REVIEW.md) for
+firmware-specific formats, initial offset calibration, fresh track-discovery
+decompilation and remaining physical acceptance criteria. This later evidence
+qualifies the earlier broad SDK compatibility statements above.
