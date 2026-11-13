@@ -3,6 +3,15 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Hardware trace now replayed
+
+The attached Groundshock capture is preserved and replays to an 11-piece map.
+It contains special piece 57 (still blocked for scoring), and the left-lane request
+received a cancellation report after 53 ms. New diagnostics expose cancellation;
+548 Node tests pass. The cause of cancellation and physical steering remain open.
+See the attached-trace section in MVP-ACCEPTANCE.md. No live controller reload or
+additional physical movement was performed for this diagnostic change.
+
 ## First physical SDK scan
 
 On 13 November, Groundshock firmware 11866 successfully scanned an 11-piece circuit

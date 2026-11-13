@@ -512,7 +512,8 @@ function refresh(snapshot = game.snapshot()) {
       'Requested '+x.requestedSpeed+' mm/s; car reported '+x.reportedSpeed+' mm/s ('+seconds(x.reportedSpeedAgeMs)+')\n'+
       'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
       'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+'\n'+
-      'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms';
+      'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
+      (x.laneChange?.cancelled?'\nLane change: car reported cancellation; steering not confirmed.':'');
   }).join('\n\n') || 'Connect a car to see telemetry health.';
   $('saveTrace').disabled=recorder.cars.length===0;
   if(recorder.active)$('traceNote').textContent='Recording · '+recorder.events.length+' messages · '+recorder.dropped+' dropped · '+recorder.markersDropped+' annotations dropped. Save anytime without stopping.';

@@ -119,3 +119,46 @@ trace fixture is claimed for this run. Steering, repeatable discovery, phone/iPa
 controls, scored physical rounds and 2–4 car operation remain open. The F&F app
 profile remains unresolved; SDK success applies only to this observed car/firmware
 and track, and does not establish MXT or special-tile compatibility.
+
+## Attached trace replay and steering cancellation
+
+The operator supplied `slipstream-trace-2026-11-13T13-43-41-621Z.json`; its unchanged
+170 events are retained in `fixtures/groundshock-sdk-scan-steering.json` (SHA-256
+`1feb39b25f81fafaed201357b2eccbc85135e335f766a7a56ca6cac2a42f22b1`).
+The two recorded car entries are successive connections of the same operator-identified
+Groundshock, not two simultaneously connected cars. The original metadata says
+Unidentified because capture began before manual model selection; it is preserved.
+
+Replay independently reproduces the SDK map closure at 11 pieces. It also reveals
+**piece ID 57**, which remains special/unverified. Earlier ordinary-track wording
+recorded the test setup assumption, not a verified absence of special pieces.
+The operator's correct-map observation does not establish the geometry, effects or
+scored-round compatibility of piece 57. The existing quarantine remains in force.
+
+At trace time 406631 ms the host sent:
+`0b 25 5e 01 e8 03 00 00 34 c2 00 00` — horizontal speed 350 mm/s, acceleration
+1000 mm/s², target -45 mm, hop intent 0, tag 0. This has the documented SDK field
+layout. At 406684 ms (53 ms later), the reply was:
+`0e 41 00 00 58 c1 00 00 58 c1 00 00 f0 00 80` — current and target both -13.5 mm,
+horizontal speed 0, forward speed 240, raw lane-change ID 0x80. The retained F&F
+Ghidra export `Localization::ProcessLaneChangeUpdate` at 0071bbd8 interprets the
+high ID bit as cancellation in its stationary-horizontal branch. Subsequent
+position offsets stay -13.5 until STOP, with no intervening offset-calibration
+write. The operator did not notice a left shift and confirmed physical stop.
+This supports cancellation, not a reversed steering sign or a completed lane change.
+
+The decoder/export and live checks now expose this cancellation only when the
+horizontal speed is exactly zero, retaining the raw ID and excluding it from
+position/watchdog evidence. Two diagnostic assertions failed before the addition.
+All **548 Node tests pass**, including actual hardware replay, special-piece
+quarantine, and cancellation-not-position checks. No driving settings, automatic
+retry behavior, safety latches or timeouts changed. The active connected browser
+was not reloaded during this analysis.
+
+Root cause remains unresolved. The official SDK and retained Partydrive formatter
+use the same zero hop/tag layout, so changing those bytes without an experiment
+is unwarranted. Partydrive uses a lower default horizontal speed (100 mm/s) than
+ours (350); this is a candidate for a separately supervised one-variable test,
+not proof of a fix. Do not automatically retry a firmware-cancelled lane request.
+Sources: https://github.com/anki/drive-sdk and
+https://github.com/MasterAirscrachDev/Anki-Partydrive .

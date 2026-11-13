@@ -133,7 +133,11 @@ function decodeOne(m) {
       const currentOffset = v.getFloat32(2,true), targetOffset = v.getFloat32(6,true);
       if (!Number.isFinite(currentOffset) || !Number.isFinite(targetOffset)) break;
       return {id,type:'laneChange',currentOffset,targetOffset,offsetKnown:currentOffset !== 654321 && targetOffset !== 654321,
-        horizontalSpeed:v.getUint16(10,true),verticalSpeed:v.getInt16(12,true),laneChangeId:m[14]};
+        horizontalSpeed:v.getUint16(10,true),verticalSpeed:v.getInt16(12,true),laneChangeId:m[14],
+        // F&F Localization::ProcessLaneChangeUpdate (0071bbd8) treats the
+        // high bit as cancellation in its stationary-horizontal branch.
+        // Restrict this diagnostic to exactly zero; retain the raw ID above.
+        cancelled:v.getUint16(10,true)===0 && !!(m[14]&0x80)};
     }
     case ID.SPEED_UPDATE: if (!has(7)) break; return {id, type: 'speed', desired: v.getInt16(2, true), accel: v.getInt16(4, true), actual: v.getInt16(6, true)};
     case ID.COLLISION: if (!has(3)) break; return {id, type: 'collision', a: m[2], b: m[3], wasSideOnCollision: !!m[2], wasFrontBackCollision: !!m[3]};

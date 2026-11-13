@@ -352,3 +352,12 @@ strings or fragments; remote origins require HTTPS. Subsequent diagnostic API
 requests also refuse redirects. This detects private Codespaces forwarding without
 automatically expanding access. It does not validate car firmware or replace
 supervised physical acceptance.
+
+## Hardware lane-cancellation diagnostics
+
+A captured Groundshock lane request received a stationary lane-update reply with
+the cancellation bit used by the original app. The decoder and live diagnostics
+now expose this status; they retain the raw byte and do not treat it as position,
+watchdog freshness or physical steering success. No command retries or movement
+settings were added. Hardware trace replay also confirms special piece 57 remains
+quarantined despite successful map closure.

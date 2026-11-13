@@ -49,3 +49,13 @@ pass, noting the physical piece, travel direction and car/firmware in the trace
 note. Keep the observations separate from assumed gameplay semantics. Do not
 infer accurate zone geometry, stopping behavior or firmware compatibility merely
 from a successful decode. Keep raw traces private until their contents are reviewed.
+
+### groundshock-sdk-scan-steering.json
+
+Unmodified operator export from 13 November 2026; 170 events, two sequential
+connection profiles on one Groundshock firmware 11866. SDK scanning mapped an
+11-piece circuit; operator confirmed the map and physical stop. Contains special
+piece 57, which remains unverified for scoring. The later -45 mm lane request
+receives a stationary 0x80 cancellation report after 53 ms; no steering success
+is claimed. Original Unidentified-car metadata is retained. See MVP-ACCEPTANCE.md
+for source hash, timings and limitations. No host or player credentials are present.
