@@ -20,8 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Node 18 preserves the documented minimum; it is an EOL compatibility check.
-        node: [18, 22, 24]
+        # Supported (non end-of-life) Node lines only.
+        node: [22, 24]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -31,7 +31,7 @@ jobs:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
       - name: Run bench codec, transport, UI and evidence tests (no radio)
-        run: node --test bench/*.test.mjs instructor-drive/*.test.mjs
+        run: node --test bench/*.test.mjs instructor-drive/*.test.mjs slipstream/*.test.mjs
 
   platform:
     name: Pinned platform / Node ${{ matrix.node }}
@@ -49,10 +49,14 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           package-manager-cache: false
-      - name: Install exact classroom dependency pins without lifecycle scripts
+      - name: Install exact locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify platform operation and intended dependency reproductions
+      - name: Fail on any known advisory in the installed dependency tree
+        run: npm audit --audit-level=low
+      - name: Verify platform operation, access rules and dependency regression checks
         run: npm run test:platform
+      - name: Run the dependency regression check
+        run: npm run dependency-lab
 
   simulator:
     name: Simulator / Python ${{ matrix.python }}
@@ -70,5 +74,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
-      - name: Run simulator regression and intentional-flaw characterization tests
+      - name: Run simulator functional and security regression tests
         run: python -m unittest discover -s tests -v
+      - name: Run the fixed security probes (non-zero exit if a flaw returns)
+        run: python -m lapreturn.cwe_lab

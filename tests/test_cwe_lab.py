@@ -1,4 +1,4 @@
-"""Runnable lesson checks; expected flawed behavior is NOT a security pass."""
+"""Security regression probes: each must report the original flaw as absent."""
 import json
 from pathlib import Path
 import subprocess
@@ -18,7 +18,7 @@ class CweLabTests(unittest.TestCase):
         return subprocess.run([sys.executable, "-m", "lapreturn.cwe_lab", *args],
                               cwd=ROOT, text=True, capture_output=True, timeout=5)
 
-    def test_cli_default_runs_three_labelled_deliberate_baselines(self):
+    def test_cli_default_runs_three_passing_probes(self):
         result = self.cli()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stderr, "")
@@ -26,11 +26,12 @@ class CweLabTests(unittest.TestCase):
         self.assertEqual([r["case"] for r in reports], ["authorization", "repeat", "profile"])
         for report in reports:
             self.assertEqual(report["source"], "SIMULATION / fixed synthetic inputs")
-            self.assertTrue(report["deliberate_flawed_baseline_observed"])
-            self.assertFalse(report["security_pass"])
+            self.assertFalse(report["flaw_reproduced"])
+            self.assertTrue(report["regression_check_passed"])
+            self.assertIn("not a complete security assessment", report["note"])
             self.assertEqual(report["absolute_simulation_limit"], 500)
 
-    def test_cli_per_case_runs_only_the_selected_lesson(self):
+    def test_cli_per_case_runs_only_the_selected_probe(self):
         for case in ("authorization", "repeat", "profile"):
             with self.subTest(case=case):
                 result = self.cli(case)
@@ -39,7 +40,7 @@ class CweLabTests(unittest.TestCase):
                 self.assertEqual(len(lines), 1)
                 self.assertEqual(json.loads(lines[0])["case"], case)
 
-    def test_cli_rejects_unknown_case_without_running_lessons(self):
+    def test_cli_rejects_unknown_case_without_running_probes(self):
         result = self.cli("hardware")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(result.stdout, "")
@@ -48,58 +49,54 @@ class CweLabTests(unittest.TestCase):
     def test_cli_runs_are_deterministic_and_do_not_share_state(self):
         first, second = self.cli("all"), self.cli("all")
         self.assertEqual(first.returncode, 0, first.stderr)
-        self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(first.stdout, second.stdout)
 
-    def test_lessons_call_actual_methods_on_fresh_pilots(self):
-        pilots = []
+    def test_authorization_probe_shows_denial_and_no_state_change(self):
+        observed = cwe_lab.authorization()["observed"]
+        self.assertFalse(observed["outcome"]["accepted"])
+        self.assertEqual(observed["blue_speed_after"], 0)
+        self.assertEqual(observed["other_team_events_visible_to_red"], 0)
 
-        def fresh():
-            pilot = Pilot()
-            pilots.append(pilot)
-            return pilot
-
-        with patch("lapreturn.cwe_lab.Pilot", side_effect=fresh):
-            reports = [lesson() for lesson in cwe_lab.LESSONS.values()]
-        self.assertEqual(len(pilots), 3)
-        self.assertEqual(pilots[0].vehicles["sim-blue"]["speed"], 40)
-        self.assertEqual(pilots[0].vehicles["sim-red"]["distance"], 0)
-        self.assertEqual(pilots[1].vehicles["sim-red"]["distance"], 6)
-        self.assertEqual(pilots[1].vehicles["sim-blue"]["speed"], 0)
-        self.assertEqual(pilots[2].vehicles["sim-red"]["max_speed"], 450)
-        self.assertEqual(pilots[2].events, [])
-        self.assertTrue(all(report["deliberate_flawed_baseline_observed"] for report in reports))
-
-    def test_repeat_reports_two_effects_despite_one_nonce(self):
+    def test_repeat_probe_shows_one_effect_for_one_nonce(self):
         observed = cwe_lab.repeat()["observed"]
         self.assertEqual(observed["distance_after_first"], 3)
-        self.assertEqual(observed["distance_after_second"], 6)
-        self.assertEqual(observed["event_count"], 2)
-        self.assertEqual(observed["unique_nonce_count"], 1)
+        self.assertEqual(observed["distance_after_second"], 3)
+        self.assertEqual(observed["distance_after_changed_request"], 3)
+        self.assertFalse(observed["same_nonce_different_value_outcome"]["accepted"])
+        self.assertEqual(observed["event_count"], 1)
 
-    def test_profile_distinguishes_integrity_authenticity_and_absolute_limit(self):
+    def test_profile_probe_distinguishes_checksum_signature_and_limit(self):
         observed = cwe_lab.profile()["observed"]
-        self.assertFalse(observed["original_digest_outcome"]["accepted"])
-        self.assertIn("checksum", observed["original_digest_outcome"]["error"])
-        self.assertTrue(observed["replacement_digest_outcome"]["accepted"])
-        self.assertFalse(observed["publisher_proof_supplied"])
-        self.assertFalse(observed["above_500_outcome"]["accepted"])
-        self.assertEqual(observed["max_speed_before"], 120)
-        self.assertEqual(observed["max_speed_after"], 450)
+        self.assertFalse(observed["no_publisher_key_outcome"]["accepted"])
+        self.assertFalse(observed["checksum_only_outcome"]["accepted"])
+        self.assertFalse(observed["wrong_key_signature_outcome"]["accepted"])
+        self.assertEqual(observed["max_speed_after_unsigned_attempts"], 120)
+        self.assertTrue(observed["publisher_signed_outcome"]["accepted"])
+        self.assertEqual(observed["max_speed_after_signed"], 450)
+        self.assertFalse(observed["signed_above_500_outcome"]["accepted"])
 
-    def test_report_reflects_repaired_policy_instead_of_canned_success(self):
-        class OwnTeamOnly(Pilot):
+    def test_probes_detect_a_reintroduced_flaw_and_cli_fails(self):
+        class TrustsClaimedTeam(Pilot):
             def authorize(self, token, team, vehicle):
-                if self.authenticate(token) != self.vehicles[vehicle]["team"]:
-                    raise PermissionError("Cross-team change denied")
-                super().authorize(token, team, vehicle)
+                self.authenticate(token)
+                if self.vehicles[vehicle]["team"] != team:
+                    raise PermissionError("Vehicle belongs to a different team")
+                return team
 
-        with patch("lapreturn.cwe_lab.Pilot", OwnTeamOnly):
+        class ReplaysEffects(Pilot):
+            def command(self, *args, **kwargs):
+                self.seen.clear()
+                return super().command(*args, **kwargs)
+
+        with patch("lapreturn.cwe_lab.Pilot", TrustsClaimedTeam):
             report = cwe_lab.authorization()
-        self.assertFalse(report["deliberate_flawed_baseline_observed"])
-        self.assertFalse(report["observed"]["outcome"]["accepted"])
-        self.assertEqual(report["observed"]["blue_speed_after"], 0)
-        self.assertFalse(report["security_pass"], "one denied probe is not a security assessment")
+            self.assertTrue(report["flaw_reproduced"])
+            self.assertFalse(report["regression_check_passed"])
+            with self.assertRaises(SystemExit):
+                with patch("builtins.print"):
+                    cwe_lab.main(["authorization"])
+        with patch("lapreturn.cwe_lab.Pilot", ReplaysEffects):
+            self.assertTrue(cwe_lab.repeat()["flaw_reproduced"])
 
 
 if __name__ == "__main__":

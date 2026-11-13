@@ -67,12 +67,19 @@ test('only explicit opt-in exposes the page and local configuration without cach
   assert.equal(page.headers['cache-control'],'no-store');
   assert.match(page.headers['content-type'],/text\/html/);
   assert.match(page.text,/<!doctype html>/i);
-  for(const file of ['protocol.mjs','controller.mjs','transport.mjs','ui.mjs']){
+  for(const file of ['protocol.mjs','controller.mjs','scan-controller.mjs','track.mjs','transport.mjs','ui.mjs']){
     const module=await call('/instructor-drive/'+file);
     assert.equal(module.status,200,file);
     assert.equal(module.headers['cache-control'],'no-store',file);
     assert.match(module.headers['content-type'],/(?:application|text)\/javascript/,file);
   }
+  for(const doc of ['README.md','IDENTIFICATION.md','SOURCES.md','VALIDATION.md'])
+    assert.equal((await call('/instructor-drive/'+doc)).status,200,doc);
+  // Only the page's own assets are served: no tests or validation logs.
+  for(const path of ['/instructor-drive/controller.test.mjs','/instructor-drive/ui.test.mjs',
+    '/instructor-drive/validation/python-tests.txt','/instructor-drive/validation/',
+    '/instructor-drive/Protocol.mjs','/instructor-drive//protocol.mjs'])
+    assert.equal((await call(path)).status,404,path);
   for(const path of ['/api/drive','/api/stop','/instructor-drive/api/drive',
     '/instructor-drive/../platform/server.mjs','/instructor-drive/.git/config']){
     assert.equal((await call(path)).status,404,path);
@@ -87,8 +94,9 @@ test('instructor gate preserves the stationary bench and synthetic worksheet in 
     }
     const health=JSON.parse((await call('/api/health')).text);
     assert.equal(health.source,'MOCK');
-    // Deliberate course CWE-639 remains isolated in disposable worksheet data.
-    const record=JSON.parse((await call('/api/support/records/102?operator=pilot-red')).text);
+    const denied=await call('/api/support/records/102?operator=pilot-red');
+    assert.equal(denied.status,400);
+    const record=JSON.parse((await call('/api/support/records/102?operator=pilot-blue')).text);
     assert.equal(record.source,'MOCK');
     assert.equal(record.record.team,'blue');
   }

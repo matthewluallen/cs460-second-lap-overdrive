@@ -1,5 +1,10 @@
 # Three simulator security investigations
 
+> **Status: repaired.** `python -m lapreturn.cwe_lab` now reports `flaw_reproduced: false` for all three cases and exits non-zero if one returns. The token decides the team (CWE-863), a repeated nonce has one effect (CWE-837), and profiles need a publisher HMAC signature in addition to the checksum (CWE-345).
+> The steps further down describe the original flawed baseline and are kept as
+> a record of what was investigated; on this branch they now end in a refusal.
+> See [SECURITY.md](../SECURITY.md) for the change list and the baseline commit.
+
 These optional lessons turn three existing simulator weaknesses into repeatable
 experiments. Finish the physical activity, save its evidence and disconnect the
 car first. Every example below operates only on a new in-memory `Pilot` with

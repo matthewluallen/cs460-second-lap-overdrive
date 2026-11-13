@@ -1,7 +1,7 @@
-"""Local simulator review: operational guardrails and deliberate flawed baseline.
+"""Local simulator review: operational guardrails and security regressions.
 
-DeliberateScenarioCharacterizationTests preserve the supplied investigation.
-Their success is NOT a security pass; student repairs replace those expectations.
+SecurityRegressionTests replay requests that the original flawed baseline
+accepted and require the repaired behavior. See SECURITY.md.
 No test opens a network connection or addresses physical hardware.
 """
 import contextlib
@@ -15,15 +15,22 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from lapreturn.__main__ import dispatch, main
-from lapreturn.core import ABSOLUTE_SIMULATION_LIMIT, Pilot, digest_profile
+from lapreturn.__main__ import dispatch, main, pilot_from_environment
+from lapreturn.core import ABSOLUTE_SIMULATION_LIMIT, Pilot, digest_profile, sign_profile
 
 
 TEAMS = ("red", "blue", "green", "gold")
 ROOT = Path(__file__).resolve().parents[1]
 STATUS = {"op": "status", "token": "pilot-red"}
+KEY = "unit-test-publisher-key-0123456789abcdef"
+OTHER_KEY = "unit-test-other-key-0123456789abcdef0000"
 DRIVE = {"op": "command", "token": "pilot-red", "team": "red",
          "vehicle": "sim-red", "action": "drive", "value": 80, "nonce": "start"}
+
+
+def signed_install(pilot, token, team, vehicle, profile, key=KEY):
+    return pilot.install_profile(token, team, vehicle, profile, digest_profile(profile),
+                                 sign_profile(profile, key))
 
 
 def snapshot(pilot):
@@ -117,46 +124,156 @@ class ShellGuardrailTests(unittest.TestCase):
         self.assertTrue(replies[0]["ok"])
 
 
-class DeliberateScenarioCharacterizationTests(unittest.TestCase):
-    """Expected vulnerabilities: these passing cases are evidence, not assurance."""
+class SecurityRegressionTests(unittest.TestCase):
+    """Each case replays a request the original flawed baseline accepted."""
 
-    def test_deliberate_requested_team_bypasses_authenticated_team(self):
+    def test_token_team_is_the_authority_for_commands(self):
         for actor, target in itertools.permutations(TEAMS, 2):
-            with self.subTest(actor=actor, target=target):
-                pilot = Pilot()
-                pilot.command(f"pilot-{actor}", target, f"sim-{target}", "drive", 40, "cross-team")
-                self.assertEqual(pilot.status(f"pilot-{target}")[f"sim-{target}"]["speed"], 40)
-                self.assertNotIn(f"sim-{target}", pilot.status(f"pilot-{actor}"))
+            for claimed in (target, actor):
+                with self.subTest(actor=actor, target=target, claimed=claimed):
+                    pilot = Pilot()
+                    before = snapshot(pilot)
+                    with self.assertRaises(PermissionError):
+                        pilot.command(f"pilot-{actor}", claimed, f"sim-{target}", "drive", 40, "cross-team")
+                    self.assertEqual(snapshot(pilot), before)
 
-    def test_deliberate_duplicate_nonce_repeats_non_idempotent_advance(self):
+    def test_claimed_team_must_match_token_even_for_own_vehicle(self):
+        pilot = Pilot()
+        with self.assertRaisesRegex(PermissionError, "does not match"):
+            pilot.command("pilot-red", "blue", "sim-red", "drive", 40, "n")
+        self.assertEqual(pilot.vehicles["sim-red"]["speed"], 0)
+
+    def test_unknown_and_other_team_vehicles_are_indistinguishable(self):
+        pilot = Pilot()
+        messages = set()
+        for vehicle in ("sim-blue", "sim-missing", "", None, [], {}):
+            with self.subTest(vehicle=vehicle), self.assertRaises(PermissionError) as caught:
+                pilot.command("pilot-red", "red", vehicle, "drive", 10, "n")
+            messages.add(str(caught.exception))
+        self.assertEqual(len(messages), 1)
+
+    def test_duplicate_nonce_is_idempotent_for_identical_request(self):
         for team in TEAMS:
             with self.subTest(team=team):
                 pilot = Pilot()
-                for _ in range(2):
-                    pilot.command(f"pilot-{team}", team, f"sim-{team}", "advance", 2, "retry")
-                self.assertEqual(pilot.vehicles[f"sim-{team}"]["distance"], 4)
-                self.assertEqual(len(pilot.events), 2)
+                results = [pilot.command(f"pilot-{team}", team, f"sim-{team}", "advance", 2, "retry")
+                           for _ in range(3)]
+                self.assertEqual(pilot.vehicles[f"sim-{team}"]["distance"], 2)
+                self.assertEqual(results[0], results[1])
+                self.assertEqual(results[0], results[2])
+                self.assertEqual(len(pilot.events), 1)
                 self.assertEqual(len(pilot.seen), 1)
 
-    def test_deliberate_telemetry_exposes_every_teams_events(self):
+    def test_nonce_reuse_for_a_different_request_is_refused_atomically(self):
+        pilot = Pilot()
+        pilot.command("pilot-red", "red", "sim-red", "advance", 2, "n")
+        before = snapshot(pilot)
+        for action, value in (("advance", 3), ("drive", 2)):
+            with self.subTest(action=action), self.assertRaisesRegex(ValueError, "different request"):
+                pilot.command("pilot-red", "red", "sim-red", action, value, "n")
+            self.assertEqual(snapshot(pilot), before)
+
+    def test_nonces_are_scoped_to_the_authenticated_team(self):
+        pilot = Pilot()
+        pilot.command("pilot-red", "red", "sim-red", "advance", 2, "shared")
+        pilot.command("pilot-blue", "blue", "sim-blue", "advance", 5, "shared")
+        self.assertEqual(pilot.vehicles["sim-red"]["distance"], 2)
+        self.assertEqual(pilot.vehicles["sim-blue"]["distance"], 5)
+
+    def test_stop_is_never_suppressed_by_a_replayed_nonce(self):
+        pilot = Pilot()
+        pilot.command("pilot-red", "red", "sim-red", "stop", 0, "s")
+        pilot.command("pilot-red", "red", "sim-red", "drive", 60, "d")
+        pilot.command("pilot-red", "red", "sim-red", "stop", 0, "s")
+        self.assertEqual(pilot.vehicles["sim-red"]["speed"], 0)
+        pilot.command("pilot-red", "red", "sim-red", "drive", 60, "d2")
+        pilot.command("pilot-red", "red", "sim-red", "stop", 0, "d")
+        self.assertEqual(pilot.vehicles["sim-red"]["speed"], 0)
+
+    def test_event_and_nonce_stores_are_bounded(self):
+        pilot = Pilot()
+        with patch("lapreturn.core.MAX_EVENTS", 5), patch("lapreturn.core.MAX_NONCES", 5):
+            for index in range(20):
+                pilot.command("pilot-red", "red", "sim-red", "advance", 1, f"n{index}")
+        self.assertEqual(len(pilot.events), 5)
+        self.assertEqual(len(pilot.seen), 5)
+        self.assertEqual(pilot.events[-1]["nonce"], "n19")
+        self.assertEqual(pilot.vehicles["sim-red"]["distance"], 20)
+
+    def test_telemetry_shows_only_the_callers_team(self):
         pilot = Pilot()
         for team in TEAMS:
             pilot.command(f"pilot-{team}", team, f"sim-{team}", "advance", 1, "event")
         for actor in TEAMS:
             with self.subTest(actor=actor):
                 events = pilot.telemetry(f"pilot-{actor}")
-                self.assertEqual({event["team"] for event in events}, set(TEAMS))
+                self.assertEqual({event["team"] for event in events}, {actor})
+                self.assertEqual(len(events), 1)
 
-    def test_deliberate_caller_recomputed_checksum_is_not_publisher_authentication(self):
-        # No secret or trusted signature is involved; cross-team profile changes
-        # share the same deliberately defective authorization as commands.
+    def test_profile_install_is_disabled_without_a_publisher_key(self):
+        pilot = Pilot()
+        profile = {"max_speed": 450}
+        with self.assertRaisesRegex(PermissionError, "no publisher key"):
+            pilot.install_profile("pilot-red", "red", "sim-red", profile, digest_profile(profile))
+        with self.assertRaisesRegex(PermissionError, "no publisher key"):
+            pilot.install_profile("pilot-red", "red", "sim-red", profile, digest_profile(profile),
+                                  sign_profile(profile, OTHER_KEY))
+        self.assertEqual(pilot.vehicles["sim-red"]["max_speed"], 120)
+
+    def test_caller_checksum_or_wrong_key_is_not_publisher_authentication(self):
+        profile = {"max_speed": 450}
+        digest = digest_profile(profile)
+        forged = [None, "", digest, sign_profile(profile, OTHER_KEY),
+                  sign_profile({"max_speed": 449}, KEY), 7, [], {}]
+        for signature in forged:
+            with self.subTest(signature=signature):
+                pilot = Pilot(publisher_key=KEY)
+                before = snapshot(pilot)
+                with self.assertRaises(PermissionError):
+                    pilot.install_profile("pilot-red", "red", "sim-red", profile, digest, signature)
+                self.assertEqual(snapshot(pilot), before)
+
+    def test_signed_profile_still_cannot_cross_teams(self):
+        profile = {"max_speed": 450}
         for actor, target in itertools.permutations(TEAMS, 2):
             with self.subTest(actor=actor, target=target):
-                pilot = Pilot()
-                profile = {"max_speed": 450}
-                result = pilot.install_profile(f"pilot-{actor}", target, f"sim-{target}",
-                                               profile, digest_profile(profile))
-                self.assertEqual(result, {"installed": True, "max_speed": 450})
+                pilot = Pilot(publisher_key=KEY)
+                with self.assertRaises(PermissionError):
+                    pilot.install_profile(f"pilot-{actor}", target, f"sim-{target}", profile,
+                                          digest_profile(profile), sign_profile(profile, KEY))
+                self.assertEqual(pilot.vehicles[f"sim-{target}"]["max_speed"], 120)
+
+    def test_publisher_key_and_token_configuration_are_validated(self):
+        for key in ("short", b"x" * 31, 7, [], ""):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                Pilot(publisher_key=key)
+        for tokens in ({}, [], {"t": "purple"}, {"": "red"}, {7: "red"}, {"x" * 201: "red"}):
+            with self.subTest(tokens=tokens), self.assertRaises(ValueError):
+                Pilot(tokens=tokens)
+        pilot = Pilot(tokens={"s3cret-red": "red"})
+        self.assertIn("sim-red", pilot.status("s3cret-red"))
+        with self.assertRaises(PermissionError):
+            pilot.status("pilot-red")
+        for token in (None, [], {}, 7):
+            with self.subTest(token=token), self.assertRaises(PermissionError):
+                pilot.status(token)
+
+    def test_shell_environment_configures_tokens_and_publisher_key(self):
+        pilot = pilot_from_environment({})
+        self.assertIn("sim-red", pilot.status("pilot-red"))
+        pilot = pilot_from_environment({"LAPRETURN_TOKENS": '{"t-blue":"blue"}',
+                                        "LAPRETURN_PUBLISHER_KEY": KEY})
+        profile = {"max_speed": 200}
+        result = dispatch(pilot, {"op": "install_profile", "token": "t-blue", "team": "blue",
+                                  "vehicle": "sim-blue", "profile": profile,
+                                  "sha256": digest_profile(profile),
+                                  "signature": sign_profile(profile, KEY)})
+        self.assertEqual(result, {"installed": True, "max_speed": 200})
+        for bad in ("{", "[]", '{"t":"purple"}'):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                pilot_from_environment({"LAPRETURN_TOKENS": bad})
+        with self.assertRaises(ValueError):
+            pilot_from_environment({"LAPRETURN_PUBLISHER_KEY": "short"})
 
 
 class SimulatorEnvelopeTests(unittest.TestCase):
@@ -164,35 +281,36 @@ class SimulatorEnvelopeTests(unittest.TestCase):
         self.assertEqual(ABSOLUTE_SIMULATION_LIMIT, 500)
         for team in TEAMS:
             with self.subTest(team=team):
-                pilot = Pilot()
+                pilot = Pilot(publisher_key=KEY)
                 for limit in (0, 120, 500):
                     profile = {"max_speed": limit}
-                    pilot.install_profile(f"pilot-{team}", team, f"sim-{team}", profile, digest_profile(profile))
-                    pilot.command(f"pilot-{team}", team, f"sim-{team}", "drive", limit, "permitted")
+                    signed_install(pilot, f"pilot-{team}", team, f"sim-{team}", profile)
+                    pilot.command(f"pilot-{team}", team, f"sim-{team}", "drive", limit, f"permitted-{limit}")
                     before = snapshot(pilot)
                     with self.assertRaises(ValueError):
-                        pilot.command(f"pilot-{team}", team, f"sim-{team}", "drive", limit + 1, "denied")
+                        pilot.command(f"pilot-{team}", team, f"sim-{team}", "drive", limit + 1, f"denied-{limit}")
                     self.assertEqual(snapshot(pilot), before)
 
     def test_invalid_profiles_do_not_change_state(self):
-        pilot = Pilot()
+        pilot = Pilot(publisher_key=KEY)
         pilot.command("pilot-red", "red", "sim-red", "drive", 80, "start")
         before = snapshot(pilot)
         profiles = [{}, {"max_speed": 120, "extra": True}]
         profiles += [{"max_speed": value} for value in (-1, 501, True, 80.5, None, [], {"nested": 120})]
         for profile in profiles:
             with self.subTest(profile=profile), self.assertRaises(ValueError):
-                pilot.install_profile("pilot-red", "red", "sim-red", profile, digest_profile(profile))
+                signed_install(pilot, "pilot-red", "red", "sim-red", profile)
             self.assertEqual(snapshot(pilot), before)
         with self.assertRaisesRegex(ValueError, "checksum"):
-            pilot.install_profile("pilot-red", "red", "sim-red", {"max_speed": 120}, "incorrect")
+            pilot.install_profile("pilot-red", "red", "sim-red", {"max_speed": 120}, "incorrect",
+                                  sign_profile({"max_speed": 120}, KEY))
         self.assertEqual(snapshot(pilot), before)
 
     def test_profile_reduction_clamps_speed_and_stop_still_works(self):
-        pilot = Pilot()
+        pilot = Pilot(publisher_key=KEY)
         pilot.command("pilot-red", "red", "sim-red", "drive", 80, "start")
         profile = {"max_speed": 30}
-        pilot.install_profile("pilot-red", "red", "sim-red", profile, digest_profile(profile))
+        signed_install(pilot, "pilot-red", "red", "sim-red", profile)
         self.assertEqual(pilot.vehicles["sim-red"]["speed"], 30)
         pilot.command("pilot-red", "red", "sim-red", "stop", 0, "stop")
         self.assertEqual(pilot.vehicles["sim-red"]["speed"], 0)
