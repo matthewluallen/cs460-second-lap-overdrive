@@ -63,15 +63,20 @@ function addCard(driver) {
   const refreshHealth = el('button', {textContent:'Refresh battery (stopped)'});
   refreshHealth.onclick = () => { if (game.drivers.some(d=>d.car.speed>0) || countdown || game.diagnostic) return; driver.car.refreshBattery(); log('Battery refresh requested; wait for a new sample'); };
   const diagnostic = el('button', {textContent:'Clear track · 0.5 s straight test', title:'Supervise beside the car. Three-second countdown, then at most 150 mm/s; host timing cannot guarantee a stop after Bluetooth loss.'});
-  diagnostic.onclick = () => {
+  const steeringTest = el('button', {textContent:'Clear track · one left-lane test', title:'Supervise beside the car. Three-second countdown; at most 300 mm/s for four seconds. One left request only after a readable straight code; automatic STOP.'});
+  const prepareDiagnostic = steering => {
     try {
       requireVisible();
       if (countdown || game.diagnostic || session.status==='running' || session.status==='paused' || game.pitReason || game.drivers.some(d=>d.car.speed>0)) throw new Error('Stop the session and clear the pit first');
       halt('Preparing supervised diagnostic');
-      countdown={kind:'diagnostic',driverId:driver.id,until:performance.now()+3000};
-      log('Supervised diagnostic countdown: track clear, watch the car'); renderRound();
+      if (steering && (!game.track || game.track.inferredCount)) throw new Error('Scan an identified track before the lane test');
+      countdown={kind:'diagnostic',driverId:driver.id,steering,until:performance.now()+3000};
+      recorder.mark('diagnostic-request',{carId:driver.id,steering,maximumMs:steering?4000:500,ceiling:Math.min(steering?300:150,game.topSpeed)});
+      log(steering?'Supervised lane-test countdown: watch for one left shift':'Supervised diagnostic countdown: track clear, watch the car'); renderRound();
     } catch(error) { log(error.message); }
   };
+  diagnostic.onclick = () => prepareDiagnostic(false);
+  steeringTest.onclick = () => prepareDiagnostic(true);
   const throttle = el('input', {type: 'range', min: 0, max: 100, value: 0, step: 5});
   throttle.setAttribute('aria-label', driver.car.name + ' throttle');
   throttle.oninput = () => { if (driver.control === 'browser' && !game.halted && !driver.car.safetyReason) driver.level = Number(throttle.value) / 100; else throttle.value = 0; };
@@ -96,7 +101,7 @@ function addCard(driver) {
     el('div', {className: 'top'}, name, tag, code, remove),
     el('div', {className: 'grid'}, model, control), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
-    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, seatBox);
+    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, steeringTest, seatBox);
   code.onclick = async () => {
     if (!seatBox.hidden) { seatBox.hidden = true; return; }
     try {
@@ -236,7 +241,7 @@ function tickRound(now) {
       const ready = countdown; countdown = null; $('countdown').hidden = true;
       try {
         requireVisible();
-        if(ready.kind==='diagnostic') { game.startDiagnostic(game.drivers.find(d=>d.id===ready.driverId)); return; }
+        if(ready.kind==='diagnostic') { game.startDiagnostic(game.drivers.find(d=>d.id===ready.driverId),{steering:!!ready.steering}); return; }
         if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');recorder.mark('scan-start',{carId:scanner.id,startingLateral:ready.startingLateral});game.startScan(scanner,{startingLateral:ready.startingLateral??null});return; }
         if(ready.kind==='pit') {game.resumeFromPit();game.armComputers();session.resume(now);return;}
         if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
@@ -264,7 +269,7 @@ function renderRound() {
   $('pitMessage').textContent = game.pitReason ? game.pitReason + '. Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button, clear hands and obstacles, then continue.' : '';
   $('pitResume').textContent = view.status === 'paused' ? 'Track clear · Continue round' : 'Track clear · Rearm controls';
   $('roundLabel').textContent = game.pitReason ? 'SHARED PIT · CLOCK PAUSED' : countdown ? 'TRACK CLEAR · GET READY' : running ? activeExperience.toUpperCase() + ' · ROUND LIVE' : view.status === 'finished' ? 'ROUND COMPLETE' : 'READY WHEN YOU ARE';
-  $('roundTitle').textContent = (game.diagnostic || countdown?.kind==='diagnostic') ? 'Supervised straight test · 0.5 s' : view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
+  $('roundTitle').textContent = (game.diagnostic || countdown?.kind==='diagnostic') ? (game.diagnostic?.steering || countdown?.steering ? 'One left-lane test · 4 s maximum' : 'Supervised straight test · 0.5 s') : view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
   $('roundGoal').textContent = view.objective || (view.goal ? view.teamLaps + ' / ' + view.goal + ' shared laps · every driver contributes' : view.mode === 'battle' ? '100 per knockout · 25 per assist or lap' : view.mode === 'solo' ? 'Complete a full circuit. Find your fastest clean rhythm.' : 'Complete laps. Keep your eyes on the physical track.');
   $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
   $('roundState').textContent = game.diagnostic ? 'DIAGNOSTIC · AUTO STOP' : countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';

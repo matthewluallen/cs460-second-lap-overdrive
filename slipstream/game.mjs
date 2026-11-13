@@ -1,6 +1,6 @@
 // Game orchestration with no DOM: drivers, scanning, battle and the control loop.
 import {Car, LANE_STEP} from './car.mjs';
-import {Pieces, Track, TrackMapper, traversal, trackFromPlan} from './track.mjs';
+import {Pieces, Track, TrackMapper, traversal, trackFromPlan, LANE_LIMIT} from './track.mjs';
 import {Battle, Bot, loadout} from './battle.mjs';
 
 export const MAX_CARS = 4;
@@ -55,7 +55,7 @@ export class Game {
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
-    if (this.diagnostic?.driver === driver && message.type === 'collision') { this.requestPit(driver, 'Collision during diagnostic'); return; }
+    if (this.diagnostic?.driver === driver && !this.diagnostic.steering && message.type === 'collision') { this.requestPit(driver, 'Collision during diagnostic'); return; }
     if (message.type === 'laneChange' && message.cancelled) {
       driver.input.lane = null;
       // Continuous phone/CPU input must not silently retry a rejected command.
@@ -63,6 +63,19 @@ export class Game {
       if (driver.car.speed > 0) { this.requestPit(driver, 'Lane change cancelled by car'); return; }
     }
     if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
+    const trial=this.diagnostic;
+    if (trial?.steering && trial.driver===driver && message.type==='position' && !trial.laneRequested) {
+      const now=this.clock(), car=driver.car, definition=this.pieces.get(message.pieceId);
+      const spot=definition?.kind==='straight' && !definition.unverified ? this.pieces.locate(message.pieceId,message.locationId,message.reverse) : null;
+      const target=spot ? spot.lateral+LANE_STEP : Infinity;
+      if (now>trial.started && now<trial.until && trial.until-now>=750 && message.speed>0 && spot && (1-spot.progress)*definition.length>=250 && Math.abs(target)<=LANE_LIMIT && car.lateralEstimate?.source==='printed-code' && car.lateralEstimate.at===now) {
+        // Commit the single attempt before any queued write can produce a reply.
+        trial.laneRequested=true; trial.until=Math.min(trial.until,now+750); car.diagnosticUntil=trial.until;
+        trial.laneTimer=this.schedule(()=>{if(this.diagnostic===trial){this.stopAll();this.log('Steering test completed: STOP requested; confirm physical stop');}},trial.until-now);
+        if (!car.steerDiagnosticOnce(target)) { this.stopAll(); this.log('Steering test stopped: lane request unavailable'); return; }
+        this.log('Steering test: one left request from fresh printed lane '+spot.lateral+' to '+target+' mm');
+      }
+    }
     if (this.phase === 'scanning' && driver === this.scanner) {
       if (message.type === 'position') {
         if (message.pieceId === 34 && this.scanAnchor !== 34) { this.scanAnchor = 34; this.scanLaps = 0; this.scanLastPiece = undefined; }
@@ -89,9 +102,9 @@ export class Game {
     }
   }
   #stopDrivers(offTrack = null) {
-    if (this.diagnostic) { this.unschedule(this.diagnostic.timer); this.diagnostic = null; }
+    if (this.diagnostic) { this.unschedule(this.diagnostic.timer); if(this.diagnostic.laneTimer)this.unschedule(this.diagnostic.laneTimer); this.diagnostic = null; }
     for (const d of this.drivers) {
-      d.car.diagnosticMotion = false;
+      d.car.diagnosticMotion = false; d.car.diagnosticSteering = false; d.car.diagnosticLaneSent = false;
       d.cpuArmed = false; d.armed = false; d.gamepadArmed = false; d.input = emptyInput(); d.level = 0; d.objectiveInput = null;
       if (d.pad) { d.pad.throttle = 0; d.pad.seen = 0; d.pad.attack = d.pad.support = d.pad.special = false; }
       d.car.safetyStop(d === offTrack ? 'Off track' : d.car.safetyReason || 'Host stopped');
@@ -192,29 +205,35 @@ export class Game {
   }
   // One supervised pulse, bounded independently of the animation/control loop.
   // This is a host deadline, never a guarantee across suspension or BLE loss.
-  startDiagnostic(driver) {
+  startDiagnostic(driver, {steering=false} = {}) {
     if (this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
     if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing) throw new Error('Car is not ready');
     if (this.drivers.some(d => d.car.speed > 0)) throw new Error('Stop all cars first');
+    if (steering && (!this.track?.closed || this.track.inferredCount)) throw new Error('Map a complete identified track before the steering test');
     const c = driver.car, d = c.diagnostics();
     if (c.safetyReason && c.safetyReason !== 'Host stopped') throw new Error('Recover the car first');
     if (d.batteryAgeMs === null || d.batteryAgeMs > 30000) throw new Error('Refresh the battery reading before the diagnostic');
     if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
     this.stopAll(); c.recover();
-    const pulse = {driver, until:this.clock()+500, timer:null};
-    this.diagnostic = pulse; c.diagnosticMotion = true; c.diagnosticUntil = pulse.until;
+    const duration=steering?4000:500;
+    const pulse = {driver, steering:!!steering, started:this.clock(), until:this.clock()+duration, timer:null, laneTimer:null, laneRequested:false};
+    this.diagnostic = pulse; c.diagnosticMotion = true; c.diagnosticSteering=!!steering; c.diagnosticLaneSent=false; c.diagnosticUntil = pulse.until;
     pulse.timer = this.schedule(() => {
       if (this.diagnostic !== pulse) return;
       this.stopAll(); this.log('Diagnostic deadline: STOP requested; confirm physical stop');
-    },500);
-    c.setSpeed(Math.min(150,this.topSpeed));
-    this.log('Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');
+    },duration);
+    c.setSpeed(Math.min(steering?300:150,this.topSpeed));
+    this.log(steering?'Experimental steering test: at most 300 mm/s, 4 s total; one left request only after a fresh ordinary straight code; raw collision packets follow ordinary driving policy':'Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');
   }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
     if (this.diagnostic) {
       const {driver,until} = this.diagnostic;
       if (now >= until || !driver.car.connected || driver.car.safetyReason || driver.car.speed === 0) this.stopAll();
+      else if (this.diagnostic.steering) {
+        const car=driver.car, hasTrack=car.lastTrackAt!==undefined && car.lastTrackAt>=car.motionSince;
+        if(now-(hasTrack?car.lastTrackAt:car.motionSince)>(hasTrack?this.safety.trackGapMs:this.safety.firstTrackMs)) this.requestPit(driver,'Telemetry timeout');
+      }
       return; // no human, phone, CPU or gameplay commands during the pulse
     }
     for (const d of this.drivers) {

@@ -91,7 +91,8 @@ export class Car {
   }
   async #write(bytes) {
     let timer; const writeStarted = this.clock();
-    const deadline = this.diagnosticMotion && bytes[1] === 0x24 && (bytes[2] || bytes[3]) ? this.diagnosticUntil : undefined;
+    const trialMotion = (bytes[1] === 0x24 && (bytes[2] || bytes[3])) || (this.diagnosticSteering && [0x25,0x2c].includes(bytes[1]));
+    const deadline = this.diagnosticMotion && trialMotion ? this.diagnosticUntil : undefined;
     this.telemetry.lastWriteAttempt={at:writeStarted,id:bytes[1],bytes:[...bytes],status:'pending'};
     // A timeout is NOT completion of the browser's GATT operation. Callers must
     // close the link rather than start another write when this deadline fires.
@@ -129,6 +130,7 @@ export class Car {
   }
   #finishClose(error, wasMoving = false) {
     this.scanDelocalizationAllowance = false;
+    this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     const wasConnected = this.connected;
     this.connected = false; this.pending.clear(); this.unsubscribe?.();
     try { this.transport.close(); } catch {}
@@ -195,7 +197,7 @@ export class Car {
       else if (m.type === 'version') this.version = m.version;
       else if (m.type === 'status') { this.status = m; this.telemetry.statusAt = now; }
       else if (m.type === 'delocalized') this.delocalized = true;
-      else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; if (!this.diagnosticMotion) this.#lane(m, now); }
+      else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; if (!this.diagnosticMotion || (this.diagnosticSteering && now < this.diagnosticUntil)) this.#lane(m, now); }
       else if (m.type === 'speed') { this.telemetry.speedReport={...m,at:now}; this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
       this.localizer?.feed(m, now);
       for (const fn of this.listeners) fn(m, this);
@@ -251,7 +253,7 @@ export class Car {
       collisionAgeMs:age(this.telemetry.lastCollision?.at),
       batteryAgeMs:age(this.telemetry.batteryAt),statusAgeMs:age(this.telemetry.statusAt),status:{...this.status},
       millivolts:this.millivolts,notificationAgeMs:age(this.telemetry.lastNotificationAt),positionAgeMs:age(this.telemetry.lastPositionAt),
-      lateralEstimate:this.lateralEstimate?{...this.lateralEstimate}:null,diagnosticMotion:!!this.diagnosticMotion,
+      lateralEstimate:this.lateralEstimate?{...this.lateralEstimate}:null,diagnosticMotion:!!this.diagnosticMotion,diagnosticSteering:!!this.diagnosticSteering,
       ...this.telemetry,counts:{...this.telemetry.counts},startingCalibration:this.startingCalibration??null,
       scanAllowanceRequested:this.scanDelocalizationAllowance,physicalStopVerified:false};
   }
@@ -280,6 +282,16 @@ export class Car {
   // Lateral target, mm, positive to the left of travel.
   steerTo(lateral, speed = 350) {
     if (this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return;
+    this.#steerTo(lateral,speed);
+  }
+  // Only the bounded trial may authorize one steering request. Ordinary controls
+  // still use steerTo(), which remains blocked throughout any diagnostic.
+  steerDiagnosticOnce(lateral, speed = 350) {
+    if (!this.diagnosticMotion || !this.diagnosticSteering || this.diagnosticLaneSent || this.clock() >= this.diagnosticUntil || this.initializing || this.safetyReason || this.closing || this.faulted || !this.connected || !Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) return false;
+    this.diagnosticLaneSent = true; this.forceLane = true;
+    this.#steerTo(lateral,speed); return true;
+  }
+  #steerTo(lateral, speed) {
     const target = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, lateral));
     if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return;
     this.forceLane = false; this.targetLateral = target;
@@ -313,11 +325,12 @@ export class Car {
     this.forceLane = true;
     this.scanDelocalizationAllowance = false;
     this.pending.delete('scan-delocalization');
-    for (const key of ['speed', 'lane', 'lane-offset', 'turn']) this.pending.delete(key);
+    for (const key of ['speed', 'lane', 'lane-offset', 'offset', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
     this.pending = new Map([['speed', encode.speed(0, 2500)],
       ...(this.scanDelocalizationUsed ? [['scan-delocalization', encode.maxDelocalizedSpeed(0)]] : []), ...this.pending]);
     this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
+    this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     if (!this.connected || this.closing || this.faulted) { this.pending.clear(); return; }
     if (!this.pumping) this.pumpPromise = this.#pump();
   }
@@ -338,6 +351,7 @@ export class Car {
   close() {
     if (this.closePromise) return this.closePromise;
     this.closing = true; this.scanDelocalizationAllowance = false; this.pending.clear(); this.speed = 0;
+    this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     return this.closePromise = (async () => {
       // The queue owns the radio until its current operation settles or times
       // out. Disconnect must never race a light, speed, or calibration write.
