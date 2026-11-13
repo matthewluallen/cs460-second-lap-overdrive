@@ -12,9 +12,14 @@ An advancing-clock regression reproduced it; sampling after delivery fixes it
 without weakening freshness checks. All 537 Node tests pass. Browser verification
 then showed both CPU racers scoring laps (7 and 6 at the captured observation).
 Ordinary races now show best/last lap times rather than knockout columns.
-Codespaces restart FAILED automatic recovery (Node and home state disappeared);
-manual recovery restored the public URL. The actual container needs rebuilding
-and another restart test. Hardware scanning remains unproven.
+The initial Codespaces restart failed because the old Alpine container lost Node
+and home state. Rebuilding the configured Node 22 container, adding SSH support,
+and keeping private state under `/workspaces/.slipstream-managed` repaired this.
+Rebuild and subsequent shutdown/resume preserved the host code and automatically
+started the live server. Readiness can lag SSH availability; wait for `/slipstream/ready`.
+Four public-proxy clients passed both socket and HTTP checks after rebuild.
+GitHub reset port 3000 to private on resume; restored authorized public visibility.
+Check forwarding visibility before sharing QR codes. Hardware scanning remains unproven.
 
 ## Network lifecycle regression
 

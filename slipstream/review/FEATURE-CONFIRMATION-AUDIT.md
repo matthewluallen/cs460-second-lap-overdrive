@@ -70,8 +70,7 @@ state in `/workspaces/.slipstream-managed`, and restored the authorized public p
 The host code was regenerated because the previous private state was absent; the
 new code is only in that private directory. Old rooms were already lost on shutdown.
 The URL again returned HTTP 200. Do not describe this manual recovery as successful
-automatic restart or a tested devcontainer rebuild. A correct rebuild and another
-restart acceptance run remain required before classroom sign-off.
+automatic restart or a tested devcontainer rebuild. That was the initial failure; subsequent acceptance is recorded below.
 
 ## Remaining release gates
 
@@ -82,7 +81,7 @@ restart acceptance run remain required before classroom sign-off.
 3. Verify phone/iPad join, neutral recovery, sensors and haptic fallback on devices.
 4. Validate battle hit geometry on actual localization and confirm the desired
    rules if a lap-winning race with attacks is required instead of Battle rush.
-5. Finish Codespaces rebuild/restart acceptance and simplify the playing view.
+5. Simplify the playing view; retain deployment restart regression checks.
 
 Validation after repair: **537 Node tests pass**. In the actual browser, the corrected
 Lap sprint showed Boson at 7 laps and BigBang at 6 laps with finite lap times at the
@@ -98,3 +97,19 @@ as a required regression. Directed weapon/disable/recovery and four-bot battle
 regressions pass. Default two-car battle pacing therefore still needs a fun/feedback
 review; do not turn weapon implementation coverage into a claim that every matchup
 is engaging or that physical targeting is validated.
+
+## Deployment repair acceptance
+
+The configured Debian/Node container was rebuilt with persistent private state and
+the official SSH feature (`c88a504`). Node reports v22.16.0. A private checksum check
+confirmed that the host code survived both rebuild and subsequent shutdown/resume.
+The server started automatically in live mode, with a new boot ID after each cycle.
+The first check immediately after SSH became available preceded application startup;
+a subsequent readiness check succeeded without manually launching the server.
+After rebuild, four approved clients passed input, state and revocation checks via
+both WebSocket and forced HTTP through the public HTTPS proxy; temporary rooms
+were removed. This verifies deployment and relay behavior, not BLE or phone sensors.
+
+GitHub reset forwarded port 3000 to private during shutdown/resume. Restored the
+user-authorized public visibility. Automatic server startup is verified; persistent
+public forwarding is not. Check visibility before sharing the classroom QR code.
