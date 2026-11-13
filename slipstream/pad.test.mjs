@@ -207,3 +207,23 @@ test('leaving a car locks held inputs until host acknowledgement and retries rel
   p.callbacks.onMessage({...p.state,me:{...p.state.me,id:2}});assert.equal(p.run('state.throttle'),0);
   p.run('setThrottle(.5)');assert.equal(p.run('state.throttle'),.5);
 });
+
+test('phone sends a fully neutral input while the host waits for rearming',async()=>{
+  const p=pad();await p.ready();p.run('setSteer(1);setThrottle(.5)');
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,needsNeutral:true}});
+  p.run('lastSentAt=0;send()');
+  assert.equal(p.sent.at(-1).throttle,0);
+  assert.equal(p.sent.at(-1).steer,0,'a retained steering value must not prevent host neutral arming');
+  assert.equal(p.sent.at(-1).attack,false);
+});
+
+test('sensor and arrow changes while locked cannot defeat the neutral handshake',async()=>{
+  const p=pad();await p.ready();
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,needsNeutral:true}});
+  p.run('tiltWanted=true;onTilt({beta:0,gamma:0});onTilt({beta:0,gamma:24});setSteer(1);lastSentAt=0;send()');
+  assert.equal(p.sent.at(-1).steer,0);
+  p.callbacks.onMessage(p.state);
+  p.run('setSteer(.5);setThrottle(.5);lastSentAt=0;send()');
+  assert.equal(p.sent.at(-1).steer,.5);
+  assert.equal(p.sent.at(-1).throttle,.5);
+});

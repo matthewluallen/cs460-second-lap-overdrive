@@ -55,3 +55,13 @@ No real-car command is authorized by this document alone. The operator must be
 present and ready for each physical test. Formal models and simulator tests cover
 stated assumptions; they cannot certify unknown firmware behavior, worn batteries,
 radio interference or actual lane direction.
+
+## Network-client and recovery follow-up
+
+All **522 Node tests** pass after adding two phone neutral-handshake regressions
+and eight real-client/real-relay integration cases (1–4 players, WebSocket and HTTP
+fallback). The two phone regressions failed before the fix with steering `1`
+instead of `0`. A locked phone now transmits neutral motion even when sensor/arrow
+input changes; host arming rules remain unchanged. Integration tests exercise the
+production `net.mjs`, approval, input routing, individual state and revocation on
+loopback. They do not establish public-proxy WebSocket behavior or phone sensors.

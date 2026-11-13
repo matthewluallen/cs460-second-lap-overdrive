@@ -131,6 +131,10 @@ function send() {
   if (!me || !link || !allowed || !online) return;
   if (Date.now() - lastStateAt > 1000) lockControls();
   const body = {...state, throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once, ...(releasePending ? {release:true} : {})};
+  // Tilt samples and arrow buttons can change steering while controls are locked.
+  // The host requires BOTH throttle and steering neutral before it can re-arm.
+  // Keep lobby/release requests, but never send a driving action until ready.
+  if (!driveReady || document.hidden) Object.assign(body, {throttle:0, steer:0, attack:false, support:false, special:false, uturn:false});
   const text = JSON.stringify(body), now = Date.now();
   // Always refresh a few times a second so the host's dead-man timer stays happy.
   if (text === lastSent && now - lastSentAt < 250) return;

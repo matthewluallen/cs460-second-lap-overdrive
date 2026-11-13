@@ -315,3 +315,12 @@ rights. Live-only API isolation remains tested. Startup does not change forwardi
 visibility. Tests exercise concurrent startup, permissions, code reuse, occupied
 port refusal and route isolation. Private logs contain the host code printed by
 the existing server; do not attach those logs to public bug reports.
+
+## Phone neutral recovery (12 November 2026)
+
+Locked phone controls now send fully neutral motion/actions even when a retained
+steering value or a new sensor sample is nonzero. This fixes a reproduced recovery
+deadlock while retaining the host's fresh-neutral arming requirement. Car selection
+and leave requests remain available while driving is locked. Tests also exercise
+the actual network client with 1–4 approved players over sockets and HTTP fallback,
+including per-player state separation and revoked credentials.

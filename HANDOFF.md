@@ -3,6 +3,16 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Phone neutral handshake and real network client coverage
+
+A stopped phone could retain nonzero steering while the host required a neutral
+input to re-arm. Two failing regressions reproduced that recovery deadlock. The
+phone now sends zero motion/action values whenever driving is locked, including
+sensor changes while waiting. The host's neutral rule is unchanged. Eight new
+real network client tests cover 1–4 players over WebSocket and HTTP fallback,
+including approval, input, private state and removal. All 522 Node tests pass.
+These tests do not validate phone hardware, classroom networking or physical cars.
+
 ## MVP startup and acceptance
 
 `npm run slipstream:up` adds managed live-only startup, private persisted host code,
