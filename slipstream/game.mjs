@@ -252,6 +252,7 @@ export class Game {
       if (!car.connected || (this.phase === 'scanning' && d === this.scanner)) continue;
       if (car.safetyReason) { d.input = emptyInput(); continue; }
       if (d.control === 'bot' && !d.cpuArmed) { d.input = emptyInput(); car.setSpeed(0); continue; }
+      let cpuTrackCeiling=1;
       if (d.bot && this.track) {
         d.bot.drive(now, d.input);
         // Session objectives guide CPU throttle/lane only. They cannot bypass
@@ -260,11 +261,12 @@ export class Game {
           if (Number.isFinite(d.objectiveInput.throttle)) d.input.throttle = Math.max(0, Math.min(1, d.objectiveInput.throttle));
           if (Number.isFinite(d.objectiveInput.lane)) d.input.lane = Math.max(-68, Math.min(68, d.objectiveInput.lane));
         }
+        cpuTrackCeiling=d.bot.applyTrackPolicy?.(now,d.input,{objective:!!d.objectiveInput}) ?? 1;
       }
       const input = d.input, truck = this.vehicles.models[String(car.model)]?.truck;
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);
       const limited = this.battle ? this.battle.limit(car, wanted, now) : {speed: wanted, accel: 1000};
-      car.setSpeed(Math.min(this.topSpeed, limited.speed), limited.accel);
+      car.setSpeed(Math.min(this.topSpeed*cpuTrackCeiling, limited.speed), limited.accel);
       if (input.lane !== null && input.lane !== undefined && Number.isFinite(input.lane)) car.steerTo(input.lane);
       if (this.battle) for (const bay of ['attack', 'support', 'special']) this.battle.press(car, bay, !!input[bay]);
     }

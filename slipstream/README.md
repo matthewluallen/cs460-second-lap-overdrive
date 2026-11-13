@@ -4,13 +4,7 @@ Control one to four robotic race cars from a browser, with human or computer
 drivers, a live track map, and phone controllers. Choose Arcade, Competition or
 Story missions. Simulated practice works without owning any hardware.
 
-**Status: Slipstream has not been validated on physical cars.** Automated tests use
-simulated transports and traces. Packet layouts are based on the published SDK
-and independent static app reviews ([standard OVERDRIVE](review/INDEPENDENT-REVIEW.md),
-[Fast & Furious](review/FAST-FURIOUS-REVIEW.md)). Static analysis does not establish
-physical compatibility. The separate instructor
-trial is not validation of this controller. Treat the first live session as a test:
-see [First run with real cars](#first-run-with-real-cars).
+**Status: limited supervised hardware acceptance.** Groundshock SDK firmware 11866 has scanned one 11-piece circuit and completed one observed leftward maneuver and stop. See [the hardware evidence](review/GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md). Repeated autonomous driving, right steering, multi-car races, attacks and other models remain unverified. Automated transports and captured traces do not establish general physical compatibility. Packet layouts use the published SDK and static app reviews ([standard OVERDRIVE](review/INDEPENDENT-REVIEW.md), [Fast & Furious](review/FAST-FURIOUS-REVIEW.md)); complete original-app parity is not claimed. See [First run with real cars](#first-run-with-real-cars).
 
 ## Start it
 
@@ -51,6 +45,8 @@ phone inputs. Keep that laptop awake with the host tab visible.
 | Arcade | Beat your best | Battle rush: virtual knockouts and complete laps |
 | Competition | Beat your best: fastest complete lap | Lap sprint: most full laps; ties share the finish |
 | Story missions | Deliver the crew's signal yourself | Contribute together to a shared lap target |
+
+Computer drivers use the same countdown and stop controls as people. They slow to two-thirds of the selected ceiling on curves, special/unknown sections and near the end of a straight; fresh ordinary-straight geometry permits the full ceiling. Automatic lane changes require fresh printed-code localization and sufficient remaining straight. Unscored **Free drive** alternates left/right targets; scored rounds retain their battle or mission intents within these limits. This is Slipstream gameplay, not a reconstruction of the original app’s planner.
 
 All modes allow human and computer drivers. A car set to **Parked** does not enter
 the round. Bots are labeled and use the same limits. Story choices are **The Signal

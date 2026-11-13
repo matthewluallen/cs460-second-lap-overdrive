@@ -6,6 +6,7 @@
 // Everything else (beams, mines, explosions) is drawn on the map.
 import {EFFECT} from './protocol.mjs';
 import {LANE_STEP} from './car.mjs';
+import {LANE_LIMIT, POSITION_MAX_AGE_MS} from './track.mjs';
 
 const CAR_HALF_WIDTH = 0.022;
 export const WEAPON_LABEL = Object.freeze({
@@ -388,6 +389,36 @@ export class Battle {
 // A simple computer driver: cruise, line up on the nearest car ahead, shoot when it can.
 export class Bot {
   constructor(car, battle, {skill = 0.7} = {}) { this.car = car; this.battle = battle; this.skill = skill; this.nextLane = 0; this.cruise = 0.55 + Math.random() * 0.2; this.mineAt = 0; }
+  // Slipstream CPU policy, not a reconstruction of the native app's planner.
+  // Require a fresh printed-code match on this exact piece; a transition-only
+  // prediction must not authorize automatic lateral movement.
+  applyTrackPolicy(now, input, {objective=false} = {}) {
+    const car=this.car, localizer=car.localizer, estimate=localizer?.estimate(now);
+    const piece=estimate?.located ? this.battle.track?.pieces[estimate.index] : null;
+    const definition=piece ? car.pieces?.get(piece.id) : null;
+    const positionAt=car.telemetry?.lastPositionAt;
+    const fresh=Number.isFinite(positionAt) && now>=positionAt && now-positionAt<=POSITION_MAX_AGE_MS && (car.motionSince===undefined || positionAt>=car.motionSince);
+    const ordinaryStraight=!!(fresh && localizer?.seenCode && localizer.lastId===piece?.id && definition?.kind==='straight' && !definition.unverified && !piece.inferred && !piece.unverified && Number.isFinite(estimate.progress) && estimate.progress>=0 && estimate.progress<=1 && Number.isFinite(piece.length) && piece.length>0);
+    const remaining=ordinaryStraight ? (1-estimate.progress)*piece.length : 0;
+    const ceiling=ordinaryStraight && remaining>=150 ? 1 : 2/3;
+    const active=!!this.battle.active || objective;
+    input.throttle=active ? Math.min(Math.max(0,Number.isFinite(input.throttle)?input.throttle:0),ceiling) : ceiling;
+    const safeLane=ordinaryStraight && remaining>=250 && Number.isFinite(localizer.speed) && localizer.speed>0 && Number.isFinite(estimate.lateral) && Math.abs(estimate.lateral)<=LANE_LIMIT;
+    const intent=input.lane;
+    input.lane=null; // No stale retry when localization or safe geometry disappears.
+    if (!safeLane) return ceiling;
+    const encounter=estimate.index+':'+estimate.direction+':'+localizer.laps;
+    if (encounter===this.trackLaneEncounter) return ceiling;
+    if (active) {
+      if (!Number.isFinite(intent) || Math.abs(intent)>LANE_LIMIT) return ceiling;
+      input.lane=intent;
+    } else {
+      const target=this.freeLaneTarget===undefined ? (estimate.lateral>=0 ? -LANE_STEP : LANE_STEP) : -this.freeLaneTarget;
+      input.lane=target; this.freeLaneTarget=target;
+    }
+    this.trackLaneEncounter=encounter;
+    return ceiling;
+  }
   drive(now, input, spots) {
     input.throttle = this.cruise;
     const f = this.battle.get(this.car);

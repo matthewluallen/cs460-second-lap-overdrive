@@ -1,3 +1,7 @@
+## Superseding update — 13 November 2026, successful left shift
+
+Read [GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md](GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md) first. Operator confirmed stopped and clearly shifted left after one normal Free-drive maneuver on loaded build08fe678. The accepted recording and three replay checks preserve firmware ACKs and code-derived lateral movement separately from physical observation. Earlier failures below remain historical evidence, not current acceptance status. Rightward/repeated computer steering and scored races remain open. The existing race Computer driver now has a conservative track-aware policy; this is custom gameplay, not native-app reconstruction.
+
 ## Second pre-steering trial recorded
 
 See GROUNDSHOCK-PRESTEERING-OFFTRACK.md: 150 mm/s also left the track per operator. Cumulative second fixture retains raw evidence. No new off-road message, no optical telemetry, no steering; watchdog STOP after 5002 ms. Operator confirmed physically stopped. No further physical trials pending diagnosis and an app-owned bounded diagnostic test.

@@ -1,3 +1,9 @@
+# Latest physical result: left steering accepted; Computer driving next
+
+Groundshock firmware 11866 in SDK mode on loaded build `08fe678` completed ordinary Free drive at requested 300 mm/s and one left request. The operator confirmed **stopped; clearly shifted left**. The recording shows an uncancelled lane ID 1, received/executed ID 1, and printed-code lateral change from −22.5 to +31.5 mm. This is one physical left-maneuver acceptance, not precise target accuracy or whole-system validation. See [the evidence and CPU follow-up](slipstream/review/GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md) and the retained fixture/replay tests. The optional bounded trial below was not used. Older unresolved steering statements below are historical.
+
+The existing Computer race driver now uses fresh ordinary-straight geometry for speed and lane decisions. In unscored Free drive it alternates lane targets once per straight encounter; at ceiling 300 it requests 300 on usable straights and 200 elsewhere. Active races retain their intents under the same cap. Power Zone 57 still blocks scored rounds. Repeated autonomous driving and right steering require the next physical result; no native-app parity is claimed.
+
 # Bounded steering trial — physical acceptance pending
 
 A new explicit “one left-lane test” uses a three-second countdown, at most 300 mm/s and a four-second host deadline. It requires a mapped circuit without inferred sections and a fresh battery sample. One fresh ordinary-straight position with positive reported speed, at least 250 mm remaining straight geometry, sufficient left room and 750 ms remaining authorizes exactly one relative left request. STOP follows within a 750 ms host window. The nominal geometry margin is not a proven physical stopping distance.
