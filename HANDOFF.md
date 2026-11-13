@@ -3,6 +3,13 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Current agent handoff
+
+Read [STEERING-AGENT-HANDOFF.md](slipstream/review/STEERING-AGENT-HANDOFF.md)
+for exact latest state, the failed cold-start trial, committed evidence, reproduction
+tools and remaining raw-trace gap. Groundshock is physically stopped; no next trial
+is authorized by these notes. All 557 Node tests pass.
+
 ## Repeated physical steering failure; correlation instrumentation ready
 
 Build `1e19867` was loaded in Codespaces. Groundshock SDK initialization succeeded
