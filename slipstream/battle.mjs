@@ -404,9 +404,15 @@ export class Bot {
     const encounter=safeLane ? estimate.index+':'+estimate.direction+':'+localizer.laps : null;
     return {ordinaryStraight,remaining,safeLane,encounter,estimate,positionAt};
   }
-  applyTrackPolicy(now, input, {objective=false} = {}) {
+  applyTrackPolicy(now, input, {objective=false,topSpeed=300} = {}) {
     const {ordinaryStraight,remaining,safeLane,encounter,estimate,positionAt}=this.#trackGeometry(now);
-    const ceiling=ordinaryStraight && remaining>=150 ? 1 : 2/3;
+    // At the supervised 300 mm/s ceiling, keep the speed already demonstrated
+    // by scans: 200 mm/s produced a real two-second telemetry gap on a curve.
+    // This is a cap, not a minimum imposed on objective or combat throttles;
+    // neither this policy nor a scan proves telemetry coverage on every track.
+    const selected=Number.isFinite(topSpeed) && topSpeed>0 ? topSpeed : 300;
+    const curveCeiling=Math.max(2/3,Math.min(1,300/selected));
+    const ceiling=ordinaryStraight && remaining>=150 ? 1 : curveCeiling;
     const active=!!this.battle.active || objective;
     input.throttle=active ? Math.min(Math.max(0,Number.isFinite(input.throttle)?input.throttle:0),ceiling) : ceiling;
     const intent=input.lane;

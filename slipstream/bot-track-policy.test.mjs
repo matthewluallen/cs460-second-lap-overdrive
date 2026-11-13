@@ -18,14 +18,17 @@ function rig({id=36,progress=.1,lateral=-22.5,direction=1,active=false}={}){
   const battle={active,track};return {bot:new Bot(car,battle),car,localizer,e,battle};
 }
 
-test('free CPU policy allows 300 on fresh ordinary straights and caps uncertain geometry at 200',()=>{
-  for(const [id,expected] of [[36,300],[17,200],[57,200],[999,200]]){
-    const {bot}=rig({id});const i=input();const ceiling=bot.applyTrackPolicy(1000,i);
-    assert.equal(i.throttle*300,expected);assert.equal(ceiling*300,expected);
-    if(expected===200)assert.equal(i.lane,null);
+test('free CPU respects the selected ceiling and avoids an automatic sub-300 geometry slowdown',()=>{
+  for(const [topSpeed,restrictedSpeed] of [[150,150],[300,300],[400,300],[450,300],[600,400]]){
+    for(const id of [36,17,57,999]){
+      const expected=id===36?topSpeed:restrictedSpeed;
+      const {bot}=rig({id});const i=input();const ceiling=bot.applyTrackPolicy(1000,i,{topSpeed});
+      assert.equal(i.throttle*topSpeed,expected);assert.equal(ceiling*topSpeed,expected);
+      if(id!==36)assert.equal(i.lane,null);
+    }
   }
   for(const mutate of [r=>r.battle.track.pieces[0].inferred=true,r=>r.battle.track.pieces[0].unverified=true,r=>r.e.located=false]){
-    const r=rig();mutate(r);const i=input();assert.equal(r.bot.applyTrackPolicy(1000,i)*300,200);assert.equal(i.lane,null);
+    const r=rig();mutate(r);const i=input();assert.equal(r.bot.applyTrackPolicy(1000,i,{topSpeed:450})*450,300);assert.equal(i.lane,null);
   }
 });
 
@@ -33,7 +36,7 @@ test('stale, future, pre-motion and transition-only evidence cannot authorize CP
   const changes=[r=>r.car.telemetry.lastPositionAt=-1001,r=>r.car.telemetry.lastPositionAt=1001,
     r=>r.car.motionSince=1001,r=>r.localizer.seenCode=false,r=>r.localizer.lastId=39,
     r=>r.car.telemetry.lastPositionAt=undefined];
-  for(const mutate of changes){const r=rig();mutate(r);const i=input();assert.equal(r.bot.applyTrackPolicy(1000,i)*300,200);assert.equal(i.lane,null);}
+  for(const mutate of changes){const r=rig();mutate(r);const i=input();assert.equal(r.bot.applyTrackPolicy(1000,i,{topSpeed:450})*450,300);assert.equal(i.lane,null);}
   const r=rig();r.localizer.speed=0;const i=input();r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,null,'stationary localization cannot authorize lane movement');
 });
 
@@ -43,9 +46,9 @@ test('reverse-travel remaining distance uses Localizer progress in travel direct
   const bot=new Bot(car,{active:false,track});
   localizer.feed({type:'position',pieceId:36,locationId:17,reverse:true,speed:300},1000);
   assert.equal(localizer.estimate(1000).direction,-1);assert.ok(Math.abs(localizer.estimate(1000).progress-.214)<1e-9);
-  let i=input();assert.equal(bot.applyTrackPolicy(1000,i),1);assert.equal(i.lane,22.5);
+  let i=input();assert.equal(bot.applyTrackPolicy(1000,i,{topSpeed:450}),1);assert.equal(i.lane,22.5);
   localizer.feed({type:'position',pieceId:36,locationId:15,reverse:true,speed:300},1000);
-  i=input();assert.equal(bot.applyTrackPolicy(1000,i)*300,200);assert.equal(i.lane,null,'near exit in reverse must not steer');
+  i=input();assert.equal(bot.applyTrackPolicy(1000,i,{topSpeed:450})*450,300);assert.equal(i.lane,null,'near exit in reverse must not steer');
 });
 
 test('free CPU lane targets alternate once per piece encounter, direction and lap',()=>{
@@ -67,7 +70,7 @@ test('active Battle policy only reduces throttle and admits existing safe lane i
   assert.equal(r.bot.confirmTrackLane(1000,i,30),true);
   i={throttle:1,lane:22.5};r.bot.applyTrackPolicy(1000,i);assert.equal(i.lane,null);
   r.battle.track.pieces[0]=traversal(pieces,17,false);r.localizer.lastId=17;
-  i={throttle:.2,lane:22.5};assert.equal(r.bot.applyTrackPolicy(1000,i)*300,200);assert.equal(i.throttle,.2);assert.equal(i.lane,null);
+  i={throttle:.2,lane:22.5};assert.equal(r.bot.applyTrackPolicy(1000,i,{topSpeed:450})*450,300);assert.equal(i.throttle,.2);assert.equal(i.lane,null);
 });
 
 test('inactive Battle objective preserves its own throttle and lane while applying track constraints',()=>{
@@ -78,16 +81,19 @@ test('inactive Battle objective preserves its own throttle and lane while applyi
   assert.equal(i.lane,-22.5,'objective lane must not be replaced with free-cruise alternation');
   i={throttle:0,lane:null};r.bot.applyTrackPolicy(1000,i,{objective:true});
   assert.equal(i.throttle,0);assert.equal(i.lane,null);
-  for(const id of [57,10]){
-    const restricted=rig({id});i={throttle:.2,lane:22.5};
-    assert.equal(restricted.bot.applyTrackPolicy(1000,i,{objective:true})*300,200);
-    assert.equal(i.throttle,.2);assert.equal(i.lane,null,'special and intersection objective lanes remain blocked');
+  for(const topSpeed of [300,450]){
+    for(const id of [17,57,10]){
+      const restricted=rig({id});i={throttle:.2,lane:22.5};
+      assert.equal(restricted.bot.applyTrackPolicy(1000,i,{objective:true,topSpeed})*topSpeed,300);
+      assert.equal(i.throttle,.2,'geometry floor must not increase the objective throttle');
+      assert.equal(i.lane,null,'curve, special and intersection objective lanes remain blocked');
+    }
   }
 });
 
 test('speed and steering margins independently enforce 150 mm and 250 mm remaining',()=>{
-  for(const [progress,speed,lane] of [[.5,300,true],[.5001,300,false],[.7,300,false],[.7001,200,false]]){
-    const r=rig({progress});const i=input();assert.equal(r.bot.applyTrackPolicy(1000,i)*300,speed);
+  for(const [progress,speed,lane] of [[.5,450,true],[.5001,450,false],[.7,450,false],[.7001,300,false]]){
+    const r=rig({progress});const i=input();assert.equal(r.bot.applyTrackPolicy(1000,i,{topSpeed:450})*450,speed);
     assert.equal(i.lane!==null,lane);
   }
 });
@@ -152,22 +158,24 @@ test('CPU lane confirmation rechecks the candidate and final post-effect speed',
 });
 
 test('Game applies CPU curve cap after Battle boost and preserves lower slowdowns; selection alone stays stopped',async()=>{
+  for(const [topSpeed,curveSpeed,slowedSpeed] of [[300,300,140],[400,300,140],[600,400,160]]){
   let now=1000;const sent=[];
   const radio={onNotify(){return()=>{};},async write(p){sent.push([...p]);},close(){}};
   const game=new Game({pieces:data('pieces'),weapons:data('weapons'),vehicles:data('vehicles'),clock:()=>now});
   const driver=game.addCar(radio);await driver.car.initialization;await driver.car.pumpPromise;
-  game.useTrack(buildTrack(game.pieces,LAYOUTS.Capsule));game.topSpeed=300;game.setControl(driver,'bot');
+  game.useTrack(buildTrack(game.pieces,LAYOUTS.Capsule));game.topSpeed=topSpeed;game.setControl(driver,'bot');
   game.resume();game.tick(.04,now);await driver.car.pumpPromise;assert.equal(driver.car.speed,0);
   game.startBattle();driver.objectiveInput={throttle:1,lane:22.5};
   // Actual localizer derives curve identity; separate printed-code freshness is supplied.
   driver.car.localizer.feed({type:'position',pieceId:17,locationId:10,reverse:false,speed:300},now);
   driver.car.telemetry.lastPositionAt=now;driver.car.lastTrackAt=now;
   const fighter=game.battle.get(driver.car);fighter.boostUntil=10000;fighter.boost=400;
-  game.tick(.04,now);await driver.car.pumpPromise;assert.equal(driver.car.speed,200,'boost cannot defeat final geometry cap');
+  game.tick(.04,now);await driver.car.pumpPromise;assert.equal(driver.car.speed,curveSpeed,'boost cannot defeat final geometry cap');
   fighter.slow.set('test',{until:10000,factor:.2});game.tick(.04,now);await driver.car.pumpPromise;
-  assert.equal(driver.car.speed,120,'boosted 600 times slowdown .2 remains below curve cap');
+  assert.equal(driver.car.speed,slowedSpeed,'boost and damage can still reduce speed below the geometry ceiling');
   fighter.slow.set('cap',{until:10000,cap:70});game.tick(.04,now);await driver.car.pumpPromise;assert.equal(driver.car.speed,70);
   game.stopAll();await driver.car.pumpPromise;assert.equal(driver.car.speed,0);
+  }
 });
 
 test('Game waits for a same-speed acceleration change to be acknowledged and optically observed before steering',async()=>{

@@ -31,3 +31,11 @@ Repeated autonomous laps and completed left/right steering remain unaccepted unt
 The 0x36 speed reply has no sequence number. Timestamp ordering alone cannot distinguish an arbitrarily delayed duplicate reply; the later optical speed and geometry check provides separate movement evidence. This is still not a firmware acknowledgement protocol proof.
 
 Software verification: full Node suite **620 passed**, including 12 CPU policy tests, three cancellation-trace checks and a simulator speed-reply test. The new sequencing gate has not yet passed hardware acceptance.
+
+## Speed-confirmation build: stopped before steering
+
+Build `90538af` connected Groundshock in SDK mode at 3735 mV, with the same mapped circuit and ceiling 300. The operator confirmed **stopped on track; moved forward normally** after the trial. No lane or offset write occurred: the new steering gate was never exercised. The requested acquisition/curve speed was 200. Position piece 39/code 17 arrived at recorder time23191, followed by transition23460. The next transition arrived at25576, a2116 ms gap; the watchdog marker was25489 (2029 ms after the previous transition), and the STOP write completed at25576,87 ms after that marker. The following speed report requested0 but still reported236, so only the operator confirms the physical stop. Fixture: `groundshock-sdk-cpu-slow-curve-timeout.json` (98events,0dropped).
+
+The two-second watchdog remains unchanged. The CPU geometry speed cap is adjusted to permit the demonstrated300 mm/s pace on curves when the selected ceiling is300. At ceiling400, ordinary straights permit400 and other geometry permits300; above450 the two-thirds ratio remains. This is a ceiling, not an override of mission speeds, braking, battle slowdowns or operator limits. At ceiling300 the first acceptance target is constant-speed Computer laps with completed steering; speed variation is a subsequent trial. This one gap does not establish a universal minimum speed or validate every lane/track.
+
+Cruise-cap follow-up verification: **621 Node tests passed** on Node22. Physical retest of the300 mm/s CPU pace remains pending.

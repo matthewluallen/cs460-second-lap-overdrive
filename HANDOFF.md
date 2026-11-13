@@ -1,3 +1,7 @@
+# Latest trial: ordinary forward movement, telemetry-gap stop before steering
+
+The `90538af` trial requested200 mm/s and received a2116 ms transition gap, tripping the unchanged two-second watchdog before any lane/offset request. Operator confirms **stopped on track; moved forward normally**. The speed-confirmation steering fix is therefore still untested physically. See [the updated CPU report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Next CPU policy permits the demonstrated300 mm/s pace with selected ceiling300; varying speed and completed repeated lane changes remain open.
+
 # Latest CPU hardware result: cancellation stops; movement observed
 
 Build `41c1b54` ran two Computer Free-drive attempts. Both first automatic steering requests coincided with a 200→300 mm/s speed increase and received cancellation-state reports within 97/104 ms; STOP/pit activated. The retry used new ID 2, so retained ID 1 alone cannot explain the issue. The operator confirms the retry **stopped on track and began a lane change without completing it**. This is partial movement, not three-lap or completed left/right acceptance. Read [COMPUTER-DRIVER-HARDWARE.md](slipstream/review/COMPUTER-DRIVER-HARDWARE.md) for exact traces, original-app comparison and the speed-confirmation sequencing follow-up. Do not dismiss 0x80 by its low-bit ID or weaken the cancellation stop.

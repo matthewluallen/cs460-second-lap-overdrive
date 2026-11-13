@@ -261,7 +261,7 @@ export class Game {
           if (Number.isFinite(d.objectiveInput.throttle)) d.input.throttle = Math.max(0, Math.min(1, d.objectiveInput.throttle));
           if (Number.isFinite(d.objectiveInput.lane)) d.input.lane = Math.max(-68, Math.min(68, d.objectiveInput.lane));
         }
-        cpuTrackCeiling=d.bot.applyTrackPolicy?.(now,d.input,{objective:!!d.objectiveInput}) ?? 1;
+        cpuTrackCeiling=d.bot.applyTrackPolicy?.(now,d.input,{objective:!!d.objectiveInput,topSpeed:this.topSpeed}) ?? 1;
       }
       const input = d.input, truck = this.vehicles.models[String(car.model)]?.truck;
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);

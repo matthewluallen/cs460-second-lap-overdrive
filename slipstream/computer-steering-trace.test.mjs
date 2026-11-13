@@ -73,3 +73,31 @@ test('retained ACK1 predates both new requests and capture contains no ACK2 or l
   assert.equal(response.message.desired,0);
   assert.equal(response.message.actual,316,'last speed reply is not measured zero or physical-stop proof');
 });
+
+test('slow CPU curve capture times out on a 2116 ms optical gap without a lane or offset command', () => {
+  const slow = validate(json('./fixtures/groundshock-sdk-cpu-slow-curve-timeout.json'));
+  assert.equal(slow.events.length,98);
+  assert.equal(slow.dropped,0);
+  const sent = slow.events.filter(e=>e[2]==='tx').map(([at,,direction,hex])=>({at,direction,hex,packet:raw(hex)}));
+  assert.equal(sent.some(e=>[ID.CHANGE_LANE,ID.SET_OFFSET].includes(e.packet[1])),false);
+  const motion = sent.filter(e=>e.packet[1]===ID.SPEED && speed(e)>0);
+  assert.deepEqual(motion.map(e=>[e.at,e.hex]),[[22081,'06 24 c8 00 e8 03 00']]);
+  const received = slow.events.filter(e=>e[2]==='rx').flatMap(([at,,,hex])=>decode(raw(hex)).map(message=>({at,message})));
+  const optical = received.filter(e=>['position','transition'].includes(e.message.type));
+  assert.deepEqual(optical.map(e=>[e.at,e.message.type]),[
+    [23191,'position'],[23460,'transition'],[25576,'transition']
+  ]);
+  assert.deepEqual([optical[0].message.pieceId,optical[0].message.locationId,optical[0].message.reverse],[39,17,false]);
+  assert.equal(optical[2].at-optical[1].at,2116);
+  const timeout = slow.markers.find(m=>m.kind==='log' && m.details.text==='Groundshock: Telemetry timeout');
+  assert.equal(timeout.timeMs,25489);
+  assert.equal(timeout.timeMs-optical[1].at,2029,'host watchdog triggers after its 2000 ms default');
+  const stop = sent.find(e=>e.at>motion[0].at && e.packet[1]===ID.SPEED && speed(e)===0);
+  assert.deepEqual([stop.at,stop.hex],[25576,'06 24 00 00 c4 09 00']);
+  assert.equal(stop.at-timeout.timeMs,87,'STOP write completion follows the host timeout marker');
+  assert.equal(sent.some(e=>e.at>stop.at && e.packet[1]===ID.SPEED && speed(e)>0),false);
+  const stoppedResponse = received.find(e=>e.at===25651 && e.message.type==='speed');
+  assert.deepEqual([stoppedResponse.message.desired,stoppedResponse.message.actual],[0,236]);
+  // This is zero requested speed with a nonzero reported sample, not proof of
+  // physical stopping or movement; those observations belong in the report.
+});
