@@ -144,7 +144,11 @@ silently reclaim it.
 
 ## Track mapping
 
-**Scan track** drives one car at up to 450 mm/s, capped by the chosen speed limit. Each track piece has printed codes that the
+**Scan track** drives one car at up to 300 mm/s with the Fast & Furious profile
+(450 mm/s for other profiles), capped further by the chosen speed limit.
+The F&F profile temporarily allows 300 mm/s before localization, restoring zero
+on the first position or a stop. A lost connection can prevent that reset; remain
+beside the car during this still-unverified hardware procedure. Each track piece has printed codes that the
 car reads and reports as a piece id and a location id. The mapper commits one piece at
 each transition bar, starts the map at the start/finish piece, and accepts the loop
 when the start piece comes round again and the pieces close geometrically. The map

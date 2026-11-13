@@ -72,3 +72,8 @@ profile fixes localization merely because the initialization replies succeeded.
 Subsequent regression: [CAR-COMPATIBILITY-REGRESSION.md](CAR-COMPATIBILITY-REGRESSION.md).
 Startup now also requires native 0x23 initialization confirmation; ping alone is
 insufficient. The unlocalized-speed bootstrap question remains unresolved.
+
+Operator-approved follow-up: initialization still sets zero delocalized speed,
+but an explicit supervised scan now temporarily permits up to 300 mm/s until its
+first position or stop. See the compatibility regression report for reset paths
+and the unresolved link-loss limitation.

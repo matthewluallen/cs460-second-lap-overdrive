@@ -7,8 +7,9 @@ look, how to verify, and what is deliberately unfinished or untrusted.
 
 Read [CAR-COMPATIBILITY-REGRESSION.md](slipstream/review/CAR-COMPATIBILITY-REGRESSION.md).
 The scan is still unresolved. Native 0x23 startup confirmation is now required;
-488 Node / 38 Python tests pass. A possible zero-speed localization bootstrap
-conflict requires an explicit movement-policy decision before changing it.
+The operator approved a scan-only 300 mm/s unlocalized-speed allowance. It is
+restored to zero on first position or stop; physical scan success remains unverified.
+All 501 Node tests pass, including 13 scan-bootstrap regressions.
 Groundshock's later disconnect was the operator turning it off to leave.
 
 ## What this repo is now

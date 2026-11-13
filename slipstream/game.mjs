@@ -114,7 +114,9 @@ export class Game {
     this.track = null; for (const d of this.drivers) d.car.useTrack(null);
     // Scan on a printed lane: intersections have strips at ±18/±54 mm,
     // so the geometric center has no localization codes to identify them.
-    driver.car.steerTo(LANE_STEP); driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed));
+    driver.car.beginScanDelocalization();
+    const ceiling = driver.car.transport.initializationProfile === 'fast-furious' ? 300 : this.scanSpeed;
+    driver.car.steerTo(LANE_STEP); driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed, ceiling));
     this.log('Scanning with ' + driver.car.name + ': drive one or two laps');
   }
   cancelScan() { if (this.phase !== 'scanning') return; this.scanner?.car.stop(); this.scanner = null; this.phase = this.track ? 'ready' : 'garage'; }

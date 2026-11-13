@@ -18,6 +18,7 @@ export class Car {
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
+    this.scanDelocalizationAllowance = false; this.scanDelocalizationUsed = false;
     this.firmwareInitialization = null;
     this.millivolts = null; this.version = null; this.status = {};
     this.lightKey = ''; this.lastSpeedSent = -1; this.delocalized = false; this.rx = 0; this.tx = 0;
@@ -102,11 +103,15 @@ export class Car {
     // A rejected, settled command may leave a perfectly live radio and a moving
     // car. Try STOP once before releasing the link; never retry motion.
     if (!error.writeTimedOut) {
-      try { await this.#write(encode.speed(0, 2500)); } catch {}
+      try {
+        await this.#write(encode.speed(0, 2500));
+        if (this.scanDelocalizationUsed) await this.#write(encode.maxDelocalizedSpeed(0));
+      } catch {}
     }
     this.#finishClose(error, wasMoving);
   }
   #finishClose(error, wasMoving = false) {
+    this.scanDelocalizationAllowance = false;
     const wasConnected = this.connected;
     this.connected = false; this.pending.clear(); this.unsubscribe?.();
     try { this.transport.close(); } catch {}
@@ -129,7 +134,7 @@ export class Car {
       else if (m.type === 'version') this.version = m.version;
       else if (m.type === 'status') this.status = m;
       else if (m.type === 'delocalized') this.delocalized = true;
-      else if (m.type === 'position') { this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; this.#lane(m, now); }
+      else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; this.#lane(m, now); }
       else if (m.type === 'speed') { this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
       this.localizer?.feed(m, now);
       for (const fn of this.listeners) fn(m, this);
@@ -160,8 +165,21 @@ export class Car {
     }
   }
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
+  beginScanDelocalization() {
+    if (this.transport.initializationProfile !== 'fast-furious') return false;
+    if (this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) return false;
+    this.scanDelocalizationAllowance = true; this.scanDelocalizationUsed = true;
+    this.send('scan-delocalization', encode.maxDelocalizedSpeed(300));
+    return true;
+  }
+  endScanDelocalization() {
+    if (!this.scanDelocalizationAllowance) return;
+    this.scanDelocalizationAllowance = false;
+    this.send('scan-delocalization', encode.maxDelocalizedSpeed(0));
+  }
   setSpeed(mmPerSec, accel = 1000) {
     const speed = this.initializing || this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
+    if (speed === 0) this.endScanDelocalization();
     if (speed > 0 && this.speed === 0) { this.motionSince = this.clock(); this.stopRequestedAt = null; }
     if (speed === 0 && this.speed > 0) this.stopRequestedAt = this.clock();
     this.speed = speed;
@@ -187,9 +205,12 @@ export class Car {
     // during recovery. The next steering target must reach the vehicle.
     if (this.speed > 0) this.stopRequestedAt = this.clock();
     this.forceLane = true;
+    this.scanDelocalizationAllowance = false;
+    this.pending.delete('scan-delocalization');
     for (const key of ['speed', 'lane', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
-    this.pending = new Map([['speed', encode.speed(0, 2500)], ...this.pending]);
+    this.pending = new Map([['speed', encode.speed(0, 2500)],
+      ...(this.scanDelocalizationUsed ? [['scan-delocalization', encode.maxDelocalizedSpeed(0)]] : []), ...this.pending]);
     this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
     if (!this.connected || this.closing || this.faulted) { this.pending.clear(); return; }
     if (!this.pumping) this.pumpPromise = this.#pump();
@@ -210,13 +231,17 @@ export class Car {
   pose(now = this.clock()) { return this.localizer?.pose(now) ?? null; }
   close() {
     if (this.closePromise) return this.closePromise;
-    this.closing = true; this.pending.clear(); this.speed = 0;
+    this.closing = true; this.scanDelocalizationAllowance = false; this.pending.clear(); this.speed = 0;
     return this.closePromise = (async () => {
       // The queue owns the radio until its current operation settles or times
       // out. Disconnect must never race a light, speed, or calibration write.
       await this.pumpPromise;
       if (this.connected) {
-        try { await this.#write(encode.speed(0, 2500)); await this.#write(encode.disconnect()); }
+        try {
+          await this.#write(encode.speed(0, 2500));
+          if (this.scanDelocalizationUsed) await this.#write(encode.maxDelocalizedSpeed(0));
+          await this.#write(encode.disconnect());
+        }
         catch (error) { await this.#failSafe(error); }
       }
       this.#finishClose();

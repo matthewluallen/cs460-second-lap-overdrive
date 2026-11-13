@@ -10,7 +10,7 @@ export const ID = Object.freeze({
   CAR_INIT: 0x23, BATTERY: 0x1a, BATTERY_REPLY: 0x1b, LIGHTS: 0x1d, SPEED: 0x24, CHANGE_LANE: 0x25,
   CANCEL_LANE_CHANGE: 0x26, POSITION: 0x27, TRANSITION: 0x29, INTERSECTION: 0x2a,
   DELOCALIZED: 0x2b, SET_OFFSET: 0x2c, OFFSET_UPDATE: 0x2d, TURN: 0x32, LIGHTS_PATTERN: 0x33,
-  OFFSET_ADJUST: 0x34, SPEED_UPDATE: 0x36, STATUS: 0x3f, LANE_CHANGE_UPDATE: 0x41, CONFIG: 0x45,
+  MAX_DELOCALIZED_SPEED: 0x37, OFFSET_ADJUST: 0x34, SPEED_UPDATE: 0x36, STATUS: 0x3f, LANE_CHANGE_UPDATE: 0x41, CONFIG: 0x45,
   COLLISION: 0x4d, JUMP_RESULT: 0x4e, SUPERCODE: 0x4f, ZONE_SUPERCODE: 0x53, TRANSITION2: 0x51, CYCLE_OVERTIME: 0x86, SDK_MODE: 0x90
 });
 export const MAX_SPEED = 1400;                 // mm/s hard ceiling for anything this code sends
@@ -49,6 +49,8 @@ export const encode = Object.freeze({
     v.setFloat32(6, int(offsetMm * 10, -1000, 1000, 'offset') / 10, true);
     v.setUint8(10, 0); v.setUint8(11, tag & 255);
   }),
+  // App-native 0x37: unsigned mm/s; scan policy supplies the tighter ceiling.
+  maxDelocalizedSpeed: speed => build(ID.MAX_DELOCALIZED_SPEED, 3, v => v.setUint16(2, int(speed, 0, 300, 'delocalized speed'), true)),
   cancelLaneChange: () => build(ID.CANCEL_LANE_CHANGE, 1),
   turn: (type = TURN.UTURN, trigger = 0) => build(ID.TURN, 3, v => { v.setUint8(2, int(type, 0, 4, 'turn')); v.setUint8(3, trigger ? 1 : 0); }),
   // Simple lights: low nibble selects which lights change, high nibble their new state.

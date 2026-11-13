@@ -291,3 +291,10 @@ Regression: `public live session exposes only Slipstream pages and authenticated
   The independent 42-case startup fault matrix preserves motion blocking and STOP
   latches. Delocalized-speed zero remains unchanged; no firmware equivalence or
   physical compatibility is claimed. See CAR-COMPATIBILITY-REGRESSION.md.
+
+- Operator-approved scan bootstrap: only explicit F&F scans enable the 300 mm/s
+  unlocalized-speed allowance. The first position or any stop restores zero while
+  the link is usable; STOP removes queued scan motion. Existing countdown, telemetry
+  watchdogs and scan budgets remain. Lost links and hung writes cannot guarantee a
+  firmware reset; no autonomous firmware timeout is claimed. Tests cover restoration
+  races, settled write faults, disconnect, off-track and shared-pit handling.
