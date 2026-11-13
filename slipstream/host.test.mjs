@@ -12,10 +12,11 @@ import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 
 // Execute the actual host handlers and loop with DOM stubs and the simulated
 // transport. These verify control logic, not browser rendering or real hardware.
-function host({injectFaults = false} = {}) {
+function host({injectFaults = false, advancingClock = false} = {}) {
   const transports = [];
   const nodes = new Map(), documentEvents = {}, windowEvents = {}, intervals = [];
-  let now = 0;
+  let now = 0, reads = 0;
+  const clock = () => now + (advancingClock ? ++reads * .01 : 0);
   function element(tag = 'div') {
     const n = {tagName: tag.toUpperCase(), children: [], textContent: '', value: '', hidden: false, disabled: false,
       style: {setProperty() {}}, classList: {add() {}, remove() {}, toggle() {}}, dataset: {},
@@ -39,9 +40,9 @@ function host({injectFaults = false} = {}) {
   const document = {hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
-  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock: () => now}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
+  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
     fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage,
-    performance: {now: () => now}, location: {origin: 'http://localhost', host: 'localhost'},
+    performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
     Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => false,
     api: async () => ({}), channel: () => ({send: async () => {}, stop() {}}),
@@ -53,7 +54,7 @@ function host({injectFaults = false} = {}) {
     .replace("await Promise.all([load('pieces'), load('vehicles'), load('weapons')])", '[fixtures.pieces, fixtures.vehicles, fixtures.weapons]');
   vm.runInContext(source, context);
   return {transports, run: code => vm.runInContext(code, context), node, document,
-    tick(time) { now = time; for (const transport of transports) transport.advance(now); for (const fn of intervals) fn(); },
+    tick(time) { now = time; reads = 0; for (const transport of transports) transport.advance(now); for (const fn of intervals) fn(); },
     visibility(hidden) { document.hidden = hidden; for (const fn of documentEvents.visibilitychange ?? []) fn(); },
     event(name, value = {}) { for (const fn of windowEvents[name] ?? []) fn(value); }};
 }
@@ -372,4 +373,18 @@ test('live diagnostic export includes observations and scan evidence while recor
  const x=h.run('sessionTrace()');assert.equal(x.diagnostics.operatorNotes,'Car stayed on track');assert.equal(x.diagnostics.schema,'slipstream-diagnostics-v1');
  assert.ok(x.markers.some(m=>m.kind==='scan-start'));assert.equal(h.run('recorder.active'),true);assert.equal(h.node('saveTrace').disabled,false);
  assert.match(h.node('liveDiagnostics').textContent,/Requested/);
+});
+
+for (const advancingClock of [false,true]) test(`default two-car demo scores both CPU drivers (advancing clock: ${advancingClock})`,async()=>{
+  const h=host({advancingClock});h.node('demo').click();
+  h.run("for(const d of game.drivers) game.setControl(d,'bot')");
+  await settle();h.node('mode').value='race';h.node('battle').click();
+  for(let t=40;t<=123120;t+=40){h.tick(t);await settle();}
+  const rows=JSON.parse(h.run('JSON.stringify(session.view().rows)'));
+  assert.equal(rows.length,2);
+  assert.equal(h.node('scoreCol').textContent,'Best lap');
+  assert.equal(h.node('detailCol').textContent,'Last lap');
+  assert.ok(rows.every(row=>row.laps>0),JSON.stringify(rows));
+  assert.equal(h.run('session.status'),'finished');
+  assert.equal(h.run('world.cars.every(car=>car.targetSpeed===0)'),true);
 });

@@ -334,3 +334,11 @@ now reject promises so existing caller handlers receive them. Five failing tests
 reproduced these lifecycle defects before repair; all five and the real 1–4 player
 relay integration cases pass afterward. Server credentials, host arming and car
 stop behavior are unchanged. No hardware safety claim follows from this fix.
+
+## Telemetry clock ordering
+
+The host now samples control/scoring time after synchronous simulated telemetry
+has been delivered, instead of treating newly timestamped positions as future
+samples. The future-sample rejection and telemetry watchdogs remain intact. An
+advancing-clock regression reproduces the previous zero-lap failure and verifies
+both default-speed CPU racers score and stop at the deadline after repair.

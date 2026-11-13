@@ -556,20 +556,27 @@ function refresh(snapshot = game.snapshot()) {
   }
   const round = session.view();
   const taskMode = round.mode === 'precision' || !!round.mission;
-  $('scoreCol').textContent = taskMode ? 'Points' : 'KOs';
-  $('detailCol').textContent = taskMode ? (round.mission ? 'Tasks' : 'Gates') : 'Lost';
+  const combatMode = round.mode === 'battle';
+  const lapTime = ms => Number.isFinite(ms) ? (ms / 1000).toFixed(2) + 's' : '—';
+  $('scoreCol').textContent = taskMode ? 'Points' : combatMode ? 'KOs' : 'Best lap';
+  $('scoreCol').title = taskMode ? 'Objective points' : combatMode ? 'Virtual knockouts' : 'Fastest complete lap this round';
+  $('detailCol').textContent = taskMode ? (round.mission ? 'Tasks' : 'Gates') : combatMode ? 'Lost' : 'Last lap';
   const standings = round.rows.length ? round.rows.map(row => ({...row, kills: row.hits, deaths: row.losses})) : [...snapshot].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-  const rows = standings.map(s => el('tr', {}, el('td', {textContent: s.id + ' · ' + s.name + (s.control === 'bot' ? ' · CPU' : '')}), el('td', {textContent: taskMode ? s.score : s.kills}), el('td', {textContent: taskMode ? s.task?.completed ?? 0 : s.deaths}), el('td', {textContent: s.laps})));
+  const rows = standings.map(s => el('tr', {}, el('td', {textContent: s.id + ' · ' + s.name + (s.control === 'bot' ? ' · CPU' : '')}), el('td', {textContent: taskMode ? s.score : combatMode ? s.kills : lapTime(s.bestLapMs)}), el('td', {textContent: taskMode ? s.task?.completed ?? 0 : combatMode ? s.deaths : lapTime(s.lastLapMs)}), el('td', {textContent: s.laps})));
   $('scores').tBodies[0].replaceChildren(...rows);
 }
 
 let last = performance.now(), slow = 0;
 setInterval(() => {
-  const now = performance.now(), dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const frameAt = performance.now(), dt = Math.min(0.1, (frameAt - last) / 1000); last = frameAt;
   readControls(dt);
   world.step(dt);
   for (const d of game.drivers) d.objectiveInput = session.status === 'running' ? session.guidance(d.id) : null;
-  game.tick(dt, now);
+  // world.step synchronously emits telemetry stamped after frameAt. Sampling
+  // before that delivery makes fresh positions look future-dated and resets
+  // lap progress every time a code arrives. Keep the freshness guard intact.
+  game.tick(dt, performance.now());
+  const now = performance.now();
   tickRound(now);
   if (game.battle) for (const e of game.battle.drain()) {
     const id = car => game.drivers.find(d => d.car === car)?.id;

@@ -3,6 +3,19 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Feature-confirmation audit and browser scoring repair
+
+Read [FEATURE-CONFIRMATION-AUDIT.md](slipstream/review/FEATURE-CONFIRMATION-AUDIT.md).
+A real-browser simulation exposed zero lap scores despite movement: timestamps
+sampled before synchronous telemetry made fresh positions appear future-dated.
+An advancing-clock regression reproduced it; sampling after delivery fixes it
+without weakening freshness checks. All 537 Node tests pass. Browser verification
+then showed both CPU racers scoring laps (7 and 6 at the captured observation).
+Ordinary races now show best/last lap times rather than knockout columns.
+Codespaces restart FAILED automatic recovery (Node and home state disappeared);
+manual recovery restored the public URL. The actual container needs rebuilding
+and another restart test. Hardware scanning remains unproven.
+
 ## Network lifecycle regression
 
 Five failing tests reproduced callbacks from stopped/replaced connections and a
