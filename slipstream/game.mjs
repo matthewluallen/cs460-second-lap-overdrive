@@ -11,6 +11,7 @@ export class Game {
   constructor({pieces, weapons, vehicles, clock = () => performance.now(), log = () => {}, safety = {}, schedule = (fn,ms) => setTimeout(fn,ms), unschedule = timer => clearTimeout(timer)}) {
     this.pieces = new Pieces(pieces); this.weapons = weapons; this.vehicles = vehicles;
     this.clock = clock; this.log = log; this.schedule = schedule; this.unschedule = unschedule; this.diagnostic = null;
+    this.laneCancellationComparison=null;
     this.safety = {firstTrackMs:5000, trackGapMs:2000, stopGraceMs:1000, scanMs:45000, scanLaps:3, ...safety};
     for (const value of Object.values(this.safety)) if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid safety limit");
     this.drivers = []; this.track = null; this.battle = null; this.mapper = null; this.scanner = null;
@@ -18,6 +19,7 @@ export class Game {
   }
   modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
   addCar(transport, {name, model = 8, simulated = false, control = 'none', beforeStart} = {}) {
+    if (this.laneCancellationComparison) this.stopAll();
     if (this.drivers.length >= MAX_CARS) throw new Error('A session supports at most four cars');
     if (typeof transport.id === 'string' && this.drivers.some(d => d.car.connected && d.car.transport.id === transport.id)) throw new Error('This car is already in the garage');
     const color = TEAM_COLORS.find(color => !this.drivers.some(d => d.car.color === color));
@@ -32,14 +34,14 @@ export class Game {
     return driver;
   }
   async removeCar(driver) {
-    if (this.diagnostic) this.stopAll();
+    if (this.diagnostic || this.laneCancellationComparison) this.stopAll();
     this.drivers = this.drivers.filter(d => d !== driver);
     this.battle?.remove(driver.car);
     if (this.scanner === driver) this.cancelScan();
     await driver.car.close();
   }
   setModel(driver, model) {
-    if (this.diagnostic) this.stopAll();
+    if (this.diagnostic || this.laneCancellationComparison) this.stopAll();
     driver.car.model = model;
     if (this.battle) { this.battle.remove(driver.car); this.battle.add(driver.car).crew = driver.crew ?? ''; }
   }
@@ -50,19 +52,28 @@ export class Game {
     const f = this.battle?.get(driver.car); if (f) f.crew = crew;
   }
   setControl(driver, control) {
-    if (this.diagnostic) this.stopAll();
+    if (this.diagnostic || this.laneCancellationComparison) this.stopAll();
     driver.gamepadBinding = null; driver.cpuArmed = false; driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
+    if (message.type==='hostStopped') { if(this.laneCancellationComparison?.driver===driver)this.stopAll(); return; }
     if (this.diagnostic?.driver === driver && !this.diagnostic.steering && message.type === 'collision') { this.requestPit(driver, 'Collision during diagnostic'); return; }
     if (message.type === 'laneChange' && message.cancelled) {
       driver.input.lane = null;
+      const comparison=this.laneCancellationComparison;
+      if (comparison?.driver===driver && driver.car.speed>0) {
+        comparison.cancelled=true;
+        driver.car.lockSteering('Lane cancelled during supervised comparison');
+        Object.assign(driver.car.telemetry.laneCancellationComparison,{cancelled:true,at:this.clock(),reason:'Lane cancellation: steering locked; forward comparison continues',count:(driver.car.telemetry.laneCancellationComparison.count??0)+1});
+        this.log(driver.car.name+': LANE CANCELLED — STEERING LOCKED; supervised forward comparison continues at no more than 300 mm/s. STOP ends comparison.');
+        return;
+      }
       // Continuous phone/CPU input must not silently retry a rejected command.
       // Reuse the shared recovery flow when the cancellation occurs in motion.
       if (driver.car.speed > 0) { this.requestPit(driver, 'Lane change cancelled by car'); return; }
     }
-    if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
+    if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); else if(this.laneCancellationComparison?.driver===driver)this.stopAll(); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
     const trial=this.diagnostic;
     if (trial?.steering && trial.driver===driver && message.type==='position' && !trial.laneRequested) {
       const now=this.clock(), car=driver.car, definition=this.pieces.get(message.pieceId);
@@ -102,6 +113,11 @@ export class Game {
     }
   }
   #stopDrivers(offTrack = null) {
+    if (this.laneCancellationComparison) {
+      const c=this.laneCancellationComparison.driver.car;
+      Object.assign(c.telemetry.laneCancellationComparison,{active:false,ended:this.clock()});
+      this.laneCancellationComparison=null;
+    }
     if (this.diagnostic) { this.unschedule(this.diagnostic.timer); if(this.diagnostic.laneTimer)this.unschedule(this.diagnostic.laneTimer); this.diagnostic = null; }
     for (const d of this.drivers) {
       d.car.diagnosticMotion = false; d.car.diagnosticSteering = false; d.car.diagnosticLaneSent = false;
@@ -158,6 +174,7 @@ export class Game {
     this.log('Track mapped: ' + track.count + ' pieces, ' + (track.length / 1000).toFixed(2) + ' m');
   }
   useTrack(track) {
+    if (this.laneCancellationComparison) this.stopAll();
     this.track = track; this.phase = 'ready';
     this.battle = new Battle({weapons: this.weapons, vehicles: this.vehicles, track, clock: this.clock});
     for (const d of this.drivers) { d.car.useTrack(track); this.battle.add(d.car).crew = d.crew ?? ''; if (d.control === 'bot') d.bot = new Bot(d.car, this.battle); }
@@ -171,6 +188,7 @@ export class Game {
   armComputers() { for (const d of this.drivers) if (d.control === 'bot') { d.input = emptyInput(); d.cpuArmed = true; d.armed = true; } }
   // --- battle ----------------------------------------------------------------
   startBattle() {
+    if (this.laneCancellationComparison) this.stopAll();
     if (!this.track) throw new Error('Map the track first');
     if (this.track.unverifiedCount) throw new Error('Special track pieces are unverified; scored rounds are blocked');
     if (this.track.inferredCount) throw new Error('Rescan: some track sections were inferred, not identified');
@@ -189,6 +207,7 @@ export class Game {
     this.log('All cars stopped');
   }
   resume() {
+    if (this.laneCancellationComparison) throw new Error('Stop the supervised comparison before resuming normal driving');
     if (this.diagnostic) throw new Error('Finish or stop the diagnostic first');
     if (this.pitReason) throw new Error('Pit stop: recover every off-track car, then confirm the track is clear');
     if (this.drivers.some(d => d.car.safetyReason === 'Off track')) throw new Error('Recover every off-track car before resuming');
@@ -203,10 +222,30 @@ export class Game {
     if (recovered && this.halted) driver.car.safetyStop('Host stopped');
     return recovered;
   }
+  // Explicit operator-authorized comparison only. A lane cancellation locks all
+  // further host steering while forward driving continues; every other stop and
+  // watchdog remains active. This is not the default driving or race policy.
+  startLaneCancellationComparison(driver) {
+    if (this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase==='scanning' || this.battle?.active) throw new Error('Stop and clear the pit before the comparison');
+    if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing || driver.control!=='bot' || !driver.bot) throw new Error('Select a ready Computer driver for the comparison');
+    if (this.drivers.filter(d=>d.car.connected).length!==1) throw new Error('Use exactly one connected car for the comparison');
+    if (this.drivers.some(d=>d.car.speed>0)) throw new Error('Stop all cars first');
+    if (!this.track?.closed || this.track.inferredCount) throw new Error('Map a complete identified track before the comparison');
+    const c=driver.car,d=c.diagnostics();
+    if (c.safetyReason && c.safetyReason!=='Host stopped') throw new Error('Recover the car first');
+    if (d.batteryAgeMs===null || d.batteryAgeMs>30000) throw new Error('Refresh the battery reading before the comparison');
+    if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
+    this.stopAll();this.resume();
+    const started=this.clock();
+    this.laneCancellationComparison={driver,cancelled:false,started};
+    c.telemetry.laneCancellationComparison={active:true,cancelled:false,started};
+    driver.input=emptyInput();driver.cpuArmed=true;driver.armed=true;
+    this.log('Supervised lane-cancellation comparison armed: forward ceiling 300 mm/s; a cancellation locks steering but does not stop forward driving. STOP ends comparison.');
+  }
   // One supervised pulse, bounded independently of the animation/control loop.
   // This is a host deadline, never a guarantee across suspension or BLE loss.
   startDiagnostic(driver, {steering=false} = {}) {
-    if (this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
+    if (this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
     if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing) throw new Error('Car is not ready');
     if (this.drivers.some(d => d.car.speed > 0)) throw new Error('Stop all cars first');
     if (steering && (!this.track?.closed || this.track.inferredCount)) throw new Error('Map a complete identified track before the steering test');
@@ -227,6 +266,10 @@ export class Game {
   }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
+    if (this.laneCancellationComparison) {
+      const d=this.laneCancellationComparison.driver,c=d.car;
+      if (!c.connected || c.closing || c.faulted || d.control!=='bot' || this.battle?.active) this.stopAll();
+    }
     if (this.diagnostic) {
       const {driver,until} = this.diagnostic;
       if (now >= until || !driver.car.connected || driver.car.safetyReason || driver.car.speed === 0) this.stopAll();
@@ -266,7 +309,7 @@ export class Game {
       const input = d.input, truck = this.vehicles.models[String(car.model)]?.truck;
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);
       const limited = this.battle ? this.battle.limit(car, wanted, now) : {speed: wanted, accel: 1000};
-      const finalSpeed=Math.min(this.topSpeed*cpuTrackCeiling, limited.speed);
+      const finalSpeed=Math.min(this.topSpeed*cpuTrackCeiling, limited.speed,this.laneCancellationComparison?300:Infinity);
       if (d.bot && this.track) d.bot.confirmTrackLane?.(now,input,finalSpeed,limited.accel);
       car.setSpeed(finalSpeed, limited.accel);
       if (input.lane !== null && input.lane !== undefined && Number.isFinite(input.lane)) car.steerTo(input.lane);

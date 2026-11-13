@@ -18,6 +18,7 @@ export class Car {
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
     this.laneCommandId = 0;
+    this.steeringLocked = false; this.steeringLockVersion = 0;
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
     this.scanDelocalizationAllowance = false; this.scanDelocalizationUsed = false;
     this.firmwareInitialization = null;
@@ -75,6 +76,7 @@ export class Car {
   // Latest command per key wins, so a slow radio never builds a backlog.
   send(key, bytes) {
     if (!this.connected || this.closing || this.faulted) return;
+    if (this.steeringLocked && [0x25,0x2c,0x32,0x34].includes(bytes[1])) return;
     this.pending.delete(key); this.pending.set(key, bytes);
     if (!this.pumping) this.pumpPromise = this.#pump();
   }
@@ -91,6 +93,8 @@ export class Car {
   }
   async #write(bytes) {
     let timer; const writeStarted = this.clock();
+    const lateralCommand=[0x25,0x2c,0x32,0x34].includes(bytes[1]), lockVersion=this.steeringLockVersion;
+    let suppressed=false;
     const trialMotion = (bytes[1] === 0x24 && (bytes[2] || bytes[3])) || (this.diagnosticSteering && [0x25,0x2c].includes(bytes[1]));
     const deadline = this.diagnosticMotion && trialMotion ? this.diagnosticUntil : undefined;
     this.telemetry.lastWriteAttempt={at:writeStarted,id:bytes[1],bytes:[...bytes],status:'pending'};
@@ -98,6 +102,7 @@ export class Car {
     // close the link rather than start another write when this deadline fires.
     try {
       await Promise.race([Promise.resolve().then(() => {
+        if (lateralCommand && (this.steeringLocked || lockVersion!==this.steeringLockVersion)) { suppressed=true; return; }
         // A ready GATT promise can run before an overdue timer callback.
         // Check the captured deadline at the last host boundary before motion.
         if (deadline !== undefined && this.clock() >= deadline) throw new Error('Diagnostic motion expired before write');
@@ -105,6 +110,7 @@ export class Car {
       }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
       })]);
+      if (suppressed) { this.telemetry.lastWriteAttempt.status='suppressed'; return; }
       this.telemetry.lastWriteAttempt.status='completed';
       this.telemetry.lastWriteMs = Math.max(0,this.clock()-writeStarted);
       this.telemetry.maxWriteMs = Math.max(this.telemetry.maxWriteMs,this.telemetry.lastWriteMs);
@@ -216,6 +222,7 @@ export class Car {
     if (!spot) { this.lastPair = null; return; }
     this.telemetry.calibrationBlocked = null;
     this.lateral = spot.lateral; this.lateralEstimate = {source:'printed-code',at:now,signVerified:false};
+    if (this.steeringLocked) { this.lastPair=null; return; }
     if (this.lastPair && m.offset !== 654321) {
       const dTruth = spot.lateral - this.lastPair.lateral, dCar = m.offset - this.lastPair.offset;
       // A clear move the wrong way round means our assumed sign is wrong: with the
@@ -237,7 +244,7 @@ export class Car {
   useTrack(track) { this.localizer = track ? new Localizer(track, this.pieces) : null; }
   calibrateScanStart(lateral) {
     if (!Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) throw new Error('Starting lane must be within 68 mm of track centre');
-    if (this.diagnosticMotion || this.speed || this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) throw new Error('Stop and recover the car before calibration');
+    if (this.steeringLocked || this.diagnosticMotion || this.speed || this.initializing || !this.connected || this.closing || this.faulted || this.safetyReason) throw new Error('Stop and recover the car before calibration');
     const offset=this.offsetSign*lateral;
     this.startingCalibration={source:'operator',lateral,offset,at:this.clock(),signVerified:false};
     this.lateral=lateral; this.lateralEstimate={source:'operator',at:this.clock(),signVerified:false};
@@ -248,7 +255,7 @@ export class Car {
     const age=at=>at===undefined?null:Math.max(0,Math.round(now-at));
     return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
       startupNotifications:{buffered:this.transport.earlyDelivered??0,dropped:this.transport.earlyDropped??0,timestampBasis:'buffered packets timestamped on drain'},
-      connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,
+      connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,steeringLocked:this.steeringLocked,
       requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
       collisionAgeMs:age(this.telemetry.lastCollision?.at),
       batteryAgeMs:age(this.telemetry.batteryAt),statusAgeMs:age(this.telemetry.statusAt),status:{...this.status},
@@ -279,16 +286,17 @@ export class Car {
     this.lastSpeedSent = speed; this.lastAccel = accel;
     this.telemetry.speedCommand={at:this.clock(),speed,accel};
     this.send('speed', encode.speed(speed, accel));
+    if (speed===0) for (const fn of this.listeners) fn({type:'hostStopped'},this);
   }
   // Lateral target, mm, positive to the left of travel.
   steerTo(lateral, speed = 350) {
-    if (this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return;
+    if (this.steeringLocked || this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return;
     this.#steerTo(lateral,speed);
   }
   // Only the bounded trial may authorize one steering request. Ordinary controls
   // still use steerTo(), which remains blocked throughout any diagnostic.
   steerDiagnosticOnce(lateral, speed = 350) {
-    if (!this.diagnosticMotion || !this.diagnosticSteering || this.diagnosticLaneSent || this.clock() >= this.diagnosticUntil || this.initializing || this.safetyReason || this.closing || this.faulted || !this.connected || !Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) return false;
+    if (this.steeringLocked || !this.diagnosticMotion || !this.diagnosticSteering || this.diagnosticLaneSent || this.clock() >= this.diagnosticUntil || this.initializing || this.safetyReason || this.closing || this.faulted || !this.connected || !Number.isFinite(lateral) || Math.abs(lateral)>LANE_LIMIT) return false;
     this.diagnosticLaneSent = true; this.forceLane = true;
     this.#steerTo(lateral,speed); return true;
   }
@@ -318,7 +326,14 @@ export class Car {
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;
     this.steerTo(lanes * LANE_STEP);
   }
-  uturn() { if (this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
+  uturn() { if (this.steeringLocked || this.diagnosticMotion || this.initializing || this.safetyReason || this.closing || this.faulted) return; this.targetLateral = -this.targetLateral; this.lastPair = null; this.send('turn', encode.turn(TURN.UTURN, 0)); }
+  lockSteering(reason) {
+    this.steeringLocked=true; this.steeringLockVersion++;
+    for (const key of ['lane','lane-offset','offset','turn']) this.pending.delete(key);
+    for (const [key,bytes] of this.pending) if ([0x25,0x2c,0x32,0x34].includes(bytes[1])) this.pending.delete(key);
+    this.lastPair=null;this.forceLane=true;
+    this.telemetry.steeringLock={at:this.clock(),reason};
+  }
   stop() {
     // A pending lane request may be discarded below, or the car may be moved
     // during recovery. The next steering target must reach the vehicle.
@@ -333,6 +348,8 @@ export class Car {
     this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
     this.telemetry.speedCommand={at:this.clock(),speed:0,accel:2500};
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
+    this.steeringLocked=false;
+    for (const fn of this.listeners) fn({type:'hostStopped'},this);
     if (!this.connected || this.closing || this.faulted) { this.pending.clear(); return; }
     if (!this.pumping) this.pumpPromise = this.#pump();
   }

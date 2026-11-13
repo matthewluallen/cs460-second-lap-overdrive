@@ -13,6 +13,10 @@ reproduce the original exercises; the lab guides under `bench/` still describe i
 
 Automatic lane requests now require a fresh printed-code match on a known ordinary straight, positive position-reported speed and sufficient remaining straight geometry. Curves, special sections, stale readings and transition-only prediction cannot authorize steering. CPU steering also waits for a matching speed-command reply and a later fresh optical reading, without consuming a lane attempt while waiting. The final CPU speed ceiling also caps battle boosts; STOP, neutral arming, shared-pit recovery and telemetry watchdogs are unchanged. These software checks are not a physical stopping guarantee or a car-side connection-loss failsafe. Scored rounds with unverified special tiles remain blocked.
 
+## Explicit supervised cancellation comparison — 13 November 2026
+
+The operator approved one diagnostic comparison in which a firmware lane-cancellation event locks lateral control but allows forward motion at a maximum300 mm/s. It is a separate explicit start action, never persistent configuration. Normal moving-cancellation pit stops remain the default. The comparison clears queued steering/reference/turn commands and blocks further such commands, including automatic calibration; manual STOP, off-track, telemetry watchdogs, connection faults and other shared-pit stops remain active. A stop or vehicle/control/map lifecycle change ends it. This is a deliberately different physical test policy, not a security bypass or validated production behavior. Hardware completion remains unproven.
+
 ## Summary
 
 | # | Weakness | Where | Status |

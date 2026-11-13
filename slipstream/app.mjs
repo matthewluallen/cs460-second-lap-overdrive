@@ -64,10 +64,23 @@ function addCard(driver) {
   refreshHealth.onclick = () => { if (game.drivers.some(d=>d.car.speed>0) || countdown || game.diagnostic) return; driver.car.refreshBattery(); log('Battery refresh requested; wait for a new sample'); };
   const diagnostic = el('button', {textContent:'Clear track · 0.5 s straight test', title:'Supervise beside the car. Three-second countdown, then at most 150 mm/s; host timing cannot guarantee a stop after Bluetooth loss.'});
   const steeringTest = el('button', {textContent:'Clear track · one left-lane test', title:'Supervise beside the car. Three-second countdown; at most 300 mm/s for four seconds. One left request only after a readable straight code; automatic STOP.'});
+  const cancellationComparison = el('button', {textContent:'Supervised · cancellation comparison', title:'One Computer run at no more than 300 mm/s. A lane cancellation locks further steering while forward driving continues. STOP and all other faults still stop. Remain beside the track.'});
+  cancellationComparison.onclick = () => {
+    try {
+      requireVisible();
+      if (countdown || game.diagnostic || game.laneCancellationComparison || session.status==='running' || session.status==='paused' || game.pitReason || game.drivers.some(d=>d.car.speed>0)) throw new Error('Stop the session and clear the pit first');
+      if (driver.control!=='bot') throw new Error('Choose Computer for the supervised comparison');
+      halt('Preparing supervised cancellation comparison'); session.reset(); activeMission=null;
+      if (!recorder.active) { recorder.start(game.drivers,'Supervised lane-cancellation comparison'); $('record').textContent='Stop recording'; }
+      countdown={kind:'lane-cancellation-comparison',driverId:driver.id,until:performance.now()+3000};
+      recorder.mark('lane-cancellation-comparison-request',{carId:driver.id,ceiling:Math.min(300,game.topSpeed),onCancellation:'lock-steering-continue-forward'});
+      log('Supervised comparison countdown: cancellation will lock steering while forward driving continues; STOP remains available'); renderRound();
+    } catch(error) { log(error.message); }
+  };
   const prepareDiagnostic = steering => {
     try {
       requireVisible();
-      if (countdown || game.diagnostic || session.status==='running' || session.status==='paused' || game.pitReason || game.drivers.some(d=>d.car.speed>0)) throw new Error('Stop the session and clear the pit first');
+      if (countdown || game.diagnostic || game.laneCancellationComparison || session.status==='running' || session.status==='paused' || game.pitReason || game.drivers.some(d=>d.car.speed>0)) throw new Error('Stop the session and clear the pit first');
       halt('Preparing supervised diagnostic');
       if (steering && (!game.track || game.track.inferredCount)) throw new Error('Scan an identified track before the lane test');
       countdown={kind:'diagnostic',driverId:driver.id,steering,until:performance.now()+3000};
@@ -101,7 +114,7 @@ function addCard(driver) {
     el('div', {className: 'top'}, name, tag, code, remove),
     el('div', {className: 'grid'}, model, control), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
-    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, steeringTest, seatBox);
+    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, steeringTest, cancellationComparison, seatBox);
   code.onclick = async () => {
     if (!seatBox.hidden) { seatBox.hidden = true; return; }
     try {
@@ -117,7 +130,7 @@ function addCard(driver) {
   control.onchange = () => { control.blur?.(); if (session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
   remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
-  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow, task});
+  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow, task, cancellationComparison});
   refresh();
 }
 
@@ -241,6 +254,7 @@ function tickRound(now) {
       const ready = countdown; countdown = null; $('countdown').hidden = true;
       try {
         requireVisible();
+        if(ready.kind==='lane-cancellation-comparison') { game.startLaneCancellationComparison(game.drivers.find(d=>d.id===ready.driverId)); return; }
         if(ready.kind==='diagnostic') { game.startDiagnostic(game.drivers.find(d=>d.id===ready.driverId),{steering:!!ready.steering}); return; }
         if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');recorder.mark('scan-start',{carId:scanner.id,startingLateral:ready.startingLateral});game.startScan(scanner,{startingLateral:ready.startingLateral??null});return; }
         if(ready.kind==='pit') {game.resumeFromPit();game.armComputers();session.resume(now);return;}
@@ -263,7 +277,7 @@ function tickRound(now) {
   }
 }
 function renderRound() {
-  const view = session.view(), running = view.status === 'running' || view.status === 'paused';
+  const view = session.view(), running = view.status === 'running' || view.status === 'paused', comparison=game.laneCancellationComparison;
   $('pitPanel').hidden = !game.pitReason;
   $('pitResume').disabled = !game.pitReady;
   $('pitMessage').textContent = game.pitReason ? game.pitReason + '. Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button, clear hands and obstacles, then continue.' : '';
@@ -273,10 +287,17 @@ function renderRound() {
   $('roundGoal').textContent = view.objective || (view.goal ? view.teamLaps + ' / ' + view.goal + ' shared laps · every driver contributes' : view.mode === 'battle' ? '100 per knockout · 25 per assist or lap' : view.mode === 'solo' ? 'Complete a full circuit. Find your fastest clean rhythm.' : 'Complete laps. Keep your eyes on the physical track.');
   $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
   $('roundState').textContent = game.diagnostic ? 'DIAGNOSTIC · AUTO STOP' : countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
+  if (comparison || countdown?.kind==='lane-cancellation-comparison') {
+    $('roundLabel').textContent=comparison?.cancelled?'STEERING LOCKED · CAR STILL DRIVING':'SUPERVISED COMPARISON';
+    $('roundTitle').textContent='Lane-cancellation comparison';
+    $('roundGoal').textContent=comparison?.cancelled?'No further steering. Forward driving continues at no more than 300 mm/s. Press STOP to end.':'At most 300 mm/s. A cancellation locks steering without stopping forward drive. Other safety stops remain active.';
+    $('roundState').textContent=countdown?'Get ready':comparison?.cancelled?'FORWARD DRIVE · STEERING LOCKED':'COMPUTER · SUPERVISE';
+  }
   $('countdown').hidden = !countdown; $('countdown').textContent = countdown ? $('roundClock').textContent : '';
-  $('endRound').hidden = !running && !countdown;
-  for (const button of document.querySelectorAll('[data-experience]')) button.disabled = running || !!countdown;
-  $('mode').disabled = $('mission').disabled = running || !!countdown;
+  $('endRound').hidden = !running && !countdown && !comparison;
+  $('endRound').textContent=comparison?'Stop comparison':'Finish round & stop';
+  for (const button of document.querySelectorAll('[data-experience]')) button.disabled = running || !!countdown || !!comparison;
+  $('mode').disabled = $('mission').disabled = running || !!countdown || !!comparison;
 }
 function showResults() {
   const view = session.view();
@@ -539,7 +560,7 @@ function refresh(snapshot = game.snapshot()) {
       'Firmware collision notifications: '+(x.collisions??0)+' · last '+seconds(x.collisionAgeMs)+(x.lastCollision?' · side '+x.lastCollision.wasSideOnCollision+' · front/back '+x.lastCollision.wasFrontBackCollision:'')+' · not confirmation of physical impact\n'+
       'Firmware recovery: entered '+(x.recoveryEntered??0)+' · succeeded '+(x.recoverySucceeded??0)+' (diagnostic only)\n'+
       'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
-      (x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
+      (x.laneCancellationComparison?.active?'\nSUPERVISED COMPARISON · '+(x.steeringLocked?'STEERING LOCKED; FORWARD DRIVING CONTINUES':'cancellation will lock steering and retain forward drive')+' · STOP ends this comparison.':x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+
       (x.laneRequest?'\nSteering request #'+x.laneRequest.id+': target '+x.laneRequest.offset.toFixed(1)+' mm, sideways '+x.laneRequest.horizontalSpeed+' mm/s':'')+
       (x.laneAcknowledgment?'\nSDK-layout ACK (firmware semantics unverified): received #'+x.laneAcknowledgment.received+', executed #'+x.laneAcknowledgment.executed+', requested sideways '+x.laneAcknowledgment.desiredLaneSpeed+' mm/s ('+seconds(performance.now()-x.laneAcknowledgment.at)+'); not proof of lane completion':'')+
@@ -549,7 +570,7 @@ function refresh(snapshot = game.snapshot()) {
   $('saveTrace').disabled=recorder.cars.length===0;
   if(recorder.active)$('traceNote').textContent='Recording · '+recorder.events.length+' messages · '+recorder.dropped+' dropped · '+recorder.markersDropped+' annotations dropped. Save anytime without stopping.';
   renderRound();
-  const busy = session.status === 'running' || session.status === 'paused' || !!countdown;
+  const busy = session.status === 'running' || session.status === 'paused' || !!countdown || !!game.laneCancellationComparison;
   $('carCount').textContent = game.drivers.length + ' / 4 cars';
   $('addSim').disabled = game.drivers.length >= 4 || busy;
   $('connect').disabled = !bluetoothAvailable() || game.drivers.length >= 4 || busy;
@@ -567,6 +588,7 @@ function refresh(snapshot = game.snapshot()) {
   const byId = new Map(snapshot.map(s => [s.id, s]));
   for (const [driver, ui] of cards) {
     const s = byId.get(driver.id); if (!s) continue;
+    ui.cancellationComparison.disabled=busy || !game.halted || !!game.pitReason;
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';

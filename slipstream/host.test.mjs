@@ -395,3 +395,28 @@ test('host displays and exports map checks without claiming physical validation'
  assert.equal(h.run('sessionTrace().diagnostics.trackChecks.physicalValidation'),false);
  assert.equal(h.run('sessionTrace().diagnostics.trackChecks.available'),true);
 });
+
+test('supervised cancellation comparison uses a countdown and exposes forward-driving steering lock',async()=>{
+ const h=host();h.node('addSim').click();await h.run('game.drivers[0].car.pumpPromise');
+ h.run("game.useTrack(world.track);game.setControl(game.drivers[0],'bot');game.stopAll();game.topSpeed=300;refresh();");
+ h.run('cards.get(game.drivers[0]).cancellationComparison.click()');
+ assert.equal(h.run('countdown.kind'),'lane-cancellation-comparison');
+ assert.equal(h.run('game.laneCancellationComparison'),null);assert.equal(h.run('game.drivers[0].car.speed'),0);
+ h.tick(2999);assert.equal(h.run('game.drivers[0].car.speed'),0);
+ h.tick(3001);await h.run('game.drivers[0].car.pumpPromise');
+ assert.ok(h.run('game.laneCancellationComparison'));assert.match(h.node('roundTitle').textContent,/cancellation comparison/);
+ // Rendering fixture only; actual cancellation/lock semantics have separate core tests.
+ h.run("game.laneCancellationComparison.cancelled=true;game.drivers[0].car.lockSteering('Comparison cancellation');renderRound();");
+ assert.match(h.node('roundLabel').textContent,/CAR STILL DRIVING/);
+ assert.match(h.node('roundGoal').textContent,/No further steering/);
+ assert.equal(h.node('endRound').hidden,false);assert.equal(h.node('endRound').textContent,'Stop comparison');
+ h.node('stop').click();assert.equal(h.run('game.laneCancellationComparison'),null);assert.equal(h.run('game.drivers[0].car.speed'),0);
+});
+
+test('STOP during cancellation-comparison countdown prevents later motion and comparison activation',async()=>{
+ const h=host();h.node('addSim').click();await h.run('game.drivers[0].car.pumpPromise');
+ h.run("game.useTrack(world.track);game.setControl(game.drivers[0],'bot');game.stopAll();refresh();cards.get(game.drivers[0]).cancellationComparison.click();");
+ h.node('stop').click();h.tick(4000);
+ assert.equal(h.run('countdown'),null);assert.equal(h.run('game.laneCancellationComparison'),null);
+ assert.equal(h.run('game.drivers[0].car.speed'),0);assert.equal(h.run('game.drivers[0].cpuArmed'),false);
+});
