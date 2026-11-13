@@ -3,6 +3,14 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Public relay deployment check
+
+`npm run slipstream:check` now verifies an isolated room through the deployment's
+actual origin. Four clients passed WebSocket and forced HTTP fallback through the
+public Codespaces proxy, including approval, neutral input, state and revocation.
+Temporary rooms were removed. See deployment instructions; no car or phone-hardware
+validation is implied. PR checks currently show no CI runs.
+
 ## Phone neutral handshake and real network client coverage
 
 A stopped phone could retain nonzero steering while the host required a neutral

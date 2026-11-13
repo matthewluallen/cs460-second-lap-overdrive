@@ -103,3 +103,28 @@ active before removing the lock. Do not delete server state during play.
 identity. It is not proof of Bluetooth, phone connectivity, telemetry or safe
 physical stopping. After Codespace restart, verify public forwarding again and
 create a fresh room. A public URL does not itself authorize a player to drive.
+
+## Check the public relay without cars
+
+Run `npm run slipstream:check` with `SLIPSTREAM_CHECK_ORIGIN` set to your public
+HTTPS origin and `SLIPSTREAM_HOST_CODE` supplied privately. For managed startup:
+
+```sh
+SLIPSTREAM_HOST_CODE="$(cat ~/.local/state/slipstream-managed/host-code)" \
+SLIPSTREAM_CHECK_ORIGIN="https://YOUR-CODESPACE-3000.app.github.dev" \
+npm run slipstream:check
+```
+
+This diagnostic opens its own temporary room for each transport, approves four
+test players, sends neutral input, checks individual state delivery and revoked
+credentials, then deletes its rooms. It never attaches Bluetooth, uses an existing
+room, or publishes a moving-car state. The check exercises the production network
+client over WebSocket and forced HTTP fallback. Use it before inviting players or
+after changing networks. A passing result is not proof of browser compatibility,
+sensor operation, classroom latency or car control. Do not include the host code
+in screenshots or public reports.
+
+On 12 November 2026 both transports passed through the actual public Codespaces
+HTTPS endpoint from within the Codespace, with four clients each. A phone outside
+that network still requires acceptance testing. GitHub PR checks currently show
+no runs; recorded local/Codespaces test results must not be described as CI results.

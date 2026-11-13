@@ -65,3 +65,14 @@ instead of `0`. A locked phone now transmits neutral motion even when sensor/arr
 input changes; host arming rules remain unchanged. Integration tests exercise the
 production `net.mjs`, approval, input routing, individual state and revocation on
 loopback. They do not establish public-proxy WebSocket behavior or phone sensors.
+
+## Public relay evidence
+
+`npm run slipstream:check` passed both WebSocket and forced HTTP fallback through
+`https://curly-giggle-449vvxwxrj43jr67-3000.app.github.dev` on 12 November 2026.
+Each transport used four temporary approved players, neutral input, individual
+state delivery, and rejected revoked credentials; both rooms were deleted. The
+client process ran inside Codespaces but addressed the public HTTPS proxy, not
+loopback. No Bluetooth connection or real-car command was made. An external phone
+on the classroom network remains unverified. PR #4 is open and mergeable but has
+no reported CI checks; local and Codespaces results are separate evidence.
