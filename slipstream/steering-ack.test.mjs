@@ -69,3 +69,18 @@ test('Groundshock spin-off precedes all steering and records STOP after off-road
  assert.equal(report.at-stop.at,47);
  assert.deepEqual(decode(report.b)[0],{id:0x36,type:'speed',desired:0,accel:1000,actual:1802});
 });
+
+test('second Groundshock trial has collision reports but no new off-road signal before watchdog STOP',async()=>{
+ const {readFileSync}=await import('node:fs');
+ const capture=JSON.parse(readFileSync(new URL('./fixtures/groundshock-sdk-second-offtrack.json',import.meta.url)));
+ const rows=capture.events.filter(e=>e[0]>=623912).map(([at,car,direction,hex])=>({at,direction,b:Uint8Array.from(hex.split(' ').map(x=>parseInt(x,16)))}));
+ assert.deepEqual([...rows[0].b],[6,0x24,150,0,232,3,0]);
+ const stop=rows.find(e=>e.direction==='tx'&&e.b[1]===0x24&&e.b[2]===0);
+ assert.equal(stop.at-rows[0].at,5002);
+ assert.equal(rows.some(e=>e.direction==='rx'&&[0x27,0x29,0x2b].includes(e.b[1])),false);
+ assert.equal(rows.some(e=>e.direction==='tx'&&[0x25,0x2c].includes(e.b[1])),false);
+ assert.equal(rows.filter(e=>e.direction==='rx'&&e.b[1]===0x4d&&e.at<stop.at).length,3);
+ const response=rows.find(e=>e.direction==='rx'&&e.at>stop.at&&e.b[1]===0x36);
+ assert.equal(decode(response.b)[0].actual,100);
+ assert.equal(rows.some(e=>e.direction==='rx'&&e.b[1]===0x1b),false,'no fresh battery sample after recharge');
+});

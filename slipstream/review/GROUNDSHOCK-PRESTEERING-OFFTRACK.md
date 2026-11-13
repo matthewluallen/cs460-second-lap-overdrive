@@ -30,3 +30,13 @@ The 1802 value is present in the raw final signed 16-bit field, not a UI arithme
 Battery response was 3664 mV. Status frames changed before movement, including `05 3f 00 00 01 00`; the current decoder labels this lowBattery=true, onCharger=false. Treat as a diagnostic concern, not a demonstrated cause of the spin-off. The capture contains no subsequent battery reading.
 
 Next work: verify status and speed field semantics against native consumers; investigate absence of all optical track telemetry, track placement, wheel/tire condition and charge before another supervised run. Do not change SDK flags, thresholds or steering based on an unproven cause. Keep the shared pit latched until physical recovery is confirmed.
+
+## Second attempt: 150 mm/s
+
+The cumulative capture `groundshock-sdk-second-offtrack.json` (SHA-256 `8e1cd8eb5898522056e456a86bb82552d78ce6e0f36b1c22b64124ff42b261a3`) includes both attempts; do not count the first attempt twice. Operator confirmed charged since the first trial and later confirmed stopped, having left the track again.
+
+Second drive TX at 623912 ms: `06 24 96 00 e8 03 00` (150 mm/s, acceleration 1000). RX at 623972 echoes desired 150 and final speed field zero. Three `03 4d 01 00` collision-type messages arrive before STOP. No new 0x2b off-road message and no position/transition or lane/offset command occur. Telemetry timeout marker at 628913; STOP TX at 628914, **5002 ms after motion command**. RX at 628952 reports desired zero, acceleration 2500, final speed field 100. Manual STOP TX follows at 629662.
+
+The operator's physical off-track observation is independent of the lack of a new off-road packet. The watchdog, not a short timed pulse, bounded this attempt. Browser round trips are unsuitable for guaranteeing a shorter drive duration. Implement and test an app-owned timed diagnostic with its own deadline before another such trial; preserve existing watchdog and STOP paths. No cause for failed localization is established. There is no fresh battery response in the second attempt.
+
+Local native `Vehicle::HandleSpeedUpdateFromMessage` (007a93c4, zone-receiver.c) checks a broad 0–5 m/s range; this does not reject 1.802 m/s or independently validate its physical accuracy.
