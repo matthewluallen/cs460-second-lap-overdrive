@@ -33,3 +33,26 @@ Simulator-only lane placement is retained explicitly because its intersection mo
 Three new/updated expectations failed before the repair (default SDK scan, default F&F scan, optional calibration without lane). Regressions assert absence of unlocalized steering, bounded speed, preservation of cancellation stop, and calibration ordering. Full physical scan acceptance remains pending. No new 0x35 policy or default speed changes were made.
 
 Validation: 591 Node tests and 38 Python tests pass; CWE regression checks and dependency lab pass; npm audit reports zero vulnerabilities. Runtime change is limited to scan startup steering; physical acceptance pending.
+
+## Hardware retest accepted on this layout — 10:26 America/Chicago
+
+Build 08fe678 was installed in Codespaces and reloaded. Operator selected Groundshock, confirmed clear printed-lane placement and supervised readiness. SDK firmware 11866 initialized; initial battery 4162 mV, no charging/low-battery flag. No power-cycle claim is made. Original startup-inclusive trace: `../fixtures/groundshock-sdk-repaired-scan.json` (63 events, zero dropped). The car metadata was captured before the Groundshock label was selected; diagnostics/operator observation record that identification.
+
+| Relative recorder time | Observed event |
+| --- | --- |
+| 22328 ms | Speed 300 write completed; no startup lane or offset request |
+| 23146 ms | First actual position, piece 33: 818 ms after speed write |
+| 23146 ms, after that receive event | Code-derived offset −22.5 write completed |
+| 39114 ms | Circuit closure evidence arrived |
+| 39116 ms | Map accepted and STOP writes completed, 16788 ms after speed write |
+| 39167 ms | Firmware speed reply: desired 0, actual field 300 (not physical stop proof) |
+
+Result: **11 pieces, approximately 4.88 m; 24 positions, 12 transitions; zero inferred pieces; one start/finish; geometric closure; special piece 57 at index 2**. Piece IDs 18 and 17 each occur twice. Operator explicitly confirmed **physically stopped; stayed on track; displayed map matches the layout**. This is physical acceptance of one scan on this circuit, not repeatability across arbitrary layouts or full original-app parity.
+
+Four collision notifications remain in this capture (including stationary initialization, during travel and after STOP). No lane-change command/cancellation, off-road or recovery message occurred. Scan collision handling was unchanged: raw 0x4d remains diagnostic evidence during scans; the separate bounded-drive collision latch remains enabled. Do not attribute the successful scan to disabling a safety handler.
+
+Power Zone 57 remains unverified for attacks/scored rounds. The map checks retain that warning. Mapping installs a fresh localizer, so the stopped car still needs a new position to establish race location. Steering, multi-car races, attacks and autonomous host-loss stopping are not accepted by this test.
+
+The new offline replay checks use the real decoder and mapper and preserve the observed piece order, absence of inferred geometry, and packet order. They guard against software regressions; physical stop/map agreement comes from the operator confirmation above.
+
+Post-retest verification: 594 Node tests pass, including three new repaired-scan replay regressions. No runtime code changed in this evidence commit; preceding Python38/CWE/dependency/audit results remain the build08fe678 baseline.

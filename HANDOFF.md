@@ -1,3 +1,7 @@
+# Repaired scan passed one supervised hardware trial
+
+On 13 November at 10:26 America/Chicago, Groundshock firmware 11866 in SDK mode on build 08fe678 scanned the circuit successfully: 11 pieces / 4.88 m, 24 positions, 12 transitions, no inferred pieces. The operator confirmed stopped, stayed on track, and map matches. Startup had no lane/offset command; first position arrived 818 ms after the speed write; offset calibration followed optical evidence. Trace and detailed limits are in [SCAN-START-REGRESSION.md](slipstream/review/SCAN-START-REGRESSION.md). Power Zone 57 remains unverified/scored-round-blocked; steering, races and whole-app parity remain unaccepted. This supersedes the earlier “hardware retest pending” status for this single layout only.
+
 # Physical scan startup repair — hardware retest pending
 
 Read [SCAN-START-REGRESSION.md](slipstream/review/SCAN-START-REGRESSION.md). Both the formerly successful SDK scan and today's aborted scan received an initial lane cancellation. The newer moving-cancellation stop now halts before optical acquisition. Physical scans no longer issue the speculative startup lane command; cancellation stops and watchdogs remain intact. Simulator-only lane placement is explicitly separate. Today's offset-before-lane trace still cancels, disproving its sufficiency as a steering repair. Latest physical observation: forward movement, no sideways shift, stopped; no map. New cumulative trace retained. Hardware acceptance of this repair is still required.
