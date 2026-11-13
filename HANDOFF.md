@@ -1,4 +1,8 @@
-# Latest physical result: off track before steering; reference gate required
+# Latest physical result: reference mismatch stopped safely on track
+
+On `79f9350`, charged Groundshock initially emitted continuous recovery/off-track messages while requested speed stayed zero. This stopped after the operator fully power-cycled it. The subsequent authorized comparison requested300 mm/s; the first optical reading was **curve18/code8**, not start/finish. The new gate sent STOP1 ms after that reading and sent **no lane or offset command**. Operator confirms **stopped; stayed on track**. The test did not establish the required reference or enable Computer steering. See the latest sections of [the hardware report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Do not rerun unchanged: resolve why start/finish was not read, including actual sensor placement and readable lane, before another attempt. No firmware recovery policy was changed. Both raw recordings and four replay tests are retained; the full Node suite now passes **657/657**. This evidence update changes no runtime code.
+
+# Previous physical result: off track before steering; reference gate required
 
 The approved comparison ran on `ae3012b` and ended on delocalization before any lane request. The operator confirms **stopped; it left the track**, reports the map marker at a different spot, and says they placed it at start/finish. No start/finish optical code appears in this capture:18→57→57→39, then only transitions. One printed-code auto-offset write occurred; no physical cause is established. The car was disconnected after confirmed physical stop. Read [the current hardware report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md#comparison-attempt-physical-departure-before-any-lane-command).
 
