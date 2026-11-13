@@ -1,3 +1,7 @@
+# Current recovery plan
+
+Read [SYSTEM-RECOVERY-PLAN.md](slipstream/review/SYSTEM-RECOVERY-PLAN.md) first. It supersedes older next-trial instructions below: two pre-steering spin-offs received no optical telemetry, and physical trials are paused pending bounded diagnostics and initialization review. Recent steering changes were not exercised by those trials; causality is not established. Historical test counts below are dated records.
+
 # Review handoff
 
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
