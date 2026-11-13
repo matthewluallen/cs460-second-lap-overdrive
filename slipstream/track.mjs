@@ -169,8 +169,17 @@ export class TrackMapper {
 // as soon as the car has driven past a distinguishing piece.
 export class Localizer {
   constructor(track, pieces) { this.track = track; this.piecesTable = pieces; this.reset(); }
-  reset() { this.candidates = null; this.index = -1; this.direction = 1; this.progress = 0; this.lateral = 0; this.speed = 0; this.stamp = 0; this.located = false; this.laps = 0; this.seenCode = false; this.lastId = -1; }
-  seed(index, direction, now) { this.candidates = [{index, direction}]; this.progress = 0.3; this.stamp = now; this.speed = 0; this.seenCode = true; this.lastId = this.track.pieces[index].id; this.#settle(); }
+  reset() { this.candidates = null; this.index = -1; this.direction = 1; this.progress = 0; this.lateral = 0; this.speed = 0; this.stamp = 0; this.positionStamp = undefined; this.reference = null; this.lossReason = 'No optical reference'; this.located = false; this.laps = 0; this.seenCode = false; this.lastId = -1; }
+  // Simulator placement only. Hardware placement must be established by codes.
+  seed(index, direction, now) {
+    this.candidates = [{index, direction}]; this.progress = 0.3; this.stamp = this.positionStamp = now; this.speed = 0; this.seenCode = true; this.lastId = this.track.pieces[index].id; this.lossReason = null; this.#settle();
+    this.reference = {source:'simulator-seed',pieceId:this.lastId,locationId:null,reverse:direction>0?this.track.pieces[index].reverse:!this.track.pieces[index].reverse,index,direction,at:now,unverified:!!this.track.pieces[index].unverified};
+  }
+  invalidate(reason = 'Location lost') {
+    this.located = false; this.candidates = null; this.seenCode = false;
+    this.reference = null; this.positionStamp = undefined; this.lastId = -1;
+    this.speed = 0; this.lossReason = reason;
+  }
   #candidatesFor(id, reverse) {
     const out = [];
     this.track.pieces.forEach((p, index) => { if (p.id === id) out.push({index, direction: p.reverse === reverse ? 1 : -1}); });
@@ -178,13 +187,23 @@ export class Localizer {
   }
   #step(c) { const n = this.track.count; return {index: (c.index + c.direction + n) % n, direction: c.direction}; }
   feed(message, now) {
+    // After an optical gap the car may have been moved. A repeated road ID
+    // cannot inherit a formerly unique instance, and transition-only traffic
+    // cannot carry that expired context around the map or manufacture laps.
+    if (['position','transition'].includes(message.type) && this.candidates && !this.#fresh(now)) {
+      this.candidates=null; this.located=false; this.seenCode=false; this.lastId=-1; this.speed=0;
+    }
     if (message.type === 'position') {
       const spot = this.piecesTable.locate(message.pieceId, message.locationId, message.reverse);
-      if (!spot || !Number.isFinite(message.speed)) { this.located = false; this.candidates = null; return; }
-      if (this.candidates && this.seenCode && this.lastId !== message.pieceId) this.#advance();
-      this.lastId = message.pieceId;
+      if (!spot || !Number.isFinite(message.speed)) { this.invalidate('Unrecognized optical code'); return; }
       const matches = this.#candidatesFor(message.pieceId, message.reverse);
       const key = c => c.index + ':' + c.direction;
+      if (this.candidates && this.seenCode && this.lastId !== message.pieceId) {
+        const allowed = new Set(matches.map(key));
+        if (this.candidates.some(c=>allowed.has(key(this.#step(c))))) this.#advance(now);
+        else { this.candidates=null; this.located=false; this.seenCode=false; }
+      }
+      this.lastId = message.pieceId;
       if (this.candidates && !this.seenCode) {
         const allowed = new Set(matches.map(key));
         const kept = this.candidates.filter(c => allowed.has(key(c)));
@@ -198,24 +217,34 @@ export class Localizer {
       }
       this.seenCode = true;
       if (spot) { this.progress = spot.progress; this.lateral = spot.lateral; }
-      this.speed = message.speed; this.stamp = now;
+      this.speed = message.speed; this.stamp = this.positionStamp = now; this.lossReason = null;
       this.#settle();
+      this.reference = {source:'printed-code',pieceId:message.pieceId,locationId:message.locationId,reverse:message.reverse,index:this.located?this.index:null,direction:this.located?this.direction:null,at:now,unverified:!!this.piecesTable.get(message.pieceId)?.unverified};
     } else if (message.type === 'transition') {
-      this.#advance(); this.stamp = now;
-    } else if (message.type === 'delocalized') { this.located = false; this.candidates = null; }
+      this.#advance(now); this.stamp = now;
+    } else if (message.type === 'delocalized') this.invalidate('Off track');
+    else if (message.type === 'status' && message.onTrack === false) this.invalidate('Car reports off track');
+    else if (message.type === 'delocRecoveryEntered') this.invalidate('Firmware is recovering location');
   }
-  #advance() {
+  #advance(now) {
     if (this.candidates) {
       const before = this.candidates[0];
       this.candidates = this.candidates.map(c => this.#step(c));
       const after = this.candidates[0];
-      if (this.located && this.seenCode && this.candidates.length === 1) {
+      if (this.located && this.seenCode && this.candidates.length === 1 && this.#fresh(now)) {
         const wrapped = before.direction > 0 ? after.index < before.index : after.index > before.index;
         if (wrapped) { this.laps++; this.onLap?.(this.laps); }
       }
     }
     this.seenCode = false; this.progress = 0;
     this.#settle();
+  }
+  #fresh(now) { return Number.isFinite(this.positionStamp) && now >= this.positionStamp && now - this.positionStamp <= POSITION_MAX_AGE_MS; }
+  diagnostics(now) {
+    const fresh = this.#fresh(now), trusted = this.located && fresh;
+    const state = !this.reference ? 'unknown' : !fresh ? 'stale' : !this.located ? 'ambiguous' : this.seenCode ? 'confirmed' : 'estimated';
+    const reason = state === 'unknown' ? this.lossReason : state === 'stale' ? 'Optical reference expired' : state === 'ambiguous' ? 'Optical code does not uniquely identify a mapped section' : null;
+    return {state,trusted,reason,reference:this.reference?{...this.reference,ageMs:Math.max(0,Math.round(now-this.reference.at)),fresh}:null};
   }
   #settle() {
     if (!this.candidates || !this.candidates.length) { this.located = false; return; }
@@ -226,8 +255,8 @@ export class Localizer {
   estimate(now) {
     if (this.index < 0) return null;
     const length = this.track.laneLength(this.index, this.direction * this.lateral);
-    const progress = Math.min(0.999, this.progress + Math.max(0, now - this.stamp) / 1000 * this.speed / length);
-    return {index: this.index, direction: this.direction, progress, lateral: this.lateral, located: this.located && now >= this.stamp && now - this.stamp <= POSITION_MAX_AGE_MS};
+    const progress = Math.min(0.999, this.progress + Math.min(POSITION_MAX_AGE_MS,Math.max(0, now - this.stamp)) / 1000 * this.speed / length);
+    return {index: this.index, direction: this.direction, progress, lateral: this.lateral, located: this.located && this.#fresh(now)};
   }
   pose(now) {
     const e = this.estimate(now);

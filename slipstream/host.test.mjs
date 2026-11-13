@@ -406,7 +406,7 @@ test('supervised cancellation comparison uses a countdown and exposes forward-dr
  h.tick(3001);await h.run('game.drivers[0].car.pumpPromise');
  assert.ok(h.run('game.laneCancellationComparison'));assert.match(h.node('roundTitle').textContent,/cancellation comparison/);
  // Rendering fixture only; actual cancellation/lock semantics have separate core tests.
- h.run("game.laneCancellationComparison.cancelled=true;game.drivers[0].car.lockSteering('Comparison cancellation');renderRound();");
+ h.run("game.laneCancellationComparison.stage='driving';game.laneCancellationComparison.cancelled=true;game.drivers[0].car.lockSteering('Comparison cancellation');renderRound();");
  assert.match(h.node('roundLabel').textContent,/CAR STILL DRIVING/);
  assert.match(h.node('roundGoal').textContent,/No further steering/);
  assert.equal(h.node('endRound').hidden,false);assert.equal(h.node('endRound').textContent,'Stop comparison');
@@ -419,4 +419,20 @@ test('STOP during cancellation-comparison countdown prevents later motion and co
  h.node('stop').click();h.tick(4000);
  assert.equal(h.run('countdown'),null);assert.equal(h.run('game.laneCancellationComparison'),null);
  assert.equal(h.run('game.drivers[0].car.speed'),0);assert.equal(h.run('game.drivers[0].cpuArmed'),false);
+});
+
+test('host shows unknown locations explicitly and exports the full map with optical reference evidence',()=>{
+ const h=host();h.node('addSim').click();
+ h.run("const d=game.drivers[0];game.useTrack(world.track);refresh();");
+ assert.match(h.node('mapPositionStatus').textContent,/Position unknown/);
+ assert.match(h.run('cards.get(d).locationReference.textContent'),/No optical reference/);
+ h.run("d.car.localizer.feed({type:'position',pieceId:34,locationId:20,reverse:false,speed:300},performance.now());refresh();");
+ assert.match(h.run('cards.get(d).locationReference.textContent'),/Optical reference: piece 34 \/ code 20/);
+ assert.match(h.node('mapPositionStatus').textContent,/estimates from recent optical codes/);
+ assert.equal(h.run('sessionTrace().diagnostics.cars[0].localization.reference.source'),'printed-code');
+ assert.deepEqual(JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.track)')),JSON.parse(h.run('JSON.stringify(game.track.toJSON())')));
+ h.run("d.car.localizer.feed({type:'status',onTrack:false},performance.now());refresh();");
+ assert.match(h.run('cards.get(d).locationReference.textContent'),/Position unknown.*off track.*marker hidden/);
+ assert.equal(h.run('sessionTrace().diagnostics.cars[0].localization.trusted'),false);
+ assert.match(h.node('mapPositionStatus').textContent,/Unconfirmed map markers are hidden/);
 });

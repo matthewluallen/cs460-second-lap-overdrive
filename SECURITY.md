@@ -17,7 +17,11 @@ Automatic lane requests now require a fresh printed-code match on a known ordina
 
 The operator approved one diagnostic comparison in which a firmware lane-cancellation event locks lateral control but allows forward motion at a maximum300 mm/s. It is a separate explicit start action, never persistent configuration. Normal moving-cancellation pit stops remain the default. The comparison clears queued steering/reference/turn commands and blocks further such commands, including automatic calibration; manual STOP, off-track, telemetry watchdogs, connection faults and other shared-pit stops remain active. A stop or vehicle/control/map lifecycle change ends it. This is a deliberately different physical test policy, not a security bypass or validated production behavior. Hardware completion remains unproven.
 
-## Summary
+## Optical reference and truthful map display — 13 November 2026
+
+The latest physical comparison left the track before steering; its cause remains unknown. Map markers now require a fresh, unambiguous position and disappear on loss, negative on-track status, recovery entry or disconnection. Transition reports cannot extend the freshness of an old optical code. The next explicit comparison resets localization and locks steering/calibration until a unique start/finish code and consistent follow-up arrive; mismatch or a five-second acquisition timeout invokes the existing pit/STOP. This is a stricter host precondition, not a changed firmware protocol or validation of physical recovery. See the retained trace and [hardware report](slipstream/review/COMPUTER-DRIVER-HARDWARE.md). Existing default cancellation stops and scan watchdogs remain.
+
+## Vulnerability summary
 
 | # | Weakness | Where | Status |
 |---|---|---|---|

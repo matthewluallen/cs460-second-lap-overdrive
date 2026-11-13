@@ -58,11 +58,17 @@ export class Game {
   }
   #message(driver, message) {
     if (message.type==='hostStopped') { if(this.laneCancellationComparison?.driver===driver)this.stopAll(); return; }
+    if (this.laneCancellationComparison?.driver===driver && this.laneCancellationComparison.stage==='acquiring-reference' && ((message.type==='status' && message.onTrack===false) || message.type==='delocRecoveryEntered')) {
+      this.#referenceFailure(driver,'Reference lost: '+(message.type==='status'?'car reports off track':'car entered delocalization recovery')+'; expected a new start/finish acquisition');return;
+    }
+    if (this.laneCancellationComparison?.driver===driver && this.laneCancellationComparison.stage==='acquiring-reference' && ['position','transition'].includes(message.type)) {
+      this.#comparisonReference(driver,message);return;
+    }
     if (this.diagnostic?.driver === driver && !this.diagnostic.steering && message.type === 'collision') { this.requestPit(driver, 'Collision during diagnostic'); return; }
     if (message.type === 'laneChange' && message.cancelled) {
       driver.input.lane = null;
       const comparison=this.laneCancellationComparison;
-      if (comparison?.driver===driver && driver.car.speed>0) {
+      if (comparison?.driver===driver && comparison.stage==='driving' && driver.car.speed>0) {
         comparison.cancelled=true;
         driver.car.lockSteering('Lane cancelled during supervised comparison');
         Object.assign(driver.car.telemetry.laneCancellationComparison,{cancelled:true,at:this.clock(),reason:'Lane cancellation: steering locked; forward comparison continues',count:(driver.car.telemetry.laneCancellationComparison.count??0)+1});
@@ -115,6 +121,7 @@ export class Game {
   #stopDrivers(offTrack = null) {
     if (this.laneCancellationComparison) {
       const c=this.laneCancellationComparison.driver.car;
+      if (this.laneCancellationComparison.referenceTimer!=null) this.unschedule(this.laneCancellationComparison.referenceTimer);
       Object.assign(c.telemetry.laneCancellationComparison,{active:false,ended:this.clock()});
       this.laneCancellationComparison=null;
     }
@@ -231,16 +238,60 @@ export class Game {
     if (this.drivers.filter(d=>d.car.connected).length!==1) throw new Error('Use exactly one connected car for the comparison');
     if (this.drivers.some(d=>d.car.speed>0)) throw new Error('Stop all cars first');
     if (!this.track?.closed || this.track.inferredCount) throw new Error('Map a complete identified track before the comparison');
+    if (!this.track.pieces.some(p=>['start','finish'].includes(p.kind) && !p.unverified && !p.inferred)) throw new Error('The comparison needs an identified start/finish reference');
     const c=driver.car,d=c.diagnostics();
     if (c.safetyReason && c.safetyReason!=='Host stopped') throw new Error('Recover the car first');
     if (d.batteryAgeMs===null || d.batteryAgeMs>30000) throw new Error('Refresh the battery reading before the comparison');
     if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
     this.stopAll();this.resume();
     const started=this.clock();
-    this.laneCancellationComparison={driver,cancelled:false,started};
-    c.telemetry.laneCancellationComparison={active:true,cancelled:false,started};
+    c.localizer.reset();c.lockSteering('Acquiring start/finish reference');
+    const comparison={driver,cancelled:false,started,stage:'acquiring-reference',reference:null,expectedIndex:null,transitions:0,referenceUntil:started+this.safety.firstTrackMs,referenceTimer:null};
+    this.laneCancellationComparison=comparison;
+    c.telemetry.laneCancellationComparison={active:true,cancelled:false,started,stage:comparison.stage,referenceUntil:comparison.referenceUntil};
+    comparison.referenceTimer=this.schedule(()=>{
+      if(this.laneCancellationComparison===comparison && comparison.stage==='acquiring-reference')this.#referenceFailure(driver,'Reference timeout: expected start/finish and a consistent follow-up within '+this.safety.firstTrackMs+' ms');
+    },this.safety.firstTrackMs);
     driver.input=emptyInput();driver.cpuArmed=true;driver.armed=true;
-    this.log('Supervised lane-cancellation comparison armed: forward ceiling 300 mm/s; a cancellation locks steering but does not stop forward driving. STOP ends comparison.');
+    this.log('Reference acquisition: place the sensor before the start/finish codes. Forward ceiling 300 mm/s; steering and calibration remain locked until a fresh anchor and consistent follow-up are read.');
+  }
+  #referenceFailure(driver,reason) {
+    Object.assign(driver.car.telemetry.laneCancellationComparison,{stage:'failed',reason,at:this.clock()});
+    this.requestPit(driver,reason);
+  }
+  #comparisonReference(driver,message) {
+    const comparison=this.laneCancellationComparison,car=driver.car,now=this.clock();
+    if (now>=comparison.referenceUntil) { this.#referenceFailure(driver,'Reference timeout: expected start/finish and a consistent follow-up');return; }
+    const next=index=>(index+comparison.reference.direction+this.track.count)%this.track.count;
+    if (message.type==='transition') {
+      if(comparison.reference){comparison.expectedIndex=next(comparison.expectedIndex);comparison.transitions++;}
+      return;
+    }
+    const definition=this.pieces.get(message.pieceId),spot=definition && !definition.unverified ? this.pieces.locate(message.pieceId,message.locationId,message.reverse) : null;
+    const candidates=car.localizer?.candidates,match=candidates?.length===1 ? candidates[0] : null;
+    const valid=now>comparison.started && car.speed>0 && Number.isFinite(car.motionSince) && car.motionSince>=comparison.started && now>=car.motionSince && !!spot && !!match && Number.isFinite(message.speed) && message.speed>0 && this.track.pieces[match.index]?.id===message.pieceId && !this.track.pieces[match.index]?.inferred;
+    const observed='piece '+message.pieceId+', code '+message.locationId;
+    if(!comparison.reference){
+      if(!valid || !['start','finish'].includes(definition?.kind)) { this.#referenceFailure(driver,'Reference mismatch: expected a uniquely identified start/finish; observed '+observed);return; }
+      comparison.reference={pieceId:message.pieceId,locationId:message.locationId,reverse:message.reverse,index:match.index,direction:match.direction,progress:spot.progress,at:now};
+      comparison.expectedIndex=match.index;
+      comparison.lastOpticalAt=now;
+      car.telemetry.laneCancellationComparison.reference={...comparison.reference};
+      this.log('Read start/finish '+observed+'; waiting for a distinct consistent optical follow-up. Steering remains locked.');return;
+    }
+    const anchor=comparison.reference;
+    if(now-comparison.lastOpticalAt>this.safety.trackGapMs) { this.#referenceFailure(driver,'Reference lost: optical follow-up exceeded '+this.safety.trackGapMs+' ms; expected a new start/finish acquisition');return; }
+    const samePlace=message.pieceId===anchor.pieceId && message.locationId===anchor.locationId && message.reverse===anchor.reverse;
+    const expected=match && (match.index===comparison.expectedIndex || (comparison.transitions===0 && message.pieceId!==anchor.pieceId && match.index===next(anchor.index)));
+    const forwardProgress=match?.index!==anchor.index || comparison.transitions>0 || spot?.progress>anchor.progress;
+    if(!valid || match.direction!==anchor.direction || !expected || (!samePlace && !forwardProgress)) { this.#referenceFailure(driver,'Reference mismatch: expected a forward follow-up from piece '+anchor.pieceId+' in the mapped direction; observed '+observed);return; }
+    comparison.lastOpticalAt=now;
+    if(samePlace)return;
+    comparison.stage='driving';comparison.followUp={pieceId:message.pieceId,locationId:message.locationId,index:match.index,direction:match.direction,at:now};
+    this.unschedule(comparison.referenceTimer);comparison.referenceTimer=null;
+    Object.assign(car.telemetry.laneCancellationComparison,{stage:'driving',followUp:{...comparison.followUp},confirmedAt:now});
+    car.unlockSteering();
+    this.log('Reference confirmed: piece '+anchor.pieceId+' code '+anchor.locationId+' → '+observed+'. Supervised comparison driving enabled; all normal steering gates remain.');
   }
   // One supervised pulse, bounded independently of the animation/control loop.
   // This is a host deadline, never a guarantee across suspension or BLE loss.
@@ -269,6 +320,7 @@ export class Game {
     if (this.laneCancellationComparison) {
       const d=this.laneCancellationComparison.driver,c=d.car;
       if (!c.connected || c.closing || c.faulted || d.control!=='bot' || this.battle?.active) this.stopAll();
+      else if (this.laneCancellationComparison.stage==='acquiring-reference' && now>=this.laneCancellationComparison.referenceUntil) this.#referenceFailure(d,'Reference timeout: expected start/finish and a consistent follow-up');
     }
     if (this.diagnostic) {
       const {driver,until} = this.diagnostic;
@@ -310,7 +362,8 @@ export class Game {
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);
       const limited = this.battle ? this.battle.limit(car, wanted, now) : {speed: wanted, accel: 1000};
       const finalSpeed=Math.min(this.topSpeed*cpuTrackCeiling, limited.speed,this.laneCancellationComparison?300:Infinity);
-      if (d.bot && this.track) d.bot.confirmTrackLane?.(now,input,finalSpeed,limited.accel);
+      if (this.laneCancellationComparison?.stage==='acquiring-reference') input.lane=null;
+      else if (d.bot && this.track) d.bot.confirmTrackLane?.(now,input,finalSpeed,limited.accel);
       car.setSpeed(finalSpeed, limited.accel);
       if (input.lane !== null && input.lane !== undefined && Number.isFinite(input.lane)) car.steerTo(input.lane);
       if (this.battle) for (const bay of ['attack', 'support', 'special']) this.battle.press(car, bay, !!input[bay]);

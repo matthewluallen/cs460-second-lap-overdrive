@@ -50,6 +50,7 @@ function addCard(driver) {
   for (const [id, label] of [['', 'Independent racer'], ['sun', 'Sun crew'], ['moon', 'Moon crew']]) crew.append(new Option(label, id));
   crew.onchange = () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Crew changed'); game.setCrew(driver, crew.value); refresh(); };
   const task = el('p', {className: 'driver-task', hidden: true});
+  const locationReference = el('p', {className:'note'});
   const name = el('span', {className: 'name', textContent: driver.id + ' · ' + driver.car.name});
   const tag = el('span', {className: 'tag', textContent: driver.car.simulated ? 'sim' : 'live'});
   const remove = el('button', {className: 'small', textContent: '✕', title: 'Disconnect'});
@@ -64,7 +65,7 @@ function addCard(driver) {
   refreshHealth.onclick = () => { if (game.drivers.some(d=>d.car.speed>0) || countdown || game.diagnostic) return; driver.car.refreshBattery(); log('Battery refresh requested; wait for a new sample'); };
   const diagnostic = el('button', {textContent:'Clear track · 0.5 s straight test', title:'Supervise beside the car. Three-second countdown, then at most 150 mm/s; host timing cannot guarantee a stop after Bluetooth loss.'});
   const steeringTest = el('button', {textContent:'Clear track · one left-lane test', title:'Supervise beside the car. Three-second countdown; at most 300 mm/s for four seconds. One left request only after a readable straight code; automatic STOP.'});
-  const cancellationComparison = el('button', {textContent:'Supervised · cancellation comparison', title:'One Computer run at no more than 300 mm/s. A lane cancellation locks further steering while forward driving continues. STOP and all other faults still stop. Remain beside the track.'});
+  const cancellationComparison = el('button', {textContent:'Supervised · cancellation comparison', title:'Place the sensor just before the start/finish codes. Forward-only acquisition must read that anchor and a consistent follow-up within five seconds before Computer steering unlocks. Ceiling 300 mm/s. Remain beside the track; STOP stays available.'});
   cancellationComparison.onclick = () => {
     try {
       requireVisible();
@@ -73,8 +74,8 @@ function addCard(driver) {
       halt('Preparing supervised cancellation comparison'); session.reset(); activeMission=null;
       if (!recorder.active) { recorder.start(game.drivers,'Supervised lane-cancellation comparison'); $('record').textContent='Stop recording'; }
       countdown={kind:'lane-cancellation-comparison',driverId:driver.id,until:performance.now()+3000};
-      recorder.mark('lane-cancellation-comparison-request',{carId:driver.id,ceiling:Math.min(300,game.topSpeed),onCancellation:'lock-steering-continue-forward'});
-      log('Supervised comparison countdown: cancellation will lock steering while forward driving continues; STOP remains available'); renderRound();
+      recorder.mark('lane-cancellation-comparison-request',{carId:driver.id,ceiling:Math.min(300,game.topSpeed),referencePolicy:'fresh-start-finish-and-consistent-followup',onCancellation:'lock-steering-continue-forward'});
+      log('Supervised comparison countdown: start/finish reference first; lane commands and offset calibration stay locked until confirmed. STOP remains available'); renderRound();
     } catch(error) { log(error.message); }
   };
   const prepareDiagnostic = steering => {
@@ -114,7 +115,7 @@ function addCard(driver) {
     el('div', {className: 'top'}, name, tag, code, remove),
     el('div', {className: 'grid'}, model, control), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
-    el('div', {className: 'meta'}, left, right), weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, steeringTest, cancellationComparison, seatBox);
+    el('div', {className: 'meta'}, left, right), locationReference, weaponsBox, recover, task, browserControls, refreshHealth, diagnostic, steeringTest, cancellationComparison, seatBox);
   code.onclick = async () => {
     if (!seatBox.hidden) { seatBox.hidden = true; return; }
     try {
@@ -130,7 +131,7 @@ function addCard(driver) {
   control.onchange = () => { control.blur?.(); if (session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
   remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
-  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow, task, cancellationComparison});
+  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, locationReference, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow, task, cancellationComparison});
   refresh();
 }
 
@@ -288,10 +289,11 @@ function renderRound() {
   $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
   $('roundState').textContent = game.diagnostic ? 'DIAGNOSTIC · AUTO STOP' : countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
   if (comparison || countdown?.kind==='lane-cancellation-comparison') {
-    $('roundLabel').textContent=comparison?.cancelled?'STEERING LOCKED · CAR STILL DRIVING':'SUPERVISED COMPARISON';
+    const acquiring=comparison?.stage==='acquiring-reference';
+    $('roundLabel').textContent=acquiring?'ACQUIRING START/FINISH REFERENCE':comparison?.cancelled?'STEERING LOCKED · CAR STILL DRIVING':'SUPERVISED COMPARISON';
     $('roundTitle').textContent='Lane-cancellation comparison';
-    $('roundGoal').textContent=comparison?.cancelled?'No further steering. Forward driving continues at no more than 300 mm/s. Press STOP to end.':'At most 300 mm/s. A cancellation locks steering without stopping forward drive. Other safety stops remain active.';
-    $('roundState').textContent=countdown?'Get ready':comparison?.cancelled?'FORWARD DRIVE · STEERING LOCKED':'COMPUTER · SUPERVISE';
+    $('roundGoal').textContent=acquiring?'Forward only, no lane or offset commands. The first optical code must identify start/finish, followed by a consistent reading. Wrong reference or a five-second acquisition timeout stops the test.':comparison?.cancelled?'No further steering. Forward driving continues at no more than 300 mm/s. Press STOP to end.':comparison?.stage==='driving'?'Start/finish reference and follow-up confirmed. Computer driving at no more than 300 mm/s; cancellation locks steering while forward driving continues. STOP remains available.':'Place the sensor just before start/finish. Optical reference confirmation comes before Computer steering. Ceiling 300 mm/s; STOP remains available.';
+    $('roundState').textContent=countdown?'Get ready':acquiring?'FORWARD ONLY · CONFIRMING POSITION':comparison?.cancelled?'FORWARD DRIVE · STEERING LOCKED':'COMPUTER · SUPERVISE';
   }
   $('countdown').hidden = !countdown; $('countdown').textContent = countdown ? $('roundClock').textContent : '';
   $('endRound').hidden = !running && !countdown && !comparison;
@@ -538,10 +540,20 @@ function pushState(snapshot, now) {
 
 // --- loops ---------------------------------------------------------------------------
 const PHASE = {garage: 'Garage', scanning: 'Scanning', ready: 'Track ready', battle: 'Battle'};
+function locationDescription(location) {
+  const reference=location.reference;
+  if (!reference) return 'Position unknown · '+(location.reason??'waiting for an optical code')+'. Map marker hidden.';
+  const reading=(reference.source==='simulator-seed'?'Simulator placement':'Optical reference')+': piece '+reference.pieceId+(reference.locationId===null?'':' / code '+reference.locationId)+', '+(reference.reverse?'reverse':'forward')+', '+(reference.ageMs/1000).toFixed(1)+'s ago';
+  const state=location.state==='confirmed'?'Matched map section '+(reference.index+1):location.state==='estimated'?'Estimated between optical codes':location.state==='ambiguous'?'Ambiguous map section · marker hidden':location.state==='stale'?'Reference expired · marker hidden':'Position unknown · marker hidden';
+  return state+'. '+reading+(reference.unverified?' · special-piece geometry unverified':'')+'.';
+}
 function refresh(snapshot = game.snapshot()) {
   const hasPowerZone = game.track?.pieces.some(p=>p.id===57);
   $('powerZoneStatus').hidden = !hasPowerZone;
   $('powerZoneStatus').textContent = 'Power Zone detected · brown track section. Attack activation is unverified and disabled. Scored rounds remain blocked on this circuit.';
+  const unlocated=snapshot.filter(s=>!s.located).map(s=>s.name);
+  $('mapPositionStatus').hidden=!game.drivers.length;
+  $('mapPositionStatus').textContent=unlocated.length?'Position unknown: '+unlocated.join(', ')+'. Unconfirmed map markers are hidden; physical placement alone does not establish an optical reference.':'Map positions are estimates from recent optical codes. Confirm the physical car before testing.';
 
   const scanOptions=game.drivers.filter(d=>d.car.connected),scanKey=scanOptions.map(d=>d.id+':'+d.car.name).join('|');
   if($('scanCar').dataset.key!==scanKey){const selected=$('scanCar').value;$('scanCar').replaceChildren(...scanOptions.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));if(scanOptions.some(d=>String(d.id)===selected))$('scanCar').value=selected;$('scanCar').dataset.key=scanKey;}
@@ -553,6 +565,7 @@ function refresh(snapshot = game.snapshot()) {
     const offset=x.laneChange ? (x.laneChange.offsetKnown?'reported '+x.laneChange.currentOffset.toFixed(1)+' mm':'UNKNOWN — lane calibration needed') : 'not reported';
     return d.car.name+' · firmware '+(x.firmware??'waiting')+' · '+x.profile+'\n'+
       (x.connected?'Connected':'Disconnected')+' · '+(x.safetyReason??x.initialization)+'\n'+
+      locationDescription(x.localization)+'\n'+
       'Requested '+x.requestedSpeed+' mm/s; car reported '+x.reportedSpeed+' mm/s ('+seconds(x.reportedSpeedAgeMs)+')\n'+
       'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
       'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+' ('+seconds(x.batteryAgeMs)+')\n'+
@@ -560,7 +573,7 @@ function refresh(snapshot = game.snapshot()) {
       'Firmware collision notifications: '+(x.collisions??0)+' · last '+seconds(x.collisionAgeMs)+(x.lastCollision?' · side '+x.lastCollision.wasSideOnCollision+' · front/back '+x.lastCollision.wasFrontBackCollision:'')+' · not confirmation of physical impact\n'+
       'Firmware recovery: entered '+(x.recoveryEntered??0)+' · succeeded '+(x.recoverySucceeded??0)+' (diagnostic only)\n'+
       'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
-      (x.laneCancellationComparison?.active?'\nSUPERVISED COMPARISON · '+(x.steeringLocked?'STEERING LOCKED; FORWARD DRIVING CONTINUES':'cancellation will lock steering and retain forward drive')+' · STOP ends this comparison.':x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
+      (x.laneCancellationComparison?.active?'\nSUPERVISED COMPARISON · '+(x.laneCancellationComparison.stage==='acquiring-reference'?'ACQUIRING START/FINISH REFERENCE; lane and offset commands locked':x.steeringLocked?'STEERING LOCKED; FORWARD DRIVING CONTINUES':'reference confirmed; cancellation will lock steering and retain forward drive')+' · STOP ends this comparison.':x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+
       (x.laneRequest?'\nSteering request #'+x.laneRequest.id+': target '+x.laneRequest.offset.toFixed(1)+' mm, sideways '+x.laneRequest.horizontalSpeed+' mm/s':'')+
       (x.laneAcknowledgment?'\nSDK-layout ACK (firmware semantics unverified): received #'+x.laneAcknowledgment.received+', executed #'+x.laneAcknowledgment.executed+', requested sideways '+x.laneAcknowledgment.desiredLaneSpeed+' mm/s ('+seconds(performance.now()-x.laneAcknowledgment.at)+'); not proof of lane completion':'')+
@@ -590,6 +603,7 @@ function refresh(snapshot = game.snapshot()) {
     const s = byId.get(driver.id); if (!s) continue;
     ui.cancellationComparison.disabled=busy || !game.halted || !!game.pitReason;
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
+    ui.locationReference.textContent=locationDescription(driver.car.diagnostics().localization);
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';
     ui.left.textContent = driver.car.initializing ? 'Initializing: ' + driver.car.initializationStatus : !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? driver.gamepadWarning || 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
@@ -599,7 +613,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.browserControls.hidden = driver.control !== 'browser';
     ui.fireRow.hidden = game.phase !== 'battle';
     ui.throttle.value = Math.round((driver.level ?? 0) * 100); ui.throttle.disabled = game.halted || !!s.safetyReason;
-    ui.right.textContent = (s.millivolts ? (s.millivolts / 1000).toFixed(2) + ' V · ' : '') + (s.located ? 'on map' : game.track ? 'locating' : 'no map') + (s.crew ? ' · ' + s.crew + ' · ' + s.assists + ' assists' : '') + (s.targets?.length ? ' · Target ' + s.targets.join(', ') : '');
+    ui.right.textContent = (s.millivolts ? (s.millivolts / 1000).toFixed(2) + ' V · ' : '') + (s.located ? 'map estimate' : game.track ? 'position unknown' : 'no map') + (s.crew ? ' · ' + s.crew + ' · ' + s.assists + ' assists' : '') + (s.targets?.length ? ' · Target ' + s.targets.join(', ') : '');
     if (ui.control.value !== driver.control) ui.control.value = driver.control;
     const chips = ['attack', 'support', 'special'].filter(b => s[b]).map(b => {
       const chip = el('span', {className: 'weapon' + (s[b].ready ? ' ready' : '')});
@@ -660,7 +674,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-12-live-diagnostics-1',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-13-optical-reference',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);

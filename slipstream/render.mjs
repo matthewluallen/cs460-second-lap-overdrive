@@ -4,6 +4,14 @@ import {pointOn, layout} from './track.mjs';
 const ROAD_HALF = 105;
 const css = ([r, g, b], a = 1) => `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`;
 
+// An old or ambiguous estimate is not a car location. Both map views must
+// exclude it from car sprites and effects instead of presenting a faint guess.
+export function trustedCarPose(car) {
+  const pose=car.pose;
+  if (!pose || pose.located!==true || car.located===false || car.connected===false || car.safetyReason==='Off track') return null;
+  return [pose.x,pose.y,pose.heading].every(Number.isFinite) ? pose : null;
+}
+
 export class Renderer {
   constructor(canvas) { this.canvas = canvas; this.ctx = canvas.getContext('2d'); this.effects = []; this.view = null; this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false; }
   resize() {
@@ -83,9 +91,10 @@ export class Renderer {
       c.fillText(objective.label, x, y + 4 * this.ratio);
     }
     for (const car of cars) {
-      if (!car.pose) continue;
-      const [x, y] = this.xy(car.pose); at[car.id] = {x, y, heading: car.pose.heading};
-      c.save(); c.translate(x, y); c.rotate(-car.pose.heading);
+      const pose=trustedCarPose(car);
+      if (!pose) continue;
+      const [x, y] = this.xy(pose); at[car.id] = {x, y, heading: pose.heading};
+      c.save(); c.translate(x, y); c.rotate(-pose.heading);
       const L = (car.truck ? 120 : 88) * s, W = 46 * s;
       c.shadowColor = css(car.color, 0.9); c.shadowBlur = (car.disabled ? 4 : 18) * this.ratio;
       c.fillStyle = car.disabled ? '#444b57' : css(car.color); this.#round(-L / 2, -W / 2, L, W, 9 * s); c.fill();
@@ -93,7 +102,6 @@ export class Renderer {
       c.fillStyle = '#fff'; c.fillRect(L / 2 - 5 * s, -W / 2 + 4 * s, 4 * s, 8 * s); c.fillRect(L / 2 - 5 * s, W / 2 - 12 * s, 4 * s, 8 * s);
       c.restore();
       if (car.shield) { c.beginPath(); c.arc(x, y, 70 * s, 0, 7); c.strokeStyle = 'rgba(89,200,255,.9)'; c.lineWidth = 4 * s; c.stroke(); c.fillStyle = 'rgba(89,200,255,.12)'; c.fill(); }
-      if (!car.located) { c.beginPath(); c.arc(x, y, 60 * s, 0, 7); c.setLineDash([6 * s, 6 * s]); c.strokeStyle = 'rgba(255,255,255,.5)'; c.lineWidth = 2 * s; c.stroke(); c.setLineDash([]); }
       const bw = 90 * s, bx = x - bw / 2, by = y - 78 * s;
       c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(bx, by, bw, 7 * s);
       c.fillStyle = car.energy < 0.33 ? '#ff4d6d' : car.energy < 0.66 ? '#ffb84d' : '#5dff9b'; c.fillRect(bx, by, bw * Math.max(0, car.energy), 7 * s);

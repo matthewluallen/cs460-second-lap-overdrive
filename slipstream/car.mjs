@@ -138,7 +138,7 @@ export class Car {
     this.scanDelocalizationAllowance = false;
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     const wasConnected = this.connected;
-    this.connected = false; this.pending.clear(); this.unsubscribe?.();
+    this.connected = false; this.localizer?.invalidate('Disconnected'); this.pending.clear(); this.unsubscribe?.();
     try { this.transport.close(); } catch {}
     if (wasConnected && error) for (const fn of this.listeners) fn({type: 'closed', wasMoving, reason: error.message ?? 'disconnected'}, this);
   }
@@ -206,6 +206,7 @@ export class Car {
       else if (m.type === 'position') { this.endScanDelocalization(); this.delocalized = false; this.reportedSpeed = m.speed; this.lastPosition = now; if (!this.diagnosticMotion || (this.diagnosticSteering && now < this.diagnosticUntil)) this.#lane(m, now); }
       else if (m.type === 'speed') { this.telemetry.speedReport={...m,at:now}; this.reportedSpeed = Math.max(0, m.actual); this.lastPosition = now; }
       this.localizer?.feed(m, now);
+      if (this.safetyReason==='Off track') this.localizer?.invalidate('Off track; recover before acquiring a new reference');
       for (const fn of this.listeners) fn(m, this);
     }
   }
@@ -222,7 +223,7 @@ export class Car {
     if (!spot) { this.lastPair = null; return; }
     this.telemetry.calibrationBlocked = null;
     this.lateral = spot.lateral; this.lateralEstimate = {source:'printed-code',at:now,signVerified:false};
-    if (this.steeringLocked) { this.lastPair=null; return; }
+    if (this.steeringLocked || this.safetyReason || this.initializing || this.closing || this.faulted) { this.lastPair=null; return; }
     if (this.lastPair && m.offset !== 654321) {
       const dTruth = spot.lateral - this.lastPair.lateral, dCar = m.offset - this.lastPair.offset;
       // A clear move the wrong way round means our assumed sign is wrong: with the
@@ -256,6 +257,7 @@ export class Car {
     return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
       startupNotifications:{buffered:this.transport.earlyDelivered??0,dropped:this.transport.earlyDropped??0,timestampBasis:'buffered packets timestamped on drain'},
       connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,steeringLocked:this.steeringLocked,
+      localization:this.localizer?.diagnostics(now)??{state:'unknown',trusted:false,reason:'No map',reference:null},
       requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
       collisionAgeMs:age(this.telemetry.lastCollision?.at),
       batteryAgeMs:age(this.telemetry.batteryAt),statusAgeMs:age(this.telemetry.statusAt),status:{...this.status},
@@ -334,6 +336,8 @@ export class Car {
     this.lastPair=null;this.forceLane=true;
     this.telemetry.steeringLock={at:this.clock(),reason};
   }
+  // Releasing an acquisition lock cannot revive commands discarded while locked.
+  unlockSteering() { this.steeringLocked=false; this.lastPair=null; this.forceLane=true; }
   stop() {
     // A pending lane request may be discarded below, or the car may be moved
     // during recovery. The next steering target must reach the vehicle.
@@ -353,7 +357,7 @@ export class Car {
     if (!this.connected || this.closing || this.faulted) { this.pending.clear(); return; }
     if (!this.pumping) this.pumpPromise = this.#pump();
   }
-  safetyStop(reason) { this.safetyReason = reason; this.stop(); }
+  safetyStop(reason) { this.safetyReason = reason; if(reason==='Off track')this.localizer?.invalidate('Off track; recover before acquiring a new reference'); this.stop(); }
   recover() {
     if (!this.connected || this.closing || this.faulted) return false;
     this.safetyReason = null; this.lastSpeedSent = -1; return true;

@@ -1,6 +1,7 @@
 // Original procedural scenery. The scene consumes telemetry; it never drives a car.
 import * as THREE from './vendor/three.module.js';
 import {pointOn, layout} from './track.mjs';
+import {trustedCarPose} from './render.mjs';
 
 const color = rgb => new THREE.Color(...rgb);
 export class Renderer3D {
@@ -122,15 +123,15 @@ export class Renderer3D {
     for(const [id,entry] of this.carMeshes) if(!ids.has(id)){this.#clear(entry.group);this.carRoot.remove(entry.group);this.carMeshes.delete(id);}
     for(const row of cars){
       let m=this.carMeshes.get(row.id);if(m&&m.model!==row.model){this.#clear(m.group);this.carRoot.remove(m.group);this.carMeshes.delete(row.id);m=null;}
-      if(!m){m=this.#car(row);this.carMeshes.set(row.id,m);}m.group.visible=!!row.pose;
-      if(!row.pose)continue;
-      m.group.position.set(row.pose.x/1000,.03,-row.pose.y/1000);m.group.rotation.y=row.pose.heading;
-      m.shell.color.copy(row.disabled?new THREE.Color(0x614052):color(row.color));m.ring.material.opacity=row.located ? .75 : .2;
+      if(!m){m=this.#car(row);this.carMeshes.set(row.id,m);}const pose=trustedCarPose(row);m.group.visible=!!pose;
+      if(!pose)continue;
+      m.group.position.set(pose.x/1000,.03,-pose.y/1000);m.group.rotation.y=pose.heading;
+      m.shell.color.copy(row.disabled?new THREE.Color(0x614052):color(row.color));m.ring.material.opacity=.75;
       m.shield.visible=!!row.shield;
       const energy=Number.isFinite(row.energy)?Math.max(0,Math.min(1,row.energy)):0;
       m.energy.scale.set(.1*energy,.009,1);m.energy.visible=energy>0;
       m.energy.material.color.set(energy<.33?0xff4d6d:energy<.66?0xffb84d:0x5dff9b);
-      positions.set(row.id,m.group.position.clone());headings.set(row.id,row.pose.heading);
+      positions.set(row.id,m.group.position.clone());headings.set(row.id,pose.heading);
     }
     this.#clear(this.effectRoot);
     this.effects=this.effects.filter(e=>now-e.born<(e.life??350));

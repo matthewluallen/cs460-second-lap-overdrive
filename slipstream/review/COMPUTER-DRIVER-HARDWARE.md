@@ -52,4 +52,39 @@ The operator has been asked for a product decision before changing that stop pol
 
 The operator answered **“Allow this supervised comparison”** to the specific proposal to keep forward driving (ceiling300) after a lane cancellation, clear and lock further steering, and retain manual STOP/off-track/telemetry-loss/link-fault protections. A separate **Supervised · cancellation comparison** control makes this an explicit one-run exception. Its three-second countdown is cancellable; it requires one stopped Computer-driven car, a complete identified map, initialized connection, a fresh battery sample and no charging/low-battery status. It is unscored and does not bypass the Power Zone scoring restriction. An alarm explicitly distinguishes continued forward driving from stopping. All stopping paths end the exception; it is not saved or restored on reconnect. No new test result is implied by authorization or software tests.
 
-Comparison implementation verification: **631 Node tests passed** on Node22, including seven comparison/fault/queue tests and two host countdown/UI tests. Normal scan and recorded-scan regressions pass. The comparison is authorized but has not yet run on hardware.
+Comparison implementation verification before the trial: **631 Node tests passed** on Node22, including seven comparison/fault/queue tests and two host countdown/UI tests. Normal scan and recorded-scan regressions passed.
+
+## Comparison attempt: physical departure before any lane command
+
+Build `ae3012b` ran the approved comparison on 13 November. The operator confirmed a printed lane, clear track and supervision after startup status reported `onTrack:false`. Battery was freshly recharged to4160 mV, compared with3709 mV in the previous run; this was not a strict single-variable reproduction. After STOP the operator confirmed **“Stopped; it left the track”**, then reported that the map marker showed a different location and that they had placed the car at start/finish. The car was disconnected after physical-stop confirmation. No repeat movement was attempted.
+
+The original428-event export is retained byte-for-byte as `fixtures/groundshock-sdk-comparison-offtrack.json` (SHA256 `719ce3f4f2ed814cb2f6883b88f1428560dc7d0432a8003bf85c4b381f45fee8`), downloaded as `slipstream-trace-2026-11-13T17-58-59-395Z.json`. Zero events dropped. Diagnostics were sampled at export after recording stopped, so cumulative diagnostic counters need not equal counts in the frozen event list.
+
+| Recorder time, ms | Observed evidence |
+|---|---|
+|59291|Only nonzero speed write:300 mm/s.|
+|59972|Status reports on track.|
+|61622|First optical position: curve18/code9, forward,297 mm/s; firmware offset sentinel654321.|
+|61623|Only offset write:−34.7 mm, derived from the curve’s printed code.|
+|63328,64010|Power Zone57, reverse codes25 and24.|
+|65584|Last optical position: straight39/code13, forward,239 mm/s.|
+|66843,68853,70128|Transition reports without a further printed position.|
+|70865|Status reports off track.|
+|71313|Firmware recovery entry.|
+|71553,71554|Delocalized message, then completed STOP write1 ms later. This is not measured physical braking latency.|
+
+There is **no CHANGE_LANE**, no lane-cancellation response, no start/finish33/34 position, and no0x35/0x37 write in the capture. The approved cancellation exception was therefore not exercised; it cannot explain this incident through its cancellation branch. One auto-calibration write occurred. Its presence is not proof of a bad value or a physical cause.
+
+Replaying against the previously accepted11-piece map resolves the first duplicated18 only when57 is observed, then places39 at index3. Three transition-only reports predict indices4→5→6. The original trace contains a matching map-validation summary but not the actual loaded sequence, so exact map identity is an inference. There is no evidence here proving the map was wrong before loss. There is a reproduced display defect after loss: Localizer retained an on-road point while `located:false`, and both renderers drew it. Transitions also refreshed the old optical reference’s age. Negative on-track status and recovery entry did not invalidate it until the later delocalization packet.
+
+## Reference and display repair
+
+Both renderers now hide invalid, ambiguous, stale or disconnected car poses and their anchored effects. Optical freshness is measured from the last position code, not extended by transition reports. Expired candidate history cannot disambiguate a later repeated road ID, and an unexpected road code cannot manufacture a lap before re-localization. Off-track status, recovery entry, invalid codes and disconnection invalidate location immediately. This invalidation does not itself change the ordinary forward STOP policy. The UI exposes the last code, direction, age and whether it is confirmed, estimated, ambiguous, stale or unknown. Simulator placement is explicitly labeled. New exports include the complete loaded map and localization evidence.
+
+At the operator’s request, the next **supervised cancellation comparison** begins with reference acquisition. It resets prior localization and locks lane, turn and offset commands before moving. The first valid optical observation must uniquely identify a mapped start/finish section; a distinct, consistent subsequent optical observation in the same direction is required before Computer steering becomes eligible. An unexpected first piece, inconsistent follow-up, intervening loss/recovery, expired optical evidence or five-second reference-acquisition timeout stops and opens the pit. The ordinary speed-reply/straight-geometry steering checks still apply afterward. This acquisition timeout does not limit the duration of confirmed driving. Normal scan and ordinary driving policy remain separate; no new firmware packet is introduced. Late position messages while safety-stopped or initializing can update observations but no longer trigger automatic calibration or sign learning.
+
+This is a host test precondition, **not full original-app parity or hardware acceptance**. The native app’s `ProcessPositionUpdate`0071bdc0 calls `FindUniqueBiDirectionalMatchOnLatestTrackMapperSegmentWithEncoders`008773e4 before accepting an unlocalized pose. Its loss handler0071e178 clears localization and changes the off-road representation. These support explicit uncertainty; they do not prove our simplified model or explain the physical departure. Proprietary decompiled artifacts remain local.
+
+Before another physical trial, place the sensor before the printed start/finish codes, supervise forward-only acquisition and compare the displayed optical reference with physical placement. A mismatch ends that attempt; do not repeat it unchanged. Repeated safe laps, completed right steering, attacks on special tiles and the physical cause of this departure remain open. The new acquisition procedure has not run on hardware.
+
+Final software verification: Node22.23.5, npm11.9.0, Python3.14.7; **653/653 Node tests**, **38 Python tests**, CWE regression checks and dependency lab pass; npm audit reports **0 vulnerabilities**. This includes13 comparison tests,8 optical-reference regressions,4 renderer regressions,3 new hardware-trace checks and the full existing mode/car-count matrix. Browser simulator review confirmed the 3D scene hides stale cars while displaying the reason. No additional physical trial was run and no proprietary decompiled files were published.

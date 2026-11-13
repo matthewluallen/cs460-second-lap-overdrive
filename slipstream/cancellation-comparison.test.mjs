@@ -12,10 +12,10 @@ const steeringIds=new Set([ID.CHANGE_LANE,ID.SET_OFFSET,ID.OFFSET_ADJUST,ID.TURN
 const steering=radio=>radio.sent.filter(p=>steeringIds.has(p[1]));
 const speeds=radio=>radio.sent.filter(p=>p[1]===ID.SPEED).map(p=>p[2]+256*p[3]);
 const cancellation=()=>Uint8Array.from([14,ID.LANE_CHANGE_UPDATE,0,0,0,0,0,0,0,0,0,0,44,1,128]);
-function position({piece=36,location=30,speed=300}={}){
+function position({piece=36,location=30,speed=300,reverse=false}={}){
   const bytes=new Uint8Array(17),view=new DataView(bytes.buffer);
   bytes[0]=16;bytes[1]=ID.POSITION;bytes[2]=location;bytes[3]=piece;
-  view.setFloat32(4,22.5,true);view.setUint16(8,speed,true);bytes[10]=7;bytes[11]=bytes[12]=255;
+  view.setFloat32(4,22.5,true);view.setUint16(8,speed,true);bytes[10]=7|(reverse?0x40:0);bytes[11]=bytes[12]=255;
   return bytes;
 }
 function speedReport(speed=300,accel=1000){
@@ -31,16 +31,18 @@ function radio(){
     }};return r;
 }
 async function rig(){
-  let now=0;const r=radio();
-  const game=new Game({pieces:data('pieces'),weapons:data('weapons'),vehicles:data('vehicles'),clock:()=>now});
+  let now=0;const r=radio(),timers=[];
+  const game=new Game({pieces:data('pieces'),weapons:data('weapons'),vehicles:data('vehicles'),clock:()=>now,
+    schedule:(fn,ms)=>{const timer={fn,ms,cancelled:false};timers.push(timer);return timer;},unschedule:timer=>{timer.cancelled=true;}});
   const driver=game.addCar(r,{control:'bot'});await driver.car.initialization;await driver.car.pumpPromise;
   game.useTrack(buildTrack(game.pieces,LAYOUTS.Capsule));game.stopAll();await driver.car.pumpPromise;
   r.emit([3,ID.BATTERY_REPLY,0,16]);r.emit([5,ID.STATUS,1,0,0,1]);r.sent=[];
   const time=t=>{now=t;};
-  return {game,driver,radio:r,time,async start({lane=true}={}){
+  return {game,driver,radio:r,time,timers,async start({lane=true,reference=true}={}){
     game.startLaneCancellationComparison(driver);time(100);game.tick(.04,now);await settle();
     assert.equal(driver.car.speed,300);
-    if(lane){time(110);r.emit(speedReport());time(120);r.emit(position());game.tick(.04,now);await settle();}
+    if(reference){time(110);r.emit(speedReport());time(120);r.emit(position({piece:34,location:20}));time(130);r.emit(position({piece:34,location:21}));assert.equal(game.laneCancellationComparison.stage,'driving');}
+    if(lane){time(140);r.emit(position());game.tick(.04,now);await settle();}
   }};
 }
 
@@ -109,7 +111,7 @@ test('cancellation followed immediately by STOP cannot release lateral writes qu
 
 test('off-road, telemetry silence and link failures still stop and end the comparison',async()=>{
   for(const fault of ['off-road','gap','no-first-position','link','write']){
-    const r=await rig(),{game,driver,radio,time}=r;await r.start({lane:false});
+    const r=await rig(),{game,driver,radio,time}=r;await r.start({lane:false,reference:fault!=='no-first-position'});
     if(fault!=='no-first-position'){time(200);radio.emit(position());}
     if(fault==='off-road')radio.emit([1,ID.DELOCALIZED]);
     if(fault==='gap'){time(2201);game.tick(.04,2201);}
@@ -143,6 +145,7 @@ test('comparison requires a single stopped ready computer car, an identified map
     ['no map',({game})=>game.track=null],
     ['open map',({game})=>game.track.closed=false],
     ['inferred map',({game})=>game.track.inferredCount=1],
+    ['no start or finish',({game})=>{game.track.pieces=game.track.pieces.filter(p=>!['start','finish'].includes(p.kind));}],
     ['stale battery',({time})=>time(30001)],
     ['missing battery',({driver})=>driver.car.telemetry.batteryAt=undefined],
     ['charging',({radio})=>radio.emit([5,ID.STATUS,1,1,0,0])],
@@ -162,5 +165,112 @@ test('comparison requires a single stopped ready computer car, an identified map
     const before=r.game.laneCancellationComparison;
     assert.throws(()=>r.game.startLaneCancellationComparison(r.driver),undefined,label);
     assert.equal(r.game.laneCancellationComparison===before,true,label);r.game.stopAll();await settle();
+  }
+});
+
+test('comparison resets old localization and holds all steering until a distinct consistent anchor follow-up',async()=>{
+  const r=await rig(),{game,driver,radio,time,timers}=r;
+  radio.emit(position());assert.equal(driver.car.localizer.located,true);
+  await r.start({lane:false,reference:false});
+  assert.equal(driver.car.localizer.located,false);assert.equal(driver.car.localizer.index,-1);
+  assert.equal(driver.car.steeringLocked,true);assert.equal(timers[0].ms,5000);
+  driver.car.steerTo(45);driver.car.uturn();driver.car.send('offset',encode.setOffset(45));
+  time(120);radio.emit(position({piece:34,location:20}));await settle();
+  assert.equal(game.laneCancellationComparison.stage,'acquiring-reference');
+  assert.equal(game.laneCancellationComparison.reference.pieceId,34);
+  time(130);radio.emit(position({piece:34,location:20}));game.tick(.04,130);await settle();
+  assert.equal(driver.car.steeringLocked,true,'repeated same code is not independent confirmation');
+  assert.equal(steering(radio).length,0,'even automatic calibration is blocked during acquisition');
+  time(140);radio.emit(position({piece:34,location:21}));await settle();
+  assert.equal(game.laneCancellationComparison.stage,'driving');assert.equal(driver.car.steeringLocked,false);
+  assert.equal(steering(radio).length,0,'unlock does not send an offset or lane itself');
+  assert.equal(timers[0].cancelled,true);assert.equal(driver.car.telemetry.laneCancellationComparison.confirmedAt,140);
+  timers[0].fn();assert.notEqual(game.laneCancellationComparison,null,'expired acquisition callback cannot stop confirmed driving');
+  game.stopAll();await settle();
+});
+
+test('the first optical reference must be valid, uniquely mapped start or finish from the current motion',async()=>{
+  for(const bad of [position(),position({piece:18,location:9}),position({piece:57,location:25}),position({piece:99,location:1}),position({piece:34,location:255}),position({piece:34,location:20,speed:0})]){
+    const r=await rig(),{game,driver,radio,time}=r;await r.start({lane:false,reference:false});
+    time(120);radio.emit(bad);await settle();
+    assert.equal(game.laneCancellationComparison,null);assert.equal(driver.car.speed,0);assert.match(game.pitReason,/expected.*start\/finish; observed piece/);
+    assert.equal(steering(radio).length,0,'a mismatched first code cannot calibrate before STOP');
+    assert.equal(driver.car.telemetry.laneCancellationComparison.stage,'failed');
+  }
+  const duplicate=await rig();duplicate.game.track.pieces.push({...duplicate.game.track.pieces.find(p=>p.id===34)});
+  await duplicate.start({lane:false,reference:false});duplicate.time(120);duplicate.radio.emit(position({piece:34,location:20}));await settle();
+  assert.match(duplicate.game.pitReason,/uniquely identified/);assert.equal(steering(duplicate.radio).length,0);
+  const beforeMotion=await rig();beforeMotion.game.startLaneCancellationComparison(beforeMotion.driver);
+  beforeMotion.time(1);beforeMotion.radio.emit(position({piece:34,location:20}));await settle();
+  assert.equal(beforeMotion.game.laneCancellationComparison,null,'a late optical packet before current motion cannot authorize driving');
+  assert.equal(beforeMotion.driver.car.speed,0);
+});
+
+test('reference follow-up rejects wrong pieces, reverse direction and non-forward codes',async()=>{
+  for(const next of [position({piece:20,location:9}),position({piece:57,location:25}),position({piece:34,location:21,reverse:true}),position({piece:34,location:18})]){
+    const r=await rig(),{game,driver,radio,time}=r;await r.start({lane:false,reference:false});
+    time(120);radio.emit(position({piece:34,location:20}));time(140);radio.emit(next);await settle();
+    assert.equal(driver.car.speed,0);assert.equal(game.laneCancellationComparison,null);
+    assert.match(game.pitReason,/expected a forward follow-up.*observed piece/);assert.equal(steering(radio).length,0);
+  }
+  // A finish anchor has only one longitudinal code row. Its next mapped piece
+  // is valid confirmation, with or without the intervening transition packet.
+  for(const withTransition of [false,true]){
+    const r=await rig(),{game,radio,time}=r;await r.start({lane:false,reference:false});
+    time(120);radio.emit(position({piece:33,location:10}));
+    if(withTransition){time(130);radio.emit([17,ID.TRANSITION,0,0,0,0,0,0,255,255,0,0,44,1,0,0,22,22]);}
+    time(140);radio.emit(position({piece:39,location:30}));await settle();
+    assert.equal(game.laneCancellationComparison.stage,'driving');game.stopAll();await settle();
+  }
+});
+
+test('reference deadline survives repeated anchor codes and a cancellation during acquisition still opens the pit',async()=>{
+  for(const path of ['timer','tick','message']){
+    const r=await rig(),{game,driver,radio,time,timers}=r;await r.start({lane:false,reference:false});
+    time(120);radio.emit(position({piece:34,location:20}));
+    for(const now of [1000,2000,3000,4000]){time(now);radio.emit(position({piece:34,location:20}));game.tick(.04,now);}
+    assert.notEqual(game.laneCancellationComparison,null);time(5000);
+    if(path==='timer')timers[0].fn();else if(path==='tick')game.tick(.04,5000);else radio.emit(position({piece:34,location:21}));
+    await settle();assert.equal(driver.car.speed,0);assert.equal(game.laneCancellationComparison,null);assert.match(game.pitReason,/Reference timeout/);
+    assert.equal(timers[0].cancelled,true);assert.equal(steering(radio).length,0);
+  }
+  const r=await rig();await r.start({lane:false,reference:false});r.radio.emit(cancellation());await settle();
+  assert.match(r.game.pitReason,/Lane change cancelled/);assert.equal(r.driver.car.speed,0);assert.equal(r.game.laneCancellationComparison,null);
+  assert.equal(r.driver.car.telemetry.laneCancellationComparison.cancelled,false,'acquisition never activates the continue-forward exception');
+});
+
+test('loss or an optical gap invalidates an acquisition anchor before a later follow-up can unlock steering',async()=>{
+  for(const event of ['off-track-status','recovery','optical-gap']){
+    const r=await rig(),{game,driver,radio,time}=r;await r.start({lane:false,reference:false});
+    time(120);radio.emit(position({piece:34,location:20}));
+    if(event==='off-track-status'){time(125);radio.emit([5,ID.STATUS,0,0,0,1]);}
+    if(event==='recovery'){time(125);radio.emit([1,ID.DELOC_RECOVERY_ENTERED]);}
+    // No animation tick between observations: the newly arrived follow-up must
+    // not erase the evidence gap before the reference gate can check it.
+    time(event==='optical-gap'?2121:130);radio.emit(position({piece:34,location:21}));await settle();
+    assert.equal(game.laneCancellationComparison,null,event);assert.equal(driver.car.speed,0,event);
+    assert.match(game.pitReason,/Reference lost/,event);assert.equal(steering(radio).length,0,event);
+    assert.equal(driver.car.telemetry.laneCancellationComparison.stage,'failed',event);
+  }
+});
+
+test('late optical messages after a reference stop cannot calibrate or learn a steering sign',async()=>{
+  for(const failure of ['wrong-first','timeout','cancellation','host-stop']){
+    const r=await rig(),{game,driver,radio,time,timers}=r;await r.start({lane:false,reference:false});
+    time(120);
+    if(failure==='wrong-first')radio.emit(position());
+    if(failure==='timeout'){time(5000);timers[0].fn();}
+    if(failure==='cancellation')radio.emit(cancellation());
+    if(failure==='host-stop')game.stopAll();
+    await settle();assert.ok(driver.car.safetyReason,failure);assert.equal(game.laneCancellationComparison,null);
+    driver.car.lastPair={lateral:-22.5,offset:22.5};driver.car.signVotes=0;
+    const late=position({piece:36,location:12});
+    for(const offset of [-70,654321]){
+      new DataView(late.buffer).setFloat32(4,offset,true);radio.emit(late);await settle();
+      assert.equal(steering(radio).length,0,failure+' cannot send a late offset or lane');
+      assert.equal(driver.car.signVotes,0,failure+' cannot learn from observations received while latched');
+    }
+    assert.equal(driver.car.lateral,31.5,'observed lateral telemetry may still be recorded');
+    assert.equal(driver.car.lastPair,null);assert.equal(driver.car.speed,0);
   }
 });
