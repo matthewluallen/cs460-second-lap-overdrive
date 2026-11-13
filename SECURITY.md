@@ -382,3 +382,12 @@ coverage includes all four controller types, shared stopping, fresh explicit
 steering, and special-code diagnostics that never refresh the track watchdog.
 552 Node tests and 38 Python tests pass; npm audit reports zero advisories. Physical
 steering and Power Zone activation remain unverified. No live host was reloaded.
+
+### Steering command correlation follow-up
+
+Steering requests now use seven-bit IDs, following the reviewed native app, and
+position/transition acknowledgment fields are retained in bounded diagnostics.
+Acknowledgments never release safety latches or prove physical lane completion.
+Cancellation still opens the shared pit while moving; no retry was added. All
+556 Node tests pass, including new packet-boundary, sequence-wrap and stop tests.
+This change is not a hardware-validated fix for steering cancellation.

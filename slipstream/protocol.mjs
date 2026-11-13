@@ -108,6 +108,9 @@ function decodeOne(m) {
       return {id, type: 'position', locationId: v.getUint8(2), pieceId: v.getUint8(3),
         offset: v.getFloat32(4, true), speed: v.getUint16(8, true), flags,
         reverse: (flags & 0x40) !== 0, reverseDriving: (flags & 0x20) !== 0,
+        lastReceivedLaneChangeId: has(11) ? m[11] : null,
+        lastExecutedLaneChangeId: has(12) ? m[12] : null,
+        desiredLaneSpeed: has(14) ? v.getUint16(13,true) : null,
         laneChangeId: has(12) ? v.getUint8(12) : 0, desiredSpeed: has(16) ? v.getUint16(15, true) : null};
     }
     case ID.TRANSITION: {
@@ -117,6 +120,8 @@ function decodeOne(m) {
       if (!has(17) || !Number.isFinite(v.getFloat32(4, true))) break;
       return {id, type: 'transition', pieceIndex: v.getInt8(2), previousPieceIndex: v.getInt8(3),
         offset: v.getFloat32(4, true),
+        lastReceivedLaneChangeId:m[8], lastExecutedLaneChangeId:m[9],
+        desiredLaneSpeed:v.getUint16(10,true), laneChangeActivity:m[13],
         uphill: has(15) ? v.getUint8(14) : 0, downhill: has(15) ? v.getUint8(15) : 0,
         leftCm: has(17) ? v.getUint8(16) : null, rightCm: has(17) ? v.getUint8(17) : null};
     }

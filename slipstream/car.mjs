@@ -17,6 +17,7 @@ export class Car {
     this.listeners = new Set(); this.localizer = null;
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
+    this.laneCommandId = 0;
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
     this.scanDelocalizationAllowance = false; this.scanDelocalizationUsed = false;
     this.firmwareInitialization = null;
@@ -168,7 +169,14 @@ export class Car {
         this.telemetry[key] = (this.telemetry[key] ?? 0) + 1;
         this.telemetry.lastSpecialCode = {type:m.type,code:m.code,rawTag:m.rawTag,at:now};
       }
-      if (m.type === 'position' || m.type === 'transition') this.lastTrackAt = now;
+      if (m.type === 'position' || m.type === 'transition') {
+        this.lastTrackAt = now;
+        if (m.lastReceivedLaneChangeId !== null && m.lastReceivedLaneChangeId !== undefined) {
+          this.telemetry.laneAcknowledgment = {at:now,source:m.type,
+            received:m.lastReceivedLaneChangeId,executed:m.lastExecutedLaneChangeId,
+            desiredLaneSpeed:m.desiredLaneSpeed,activity:m.laneChangeActivity??null};
+        }
+      }
       if (m.type === 'carInit') this.firmwareInitialization = m;
       else if (m.type === 'battery') this.millivolts = m.millivolts;
       else if (m.type === 'version') this.version = m.version;
@@ -257,7 +265,13 @@ export class Car {
     const target = Math.max(-LANE_LIMIT, Math.min(LANE_LIMIT, lateral));
     if (Math.abs(target - this.targetLateral) < 2 && !this.forceLane) return;
     this.forceLane = false; this.targetLateral = target;
-    this.send('lane', encode.changeLane(this.offsetSign * target, speed, 1000));
+    // F&F VehicleState::IncrementLaneChangeID (007bd20e): 7-bit sequence.
+    // The upper bit is reserved for cancellation in car reports. An ACK is
+    // evidence of command processing, never proof of physical lane completion.
+    this.laneCommandId = (this.laneCommandId + 1) & 0x7f;
+    this.telemetry.laneRequest = {id:this.laneCommandId,at:this.clock(),target,
+      offset:this.offsetSign*target,horizontalSpeed:speed,acceleration:1000};
+    this.send('lane', encode.changeLane(this.offsetSign * target, speed, 1000, this.laneCommandId));
   }
   nudge(direction) {   // +1 left, -1 right
     const lanes = Math.round(this.targetLateral / LANE_STEP) + direction;

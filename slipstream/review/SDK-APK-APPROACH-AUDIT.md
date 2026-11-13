@@ -185,3 +185,38 @@ unverified-piece calibration write using production code and the actual capture.
 The previous implementation baseline has 548 passing Node tests; green tests did
 not cover these newly identified control-policy gaps. This review changes no
 runtime behavior and does not claim a repaired steering system.
+
+## Follow-up: numbered commands and retained acknowledgments
+
+The two supervised tests on repaired build `1e19867` still produced firmware lane
+cancellation. The operator confirmed physical stopping after both tests; the
+repeat had no visible leftward shift. Therefore special-piece calibration repair
+is not established as the root-cause fix. The shared pit response was exercised,
+but stopping latency was not measured.
+
+The follow-up uses the native app's seven-bit command sequence (`007bd20e`), starting
+with 1 and wrapping modulo 128. Deduplicated requests consume no ID; safety-latched
+requests issue none. It retains the public SDK's position and transition fields
+for last received ID, last executed ID, desired sideways speed, and transition
+lane activity. The live panel shows requests beside raw acknowledgments and age.
+No ACK is interpreted as proof of physical completion, and stale/cancelled reports
+cannot release a stop or trigger retries.
+
+This is a diagnostic/sequence improvement, not a proven cancellation repair.
+The public SDK's zero-filled serializer and Partydrive both use tag zero, so the
+old value cannot be declared invalid solely because the app increments IDs.
+Offsets, sideways speed (350 mm/s), acceleration (1000 mm/s²), SDK flags and all
+stop/watchdog policies are unchanged for a controlled comparison.
+
+The SDK header also describes zeroing the car's offset before a *relative* lane
+change. The app and Partydrive use tracked absolute offsets. These are different
+coordinate strategies, not evidence that every absolute command requires a reset.
+Blindly inserting zero-offset resets would invalidate our absolute target frame;
+that has not been done. App vehicle configuration has model-dependent lane-change
+speed values, not one universal constant; no new speed has been inferred from it.
+
+Four new offline tests cover distinct ACK fields, short packet bounds, seven-bit
+wrap/deduplication, and stop preservation. All 556 Node tests pass. Physical steering
+with numbered commands remains untested. The newest browser trace has been saved
+through the UI but has not yet been imported as a local byte fixture; these repeat
+observations are from live diagnostics and the operator, not a new byte-level replay.

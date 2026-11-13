@@ -3,6 +3,20 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Repeated physical steering failure; correlation instrumentation ready
+
+Build `1e19867` was loaded in Codespaces. Groundshock SDK initialization succeeded
+(firmware 11866, battery 3.82 V). Two short tests at requested 240 mm/s received
+positions but cancelled the left-lane request. Operator confirmed stopping; on the
+repeat, no leftward shift. Shared pit activation worked; stop latency is unmeasured.
+
+The next build numbers steering requests using the app's seven-bit sequence and
+shows SDK received/executed IDs and desired sideways speed. All 556 Node tests pass.
+This is instrumentation and a controlled sequence change, not a proven steering
+fix. It must not be represented as race/attack acceptance. No further movement is
+authorized by the offline work. See the SDK/app audit follow-up for remaining
+coordinate-strategy hypotheses and newest-trace provenance limits.
+
 ## Control repairs ready for supervised acceptance
 
 The two reproduced SDK/app faults are repaired: unverified geometry cannot
