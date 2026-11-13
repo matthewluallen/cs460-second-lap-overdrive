@@ -77,8 +77,8 @@ send STOP: a car-enforced host-loss timeout remains unverified. Keep physical
 supervision and a way to retrieve cars during initial hardware validation.
 
 Verified locally: Docker build, non-root process, HTTP assets, browser rendering,
-and automated relay tests. Actual Codespaces forwarding, phone sensors, and
-Bluetooth hardware remain to be tested in the target environment.
+and automated relay tests. Codespaces rebuild, automatic startup and four-client public relay checks have also
+passed. Phone sensors and Bluetooth hardware remain to be accepted in the target environment.
 
 References: [GitHub port forwarding](https://docs.github.com/en/codespaces/developing-in-a-codespace/forwarding-ports-in-your-codespace),
 [Chrome Web Bluetooth](https://developer.chrome.com/docs/capabilities/bluetooth),
@@ -104,6 +104,24 @@ identity. It is not proof of Bluetooth, phone connectivity, telemetry or safe
 physical stopping. After Codespace restart, verify public forwarding again and
 create a fresh room. A public URL does not itself authorize a player to drive.
 
+## Check public access before sharing QR codes
+
+After every Codespace resume/rebuild, run this anonymous check from a computer
+outside the Codespace when possible. No host code is needed and no room is created:
+
+```sh
+SLIPSTREAM_CHECK_ORIGIN="https://YOUR-CODESPACE-3000.app.github.dev" \
+npm run slipstream:preflight
+```
+
+It checks live readiness, the controller page and exclusion of teaching routes.
+A GitHub sign-in redirect fails with a port-visibility explanation. GitHub reset
+port 3000 to private in our actual stop/resume test; the server starting correctly
+does not mean phones can reach it. For an authorized public session, restore Public
+in the Ports panel and repeat the check. The diagnostic never changes access settings.
+If the server is still starting, wait for readiness and retry. Then create a fresh
+room and verify a real phone joins from the classroom network.
+
 ## Check the public relay without cars
 
 Run `npm run slipstream:check` with `SLIPSTREAM_CHECK_ORIGIN` set to your public
@@ -115,7 +133,8 @@ SLIPSTREAM_CHECK_ORIGIN="https://YOUR-CODESPACE-3000.app.github.dev" \
 npm run slipstream:check
 ```
 
-This diagnostic opens its own temporary room for each transport, approves four
+The relay diagnostic first runs the same anonymous preflight and refuses HTTP
+redirects on subsequent API calls. This diagnostic opens its own temporary room for each transport, approves four
 test players, sends neutral input, checks individual state delivery and revoked
 credentials, then deletes its rooms. It never attaches Bluetooth, uses an existing
 room, or publishes a moving-car state. The check exercises the production network

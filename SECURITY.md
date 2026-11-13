@@ -342,3 +342,13 @@ has been delivered, instead of treating newly timestamped positions as future
 samples. The future-sample rejection and telemetry watchdogs remain intact. An
 advancing-clock regression reproduces the previous zero-lap failure and verifies
 both default-speed CPU racers score and stop at the deadline after repair.
+
+## Anonymous deployment preflight
+
+The deployment diagnostic now checks anonymous live readiness, controller delivery
+and teaching-route isolation before using a host code or creating temporary rooms.
+It refuses sign-in redirects and rejects origins with credentials, paths, query
+strings or fragments; remote origins require HTTPS. Subsequent diagnostic API
+requests also refuse redirects. This detects private Codespaces forwarding without
+automatically expanding access. It does not validate car firmware or replace
+supervised physical acceptance.

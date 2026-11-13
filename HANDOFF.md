@@ -3,6 +3,17 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## Classroom access preflight
+
+`npm run slipstream:preflight` checks anonymous live readiness, controller delivery
+and teaching-route isolation without a host code, rooms or Bluetooth. Set
+`SLIPSTREAM_CHECK_ORIGIN` to the public HTTPS origin. It explains private-port
+redirects and never changes forwarding permissions. `slipstream:check` runs this
+before creating its temporary rooms and refuses subsequent API redirects.
+All **545 Node tests pass**, including eight preflight regressions. The anonymous
+check passed from the operator laptop against the public Codespaces URL. Actual
+phone/iPad classroom access and physical-car acceptance remain open.
+
 ## Feature-confirmation audit and browser scoring repair
 
 Read [FEATURE-CONFIRMATION-AUDIT.md](slipstream/review/FEATURE-CONFIRMATION-AUDIT.md).

@@ -3,8 +3,9 @@
 import vm from 'node:vm';
 import {readFile} from 'node:fs/promises';
 import {WebSocket} from 'ws';
-const origin=new URL(process.env.SLIPSTREAM_CHECK_ORIGIN||'http://127.0.0.1:3000');
-if(origin.protocol!=='https:'&&!['127.0.0.1','localhost','[::1]'].includes(origin.hostname))throw new Error('Remote checks require HTTPS');
+import {checkOrigin,preflight} from './preflight.mjs';
+const origin=checkOrigin(process.env.SLIPSTREAM_CHECK_ORIGIN);
+await preflight(origin);
 const code=process.env.SLIPSTREAM_HOST_CODE;
 if(!code)throw new Error('Set SLIPSTREAM_HOST_CODE privately before running this check');
 const source=(await readFile(new URL('../net.mjs',import.meta.url),'utf8')).replaceAll('export ','');
@@ -12,7 +13,7 @@ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(check){for(let i=0;i<500;i++){if(check())return;await sleep(20);}throw new Error('Relay message deadline exceeded');}
 for(const transport of ['socket','http']){
   const context=vm.createContext({console,AbortController,TextDecoder,setTimeout,clearTimeout,location:origin,
-    fetch:(path,options)=>fetch(new URL(path,origin),{...options,signal:options?.signal??AbortSignal.timeout(10000)}),
+    fetch:(path,options)=>fetch(new URL(path,origin),{...options,redirect:'error',signal:options?.signal??AbortSignal.timeout(10000)}),
     WebSocket:transport==='socket'?WebSocket:class{constructor(){throw new Error('Test HTTP fallback');}}
   });
   vm.runInContext(source,context);

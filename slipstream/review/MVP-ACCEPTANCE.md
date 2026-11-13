@@ -1,6 +1,6 @@
 # Slipstream classroom MVP acceptance
 
-Status: **in progress, not hardware accepted**. Updated 12 November 2026.
+Status: **in progress, not hardware accepted**.
 
 The first supported game is the existing 90-second **Beat your best** round, for
 one through four cars with human or CPU drivers. Additional modes remain available
@@ -11,8 +11,8 @@ car-count, client, scanning or safety requirement.
 
 | Requirement | Current evidence | Acceptance still required |
 |---|---|---|
-| Repeatable server startup | `platform/slipstream-launcher.test.mjs`: concurrent start, reuse, restart, secret permissions, foreign-port refusal, live-only routes | Configured Codespace stop/start and rebuild exercise |
-| Public HTTPS client URL | 12 Nov: `gh codespace ports` reports public; anonymous `/slipstream/` returns 200, `/api/health` returns 404 | QR join from actual phone/iPad on classroom network; repeat after restart |
+| Repeatable server startup | Launcher tests plus actual Node 22 Codespace rebuild and shutdown/resume: automatic startup and host-code persistence passed | Check readiness after startup; do not assume immediate availability when SSH connects |
+| Public HTTPS client URL | Public readiness and four-client relay checks passed; GitHub reset forwarding to private on resume, then authorized Public was restored | Run `slipstream:preflight` after every resume; QR join from actual phone/iPad on classroom network |
 | Laptop owns Bluetooth | Existing host transport and native startup contract tests; prior cars connected | Identify each actual model/firmware accurately; stable concurrent connections for 1–4 cars |
 | Guided connect/calibrate/scan/play | Host-handler tests cover selected scan car, clear-track confirmation, countdown and other cars staying stopped | Successful repeatable scan with observed physical movement and complete telemetry; calibration remains optional, experimental |
 | Accurate track | Decoder and topology tests; unsupported special pieces remain quarantined | Compare scanned order, direction and closure with the built track; no unsupported piece accepted as verified |
