@@ -266,7 +266,9 @@ export class Game {
       const input = d.input, truck = this.vehicles.models[String(car.model)]?.truck;
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);
       const limited = this.battle ? this.battle.limit(car, wanted, now) : {speed: wanted, accel: 1000};
-      car.setSpeed(Math.min(this.topSpeed*cpuTrackCeiling, limited.speed), limited.accel);
+      const finalSpeed=Math.min(this.topSpeed*cpuTrackCeiling, limited.speed);
+      if (d.bot && this.track) d.bot.confirmTrackLane?.(now,input,finalSpeed,limited.accel);
+      car.setSpeed(finalSpeed, limited.accel);
       if (input.lane !== null && input.lane !== undefined && Number.isFinite(input.lane)) car.steerTo(input.lane);
       if (this.battle) for (const bay of ['attack', 'support', 'special']) this.battle.press(car, bay, !!input[bay]);
     }

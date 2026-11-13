@@ -158,7 +158,7 @@ test('CPU story algorithms: simulator-only 10s timing; Figure-eight excludes phy
       // Figure-eight Story is blocked in the product pending validation. This
       // explicit test double isolates mission progression, not physical driving.
       // Capsule retains the production track policy; its objectives must pass it.
-      if(layout==='Figure eight') d.bot.applyTrackPolicy=()=>1;
+      if(layout==='Figure eight') { d.bot.applyTrackPolicy=()=>1; d.bot.confirmTrackLane=()=>true; }
     }
     const snapshot=()=>game.snapshot(now).map(row=>{
       const d=game.drivers.find(driver=>driver.id===row.id), p=d.car.localizer.estimate(now);

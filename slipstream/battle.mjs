@@ -4,7 +4,7 @@
 //
 // Effects reach real cars only as speed limits, forced lane changes and lights.
 // Everything else (beams, mines, explosions) is drawn on the map.
-import {EFFECT} from './protocol.mjs';
+import {EFFECT, MAX_SPEED} from './protocol.mjs';
 import {LANE_STEP} from './car.mjs';
 import {LANE_LIMIT, POSITION_MAX_AGE_MS} from './track.mjs';
 
@@ -392,7 +392,7 @@ export class Bot {
   // Slipstream CPU policy, not a reconstruction of the native app's planner.
   // Require a fresh printed-code match on this exact piece; a transition-only
   // prediction must not authorize automatic lateral movement.
-  applyTrackPolicy(now, input, {objective=false} = {}) {
+  #trackGeometry(now) {
     const car=this.car, localizer=car.localizer, estimate=localizer?.estimate(now);
     const piece=estimate?.located ? this.battle.track?.pieces[estimate.index] : null;
     const definition=piece ? car.pieces?.get(piece.id) : null;
@@ -400,24 +400,50 @@ export class Bot {
     const fresh=Number.isFinite(positionAt) && now>=positionAt && now-positionAt<=POSITION_MAX_AGE_MS && (car.motionSince===undefined || positionAt>=car.motionSince);
     const ordinaryStraight=!!(fresh && localizer?.seenCode && localizer.lastId===piece?.id && definition?.kind==='straight' && !definition.unverified && !piece.inferred && !piece.unverified && Number.isFinite(estimate.progress) && estimate.progress>=0 && estimate.progress<=1 && Number.isFinite(piece.length) && piece.length>0);
     const remaining=ordinaryStraight ? (1-estimate.progress)*piece.length : 0;
+    const safeLane=ordinaryStraight && remaining>=250 && Number.isFinite(localizer.speed) && localizer.speed>0 && Number.isFinite(estimate.lateral) && Math.abs(estimate.lateral)<=LANE_LIMIT;
+    const encounter=safeLane ? estimate.index+':'+estimate.direction+':'+localizer.laps : null;
+    return {ordinaryStraight,remaining,safeLane,encounter,estimate,positionAt};
+  }
+  applyTrackPolicy(now, input, {objective=false} = {}) {
+    const {ordinaryStraight,remaining,safeLane,encounter,estimate,positionAt}=this.#trackGeometry(now);
     const ceiling=ordinaryStraight && remaining>=150 ? 1 : 2/3;
     const active=!!this.battle.active || objective;
     input.throttle=active ? Math.min(Math.max(0,Number.isFinite(input.throttle)?input.throttle:0),ceiling) : ceiling;
-    const safeLane=ordinaryStraight && remaining>=250 && Number.isFinite(localizer.speed) && localizer.speed>0 && Number.isFinite(estimate.lateral) && Math.abs(estimate.lateral)<=LANE_LIMIT;
     const intent=input.lane;
+    this.trackLaneCandidate=null;
     input.lane=null; // No stale retry when localization or safe geometry disappears.
     if (!safeLane) return ceiling;
-    const encounter=estimate.index+':'+estimate.direction+':'+localizer.laps;
     if (encounter===this.trackLaneEncounter) return ceiling;
     if (active) {
       if (!Number.isFinite(intent) || Math.abs(intent)>LANE_LIMIT) return ceiling;
       input.lane=intent;
     } else {
       const target=this.freeLaneTarget===undefined ? (estimate.lateral>=0 ? -LANE_STEP : LANE_STEP) : -this.freeLaneTarget;
-      input.lane=target; this.freeLaneTarget=target;
+      input.lane=target;
     }
-    this.trackLaneEncounter=encounter;
+    this.trackLaneCandidate={at:now,positionAt,encounter,target:input.lane,free:!active};
     return ceiling;
+  }
+  // A geometry candidate is not a dispatched maneuver. Wait until the speed
+  // command has a matching report and a later optical observation. This avoids
+  // sending acceleration and steering in the same pump tick; it does not claim
+  // firmware/native-planner equivalence or a physically completed lane change.
+  confirmTrackLane(now,input,finalSpeed,finalAccel=this.car.lastAccel) {
+    const candidate=this.trackLaneCandidate, car=this.car;
+    const speed=Math.max(0,Math.min(MAX_SPEED,Math.round(finalSpeed)));
+    const command=car.telemetry?.speedCommand, report=car.telemetry?.speedReport;
+    const location=this.#trackGeometry(now);
+    const ready=candidate && candidate.at===now && input.lane===candidate.target &&
+      location.safeLane && location.encounter===candidate.encounter && location.positionAt===candidate.positionAt &&
+      speed>0 && car.speed===speed && car.lastAccel===finalAccel && command?.speed===speed && command.accel===finalAccel && Number.isFinite(command.at) &&
+      report?.desired===speed && report.accel===finalAccel && Number.isFinite(report.at) && report.at>=command.at &&
+      report.at>=(car.motionSince??-Infinity) && now>=report.at &&
+      location.positionAt>report.at && car.localizer.speed>=Math.min(speed,300);
+    if (!ready) { input.lane=null; return false; }
+    this.trackLaneEncounter=candidate.encounter;
+    if (candidate.free) this.freeLaneTarget=candidate.target;
+    this.trackLaneCandidate=null;
+    return true;
   }
   drive(now, input, spots) {
     input.throttle = this.cruise;

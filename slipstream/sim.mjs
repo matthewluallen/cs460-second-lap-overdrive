@@ -50,7 +50,16 @@ export class SimCar {
       case ID.VERSION: return this.#later(Uint8Array.of(5, ID.VERSION_REPLY, 0x27, 0x25, 0, 0));
       case ID.BATTERY: return this.#later(Uint8Array.of(3, ID.BATTERY_REPLY, this.millivolts & 255, this.millivolts >> 8));
       case ID.SDK_MODE: this.sdk = m[2] === 1; return;
-      case ID.SPEED: if (this.sdk) { this.targetSpeed = v.getInt16(2, true); this.accel = Math.max(50, v.getInt16(4, true)); } return;
+      case ID.SPEED: {
+        if (!this.sdk) return;
+        this.targetSpeed = v.getInt16(2, true); this.accel = Math.max(50, v.getInt16(4, true));
+        // Report command acceptance separately from the physics speed; a later
+        // printed-code position is still needed to confirm movement/localization.
+        const bytes=new Uint8Array(8), reply=new DataView(bytes.buffer);
+        bytes[0]=7; bytes[1]=ID.SPEED_UPDATE;
+        reply.setInt16(2,this.targetSpeed,true);reply.setInt16(4,v.getInt16(4,true),true);
+        reply.setInt16(6,Math.round(this.speed),true);this.#later(bytes);return;
+      }
       case ID.SET_OFFSET: this.believedShift = v.getFloat32(2, true) - this.toCar(this.lateral); return;
       case ID.CHANGE_LANE: {
         if (!this.sdk) return;

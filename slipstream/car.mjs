@@ -277,6 +277,7 @@ export class Car {
     this.speed = speed;
     if (speed === this.lastSpeedSent && accel === this.lastAccel) return;
     this.lastSpeedSent = speed; this.lastAccel = accel;
+    this.telemetry.speedCommand={at:this.clock(),speed,accel};
     this.send('speed', encode.speed(speed, accel));
   }
   // Lateral target, mm, positive to the left of travel.
@@ -330,6 +331,7 @@ export class Car {
     this.pending = new Map([['speed', encode.speed(0, 2500)],
       ...(this.scanDelocalizationUsed ? [['scan-delocalization', encode.maxDelocalizedSpeed(0)]] : []), ...this.pending]);
     this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
+    this.telemetry.speedCommand={at:this.clock(),speed:0,accel:2500};
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     if (!this.connected || this.closing || this.faulted) { this.pending.clear(); return; }
     if (!this.pumping) this.pumpPromise = this.#pump();

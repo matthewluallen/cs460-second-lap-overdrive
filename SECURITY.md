@@ -11,7 +11,7 @@ reproduce the original exercises; the lab guides under `bench/` still describe i
 
 ## Computer-driver track constraints — 13 November 2026
 
-Automatic lane requests now require a fresh printed-code match on a known ordinary straight, positive position-reported speed and sufficient remaining straight geometry. Curves, special sections, stale readings and transition-only prediction cannot authorize steering. The final CPU speed ceiling also caps battle boosts; STOP, neutral arming, shared-pit recovery and telemetry watchdogs are unchanged. These software checks are not a physical stopping guarantee or a car-side connection-loss failsafe. Scored rounds with unverified special tiles remain blocked.
+Automatic lane requests now require a fresh printed-code match on a known ordinary straight, positive position-reported speed and sufficient remaining straight geometry. Curves, special sections, stale readings and transition-only prediction cannot authorize steering. CPU steering also waits for a matching speed-command reply and a later fresh optical reading, without consuming a lane attempt while waiting. The final CPU speed ceiling also caps battle boosts; STOP, neutral arming, shared-pit recovery and telemetry watchdogs are unchanged. These software checks are not a physical stopping guarantee or a car-side connection-loss failsafe. Scored rounds with unverified special tiles remain blocked.
 
 ## Summary
 

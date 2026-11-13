@@ -1,3 +1,7 @@
+# Latest CPU hardware result: cancellation stops; movement observed
+
+Build `41c1b54` ran two Computer Free-drive attempts. Both first automatic steering requests coincided with a 200→300 mm/s speed increase and received cancellation-state reports within 97/104 ms; STOP/pit activated. The retry used new ID 2, so retained ID 1 alone cannot explain the issue. The operator confirms the retry **stopped on track and began a lane change without completing it**. This is partial movement, not three-lap or completed left/right acceptance. Read [COMPUTER-DRIVER-HARDWARE.md](slipstream/review/COMPUTER-DRIVER-HARDWARE.md) for exact traces, original-app comparison and the speed-confirmation sequencing follow-up. Do not dismiss 0x80 by its low-bit ID or weaken the cancellation stop.
+
 # Latest physical result: left steering accepted; Computer driving next
 
 Groundshock firmware 11866 in SDK mode on loaded build `08fe678` completed ordinary Free drive at requested 300 mm/s and one left request. The operator confirmed **stopped; clearly shifted left**. The recording shows an uncancelled lane ID 1, received/executed ID 1, and printed-code lateral change from −22.5 to +31.5 mm. This is one physical left-maneuver acceptance, not precise target accuracy or whole-system validation. See [the evidence and CPU follow-up](slipstream/review/GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md) and the retained fixture/replay tests. The optional bounded trial below was not used. Older unresolved steering statements below are historical.
