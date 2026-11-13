@@ -18,14 +18,17 @@ latency affects phone inputs; rendering and the control loop share the host brow
 
 1. Open this branch in a Codespace using the supplied `.devcontainer` configuration.
    It installs the locked Node dependencies without install scripts.
-2. Run `PORT=3000 npm run slipstream:live` in the Codespace terminal. Keep the terminal's
-   host code private to the operator. It authorizes room creation.
+2. The configured devcontainer runs `npm run slipstream:up` on start. You can also
+   run `PORT=3000 npm run slipstream:up` manually. It starts the live-only server in
+   the background or verifies that the managed server is already running. Retrieve
+   the operator's private host code with `cat ~/.local/state/slipstream-managed/host-code`.
+   Keep that code private; it authorizes room creation.
 3. Open the forwarded port 3000 URL, appending `/slipstream/`, on the nearby laptop.
    Use the browser-facing **HTTPS** URL, normally
    `https://CODESPACENAME-3000.app.github.dev/slipstream/`. The upstream server is
    plain HTTP: leave the forwarded port's **protocol** set to HTTP.
 4. Connect cars on that laptop, or choose the two-car simulation first. Enter the
-   printed host code in Remote players and create a room. Approve players before
+   saved host code in Remote players and create a room. Approve players before
    assigning them to cars. Each car's Code button provides its phone join link.
 5. Open those links on the phones. Forwarded ports are private by default;
    GitHub's authentication/organization rules still apply before the app loads.
@@ -80,3 +83,23 @@ Bluetooth hardware remain to be tested in the target environment.
 References: [GitHub port forwarding](https://docs.github.com/en/codespaces/developing-in-a-codespace/forwarding-ports-in-your-codespace),
 [Chrome Web Bluetooth](https://developer.chrome.com/docs/capabilities/bluetooth),
 [Three.js](https://threejs.org/docs/).
+
+## Repeatable startup and recovery
+
+`slipstream:up` requires Node 22 or newer. It stores the host code, startup identity,
+PID and log under `~/.local/state/slipstream-managed/` (directory owner-only; files
+owner read/write). `SLIPSTREAM_STATE_DIR` overrides that directory. A supplied
+`SLIPSTREAM_HOST_CODE` must match an already-running managed server. The code
+persists across process restarts; rooms and player approvals do not.
+
+The launcher refuses an occupied port belonging to an unmanaged server. It never
+stops that server, takes over its rooms, or changes port visibility. Existing
+foreground deployments can keep using `npm run slipstream:live`; migrate only
+between sessions after stopping that process deliberately. If startup was
+interrupted and left `startup.lock`, inspect its PID and confirm no startup is
+active before removing the lock. Do not delete server state during play.
+
+`/slipstream/ready` is a minimal, uncached readiness response with a non-secret boot
+identity. It is not proof of Bluetooth, phone connectivity, telemetry or safe
+physical stopping. After Codespace restart, verify public forwarding again and
+create a fresh room. A public URL does not itself authorize a player to drive.

@@ -3,6 +3,15 @@
 For a reviewer (human or AI) picking this up cold. It says what changed, where to
 look, how to verify, and what is deliberately unfinished or untrusted.
 
+## MVP startup and acceptance
+
+`npm run slipstream:up` adds managed live-only startup, private persisted host code,
+readiness identity, and refusal to replace an occupied server. The configured
+Codespace runs it on startup. See [deployment](slipstream/DEPLOYMENT.md) and
+[MVP acceptance](slipstream/review/MVP-ACCEPTANCE.md). Local regression: 512 Node
+and 38 Python tests pass, audit clean. Public HTTPS now responds, but no successful
+real-car scan or 1–4 car physical acceptance is claimed.
+
 ## Live diagnostics and optional calibration
 
 See [LIVE-DIAGNOSTICS.md](slipstream/review/LIVE-DIAGNOSTICS.md) for the new live

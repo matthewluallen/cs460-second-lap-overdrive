@@ -60,7 +60,7 @@ function route(action){
   };
 }
 
-export function createApp({instructorLiveDrive=false,slipstream=false,slipstreamOnly=false,hostCode=newHostCode()}={}){
+export function createApp({instructorLiveDrive=false,slipstream=false,slipstreamOnly=false,hostCode=newHostCode(),bootId=null}={}){
   const app=express();
   const book=new Records(); // Shared by this app's clients; disposable on restart.
   // Flat key=value queries only; nested/bracket parsing is never needed here.
@@ -85,6 +85,9 @@ export function createApp({instructorLiveDrive=false,slipstream=false,slipstream
       return res.status(404).json({error:'Not found'});
     });
   }
+  if(slipstream)app.get('/slipstream/ready',(req,res)=>{
+    res.set('Cache-Control','no-store').json({service:'slipstream',mode:slipstreamOnly?'live':'teaching',bootId});
+  });
   app.use('/api',(req,res,next)=>{res.set('Cache-Control','no-store');next();});
   app.use('/api',express.json({limit:MAX_BODY_BYTES,strict:true}));
   // The live-car controller and its multiplayer relay exist only with --slipstream.
@@ -197,7 +200,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
     // The host code gates room creation. Set SLIPSTREAM_HOST_CODE to choose it.
     const hostCode=process.env.SLIPSTREAM_HOST_CODE||newHostCode();
     if(slipstream&&hostCode.length<8)throw new Error('SLIPSTREAM_HOST_CODE must be at least 8 characters');
-    const app=createApp({instructorLiveDrive,slipstream,slipstreamOnly,hostCode});
+    const app=createApp({instructorLiveDrive,slipstream,slipstreamOnly,hostCode,bootId:process.env.SLIPSTREAM_BOOT_ID??null});
     const bindAddress=serverBindAddress({slipstream,container:process.argv.includes('--container')});
     const server=app.listen(port,bindAddress,()=>{
       // Bound slow or stalled clients on this single-process teaching server.

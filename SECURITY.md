@@ -304,3 +304,14 @@ Regression: `public live session exposes only Slipstream pages and authenticated
   stopped car and explicit measured-placement confirmation in the UI, and is not
   silently reused. Capture and annotations are bounded and exports remain local.
   Unknown-offset feedback does not count as measured motion or steering-sign evidence.
+
+## Managed MVP startup (12 November 2026)
+
+The managed launcher creates owner-only state and secret files, persists the host
+code across restarts, and refuses to replace a running unmanaged server or alter a
+running server's code. The public readiness endpoint contains only service name,
+mode and a random non-secret boot identity; it is uncached and conveys no control
+rights. Live-only API isolation remains tested. Startup does not change forwarding
+visibility. Tests exercise concurrent startup, permissions, code reuse, occupied
+port refusal and route isolation. Private logs contain the host code printed by
+the existing server; do not attach those logs to public bug reports.
