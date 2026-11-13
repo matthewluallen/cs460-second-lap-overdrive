@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {Car, LANE_STEP} from './car.mjs';
+import {Car} from './car.mjs';
 import {Game, MAX_CARS} from './game.mjs';
 import {ID} from './protocol.mjs';
 import {Pieces} from './track.mjs';
@@ -65,8 +65,8 @@ test('off-track notification stops and latches one car through resume and furthe
 test('off-track scanner cancels scan and cannot start another without recovery', async () => {
   const g = game(), r = radio(), d = g.addCar(r); await settle();
   g.topSpeed = 300; g.startScan(); await settle(); assert.equal(speeds(r).at(-1), 300);
-  assert.equal(d.car.targetLateral, LANE_STEP);
-  assert.ok(Object.values(data('pieces')['10'].locs).some(([, lateral]) => Math.abs(lateral - d.car.targetLateral) <= 5.5), 'scan lane must reach an intersection code strip; the centerline cannot');
+  assert.equal(d.car.targetLateral, 0);
+  assert.equal(r.sent.some(b => b[1] === ID.CHANGE_LANE), false);
   r.notify(Uint8Array.of(1, ID.DELOCALIZED)); await settle();
   assert.equal(g.phase, 'garage'); assert.equal(g.scanner, null);
   assert.throws(() => g.startScan(), /recover/); assert.equal(d.car.speed, 0);

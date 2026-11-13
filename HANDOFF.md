@@ -1,3 +1,7 @@
+# Physical scan startup repair — hardware retest pending
+
+Read [SCAN-START-REGRESSION.md](slipstream/review/SCAN-START-REGRESSION.md). Both the formerly successful SDK scan and today's aborted scan received an initial lane cancellation. The newer moving-cancellation stop now halts before optical acquisition. Physical scans no longer issue the speculative startup lane command; cancellation stops and watchdogs remain intact. Simulator-only lane placement is explicitly separate. Today's offset-before-lane trace still cancels, disproving its sufficiency as a steering repair. Latest physical observation: forward movement, no sideways shift, stopped; no map. New cumulative trace retained. Hardware acceptance of this repair is still required.
+
 # App parity requirement and collision dispatch review
 
 The user requires original-app protocol/state-machine fidelity. Current SDK/F&F subsets are not equivalent to the original app; read [the compatibility ledger](slipstream/review/COLLISION-PROTOCOL-PARITY.md) before more hardware changes. Native VehicleMessenger case0x4d has no direct stop; our diagnostic collision pit is a custom safety policy, and raw-packet battle damage is also not established app parity. A fresh read-only Ghidra export covered 63 collision-named functions. Firmware collision counts/age/flags are now visible in live checks; no motion policy changed. 589 Node tests passed; isolated simulator UI verified. Live page not reloaded during this review.

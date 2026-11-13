@@ -125,12 +125,14 @@ export class Game {
     this.scanStarted = this.clock(); this.scanLaps = 0; this.scanAnchor = undefined; this.scanLastPiece = undefined;
     this.mapper = new TrackMapper(this.pieces); this.scanner = driver; this.phase = 'scanning';
     this.track = null; for (const d of this.drivers) d.car.useTrack(null);
-    // Scan on a printed lane: intersections have strips at ±18/±54 mm,
-    // so the geometric center has no localization codes to identify them.
+    // Physical acquisition follows the operator-placed lane. An unlocalized
+    // lane request was cancelled even in the formerly successful scan capture.
+    // Keep simulated placement on a readable strip; it is not hardware parity.
     if (startingLateral !== null) driver.car.calibrateScanStart(startingLateral);
     driver.car.beginScanDelocalization();
     const ceiling = driver.car.transport.initializationProfile === 'fast-furious' ? 300 : this.scanSpeed;
-    driver.car.steerTo(LANE_STEP); driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed, ceiling));
+    if (driver.car.simulated) driver.car.steerTo(LANE_STEP);
+    driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed, ceiling));
     this.log('Scanning with ' + driver.car.name + ': drive one or two laps');
   }
   cancelScan() { if (this.phase !== 'scanning') return; this.scanner?.car.stop(); this.scanner = null; this.phase = this.track ? 'ready' : 'garage'; }

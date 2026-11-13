@@ -4,9 +4,9 @@ import {readFileSync} from 'node:fs';
 import {Game} from './game.mjs';
 import {encode,hex} from './protocol.mjs';
 const data=name=>JSON.parse(readFileSync(new URL('./data/'+name+'.json',import.meta.url)));
-async function setup() {
+async function setup(profile='fast-furious') {
  let now=0,notify;
- const radio={initializationProfile:'fast-furious',sent:[],onNotify(fn){notify=fn;return()=>{};},close(){},
+ const radio={initializationProfile:profile,sent:[],onNotify(fn){notify=fn;return()=>{};},close(){},
   emit(b){notify(Uint8Array.from(b));},async write(b){
    this.sent.push([...b]);
    if(b[1]===0x16)queueMicrotask(()=>this.emit([1,0x17]));
@@ -88,9 +88,21 @@ test('disconnect still restores zero when first-position restoration was queued 
  assert.deepEqual(limits(radio),[300,0]);
  assert.equal(radio.sent.at(-1)[1],0x0d);
 });
-test('optional starting calibration precedes scanner lane and speed commands',async()=>{
+test('optional starting calibration precedes speed without requesting a scan lane',async()=>{
  const {game,driver,radio}=await setup();game.startScan(driver,{startingLateral:-22.5});await driver.car.pumpPromise;
- const offset=radio.sent.findIndex(b=>b[1]===0x2c),lane=radio.sent.findIndex(b=>b[1]===0x25);
- assert.ok(offset>=0&&offset<lane);assert.equal(driver.car.startingCalibration.lateral,-22.5);
+ const offset=radio.sent.findIndex(b=>b[1]===0x2c),move=radio.sent.findIndex(b=>b[1]===0x24&&(b[2]||b[3]));
+ assert.ok(offset>=0&&offset<move);assert.ok(!radio.sent.some(b=>b[1]===0x25));assert.equal(driver.car.startingCalibration.lateral,-22.5);
  assert.equal(driver.car.lastTrackAt,undefined);
 });
+
+for(const profile of ['sdk','fast-furious']) {
+ test(profile+' physical scan acquires forward without speculative lane or offset',async()=>{
+  const {game,driver,radio}=await setup(profile);game.topSpeed=300;
+  game.startScan(driver);await driver.car.pumpPromise;
+  assert.equal(driver.car.speed,300);
+  assert.ok(!radio.sent.some(b=>b[1]===0x25||b[1]===0x2c),'unlocalized scan must not issue a lateral command');
+  // Cancellation remains a stop: delayed firmware events must not be ignored.
+  radio.emit([14,0x41,0,0,0,0,0,0,0,0,0,0,0,0,0x80]);await driver.car.pumpPromise;
+  assert.match(game.pitReason,/Lane change cancelled/);assert.equal(driver.car.speed,0);
+ });
+}

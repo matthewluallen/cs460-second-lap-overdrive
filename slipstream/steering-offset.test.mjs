@@ -1,11 +1,6 @@
-// Regression tests for the SDK lane-change offset precondition.
-//
-// Root cause (see review/STEERING-ROOT-CAUSE.md): the open-source drive-sdk
-// vehicle-tool issues SET_OFFSET_FROM_ROAD_CENTER (0x2c) immediately before every
-// CHANGE_LANE (0x25). Our SDK steering omitted the 0x2c, and firmware 11866
-// cancelled the bare lane change. These tests lock the paired, ordered sequence
-// for SDK cars, confirm non-SDK transports are unchanged, and prove STOP,
-// cancellation, dedup and ID accounting still hold with the extra write.
+// Tests preserve the experimental SDK steering sequence and queue invariants.
+// The November 13 hardware scan still cancelled despite 0x2c preceding 0x25.
+// These tests do not establish a firmware precondition or physical steering.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {Car} from './car.mjs';
@@ -42,7 +37,7 @@ test('non-SDK transports keep the single bare CHANGE_LANE (no behaviour change)'
   }
 });
 
-test('SDK reference tracks the car current measured offset, not a blind zero', async () => {
+test('SDK reference tracks the code-derived lateral estimate', async () => {
   const r = radio('sdk'), c = new Car(r); c.initializing = false;
   c.lateral = 22.5;                     // as if a verified position fixed the lane
   c.steerTo(-45); await c.pumpPromise;
