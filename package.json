@@ -16,7 +16,8 @@
     "slipstream:live": "node platform/server.mjs --slipstream-only",
     "slipstream:up": "node platform/slipstream-launcher.mjs",
     "slipstream:check": "node slipstream/tools/check-relay.mjs",
-    "slipstream:preflight": "node slipstream/tools/preflight.mjs"
+    "slipstream:preflight": "node slipstream/tools/preflight.mjs",
+    "slipstream:code": "cat \"${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code\""
   },
   "dependencies": {
     "express": "5.3.0",

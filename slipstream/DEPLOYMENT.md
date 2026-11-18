@@ -21,7 +21,8 @@ latency affects phone inputs; rendering and the control loop share the host brow
 2. The configured devcontainer runs `npm run slipstream:up` on start. You can also
    run `PORT=3000 npm run slipstream:up` manually. It starts the live-only server in
    the background or verifies that the managed server is already running. Retrieve
-   the operator's private host code with `cat "${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code"`.
+   the operator's private host code with `npm run slipstream:code` (it reads
+   `"${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code"`).
    Keep that code private; it authorizes room creation.
 3. Open the forwarded port 3000 URL, appending `/slipstream/`, on the nearby laptop.
    Use the browser-facing **HTTPS** URL, normally

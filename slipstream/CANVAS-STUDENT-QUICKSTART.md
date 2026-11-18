@@ -13,20 +13,24 @@ from the laptop or from your phone.
 
 ## Set up your own Codespace (do this first)
 
-Each of you runs your **own** server in a GitHub Codespace. You can share the
-physical track; everyone drives through their own server.
+Each of you runs your **own** Codespace, so each of you is the host of your **own**
+room with your **own** host code. You all share the one physical track and take
+turns on it, but nobody runs everyone else's server — there is no single class
+server to log into.
 
 1. On GitHub, open **`matthewluallen/cs460-second-lap-overdrive`** and start a
    **Codespace** on the branch **`slipstream-and-security-hardening`** (the latest
    build) or on **`main`**. The `.devcontainer` installs the locked dependencies
    for you — no install scripts.
-2. The Codespace runs the server on start. If you need to start it by hand, run
-   `PORT=3000 npm run slipstream:up` in the terminal. Get your private room **host
-   code** with:
+2. Start the server:
    ```sh
-   cat "${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code"
+   npm run slipstream:up
    ```
-   Keep that code to yourself — it's what lets phones join your room.
+   Then read your own room's host code:
+   ```sh
+   npm run slipstream:code
+   ```
+   That code is yours — it's what lets your phone join your room. Keep it private.
 3. In the **Ports** panel, open the forwarded **port 3000** URL and add
    `/slipstream/` — e.g. `https://YOUR-CODESPACE-3000.app.github.dev/slipstream/`.
    Open that **HTTPS** URL in Chrome/Edge on the laptop next to the track. Leave
@@ -37,6 +41,21 @@ physical track; everyone drives through their own server.
 Prefer to run it on your own machine instead? `npm ci --ignore-scripts`, then
 `npm run slipstream`, and open `http://127.0.0.1:8000/slipstream/` (laptop only —
 phones can't reach localhost). See [DEPLOYMENT.md](DEPLOYMENT.md) for details.
+
+## How many of us at once?
+
+We all share **one** physical track, so we take turns on it:
+
+- **Driving real cars: a few at a time.** One Bluetooth laptop drives **at most 4
+  cars** at once, and the track only holds a handful. Plan on small groups (up to
+  four cars) rotating through — not everyone driving at the same moment. (Even four
+  cars at once on real hardware is still being tested, so start with one or two.)
+- **Everyone, in parallel: the simulator.** Your Codespace and the simulator need
+  no car and no track, so all of us can set up, scan a practice layout, and drive
+  simulated cars at the same time while we wait for a turn.
+- You each run your **own** Codespace, so no single server has to carry the whole
+  class — your phone joins **your** room on **your** server. The shared thing is
+  the track, not the server.
 
 ## Before you start
 
@@ -71,8 +90,8 @@ doubles as a resume button.
 
 ## Drive from a phone or iPad
 
-1. Get the **Class host code** from your instructor and type it **exactly** —
-   capitalization matters.
+1. Type your **own host code** (from `npm run slipstream:code`, step 2 above) into
+   the host-code box, **exactly** — capitalization matters.
 2. On the car's card choose **Phone / QR**, scan the QR code with the phone
    camera, open the link, enter a driver name, and join.
 3. On the laptop, choose **Let in** for that name, then **Start driving**.
