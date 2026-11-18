@@ -1,128 +1,91 @@
-# Slipstream — Student Quick Start (try it tonight)
+# Slipstream Lab — Quick Start
 
-Paste-ready for Canvas. This is the short version of the full
-[student guide](README.md#student-view-default). Do every step with someone's
-hand ready to grab the car, and keep **STOP ALL** in reach.
+**Goal tonight:** get a car driving on the track — a real car, or a pretend one on
+screen.
+
+**Always:** keep a hand near the car, and know where **STOP** is before you start.
+
+You each run your **own** copy. You all share **one** real track, so you take turns
+on it.
 
 ---
 
-## What you'll do
+## Part 1 — Start your own copy (about 5 minutes)
 
-Connect your car → identify it (model + LED color) → scan your track → drive it,
-from the laptop or from your phone.
-
-## Set up your own Codespace (do this first)
-
-Each of you runs your **own** Codespace, so each of you is the host of your **own**
-room with your **own** host code. You all share the one physical track and take
-turns on it, but nobody runs everyone else's server — there is no single class
-server to log into.
-
-1. On GitHub, open **`matthewluallen/cs460-second-lap-overdrive`** and start a
-   **Codespace** on the branch **`slipstream-and-security-hardening`** (the latest
-   build) or on **`main`**. The `.devcontainer` installs the locked dependencies
-   for you — no install scripts.
-2. Start the server:
-   ```sh
-   npm run slipstream:up
+1. Go to the project on GitHub: **matthewluallen/cs460-second-lap-overdrive**.
+2. Switch to the branch **`slipstream-and-security-hardening`** (or **`main`**).
+   Then click the green **Code** button → **Codespaces** → **Create codespace**.
+   Wait for it to finish loading.
+3. In the terminal at the bottom, type these two lines (press Enter after each):
    ```
-   Then read your own room's host code:
-   ```sh
+   npm run slipstream:up
    npm run slipstream:code
    ```
-   That code is yours — it's what lets your phone join your room. Keep it private.
-3. In the **Ports** panel, open the forwarded **port 3000** URL and add
-   `/slipstream/` — e.g. `https://YOUR-CODESPACE-3000.app.github.dev/slipstream/`.
-   Open that **HTTPS** URL in Chrome/Edge on the laptop next to the track. Leave
-   the forwarded port's **protocol set to HTTP**.
-4. To let phones join, set **port 3000 to Public** in the Ports panel. (Private is
-   the default; GitHub's sign-in still applies until you make it public.)
+   The second line prints your **host code**. Write it down — your phone needs it
+   later. Keep it to yourself.
+4. A message says a port is ready. Open it and add **`/slipstream/`** to the end of
+   the address. That's your page. Open it in **Chrome or Edge** on the laptop next
+   to the track.
+5. **Only if you'll use a phone:** open the **Ports** tab, right-click **port
+   3000** → **Port Visibility** → **Public**.
 
-Prefer to run it on your own machine instead? `npm ci --ignore-scripts`, then
-`npm run slipstream`, and open `http://127.0.0.1:8000/slipstream/` (laptop only —
-phones can't reach localhost). See [DEPLOYMENT.md](DEPLOYMENT.md) for details.
+*No car or no track yet? Skip to **Practice with no car** at the bottom — you can
+still do the whole thing.*
 
-## How many of us at once?
+## Part 2 — Set up your car (on the laptop)
 
-We all share **one** physical track, so we take turns on it:
+1. Turn your car on and take it off the charger.
+2. On your page, click **Connect car** and pick your car in the pop-up.
+3. Set **Car model** to the name printed on your car. (The Bluetooth name is **not**
+   the model.)
+4. Pick a **color**. It shows on the car's light, on screen, and on the phone.
+   Check that the real light matches.
 
-- **Driving real cars: a few at a time.** One Bluetooth laptop drives **at most 4
-  cars** at once, and the track only holds a handful. Plan on small groups (up to
-  four cars) rotating through — not everyone driving at the same moment. (Even four
-  cars at once on real hardware is still being tested, so start with one or two.)
-- **Everyone, in parallel: the simulator.** Your Codespace and the simulator need
-  no car and no track, so all of us can set up, scan a practice layout, and drive
-  simulated cars at the same time while we wait for a turn.
-- You each run your **own** Codespace, so no single server has to carry the whole
-  class — your phone joins **your** room on **your** server. The shared thing is
-  the track, not the server.
+## Part 3 — Map the track
 
-## Before you start
+1. Put the car on a printed lane.
+2. Check the box that says the track is clear and you're watching.
+3. Click **Scan track**. The car drives one slow lap, reads the track, and stops.
+4. Make sure it stopped, and the map on screen looks like your track.
 
-- Use **desktop Chrome or Edge** on the laptop next to the track (that laptop
-  owns the Bluetooth link). Phones and iPads join over the network, not Bluetooth.
-- Keep that laptop **awake** and its Slipstream tab **visible** the whole time —
-  hiding the tab stops the cars on purpose.
-- Open **`/slipstream/`**. You start in **Student** view on **Classic SDK** at a
-  **300 mm/s** ceiling. (No car yet? You can still do everything in the
-  simulator — see the last section.)
+## Part 4 — Drive
 
-## Drive from the laptop
+**From the laptop:**
+1. Click **Drive here**, then **Start driving**.
+2. Use the throttle and the left/right buttons. (Start driving only turns the
+   controls on — it does not move the car by itself.)
 
-1. **Connect & color.** Switch on one charged car and take it off the charger.
-   Choose **Connect car**, pick it in the browser's Bluetooth picker, and finish
-   pairing. The Bluetooth *name* (e.g. "Z. Drive") does **not** tell you the
-   model — set **Car model** to the model printed on your car. Then pick an **LED
-   color**; the same color shows on the car's light, its card, the map, and any
-   phone. Look at the physical light to confirm — a color command is not proof of
-   identity.
-2. **Scan your track.** Place the car on a printed lane. Check **"Car on a
-   printed lane; hands clear; I'm watching,"** then **Scan track**. After the
-   three-second countdown the car drives a lap to read the printed codes and
-   stops. Confirm it physically stopped and the drawn map matches your circuit.
-3. **Drive.** Choose **Drive here**, then **Start driving**. Use the throttle and
-   the left/right lane buttons. *Start driving only enables the controls — it does
-   not apply throttle.* After any stop, return the throttle to zero before driving
-   again.
+**From a phone:**
+1. Type your **host code** (from Part 1) into the box. Type it **exactly** — capital
+   letters matter.
+2. On the car, click **Phone / QR**. Scan the code with your phone and open the link.
+3. Enter your name and join. On the laptop, click **Let in**, then **Start driving**.
+4. On the phone: **hold** the big button to drive, **let go** to stop, arrows to
+   steer, **STOP** to stop.
 
-Press **STOP ALL** (or **Esc**) at any time. STOP always latches — it never
-doubles as a resume button.
+**To stop any time:** press **STOP ALL** on the laptop (or the **Esc** key), or
+**STOP** on the phone. Driving from a phone to a real car is still being tested, so
+keep watching the car.
 
-## Drive from a phone or iPad
+## How many of us can drive at once?
 
-1. Type your **own host code** (from `npm run slipstream:code`, step 2 above) into
-   the host-code box, **exactly** — capitalization matters.
-2. On the car's card choose **Phone / QR**, scan the QR code with the phone
-   camera, open the link, enter a driver name, and join.
-3. On the laptop, choose **Let in** for that name, then **Start driving**.
-4. On the phone: **hold to drive**, use the left/right arrows to steer, and
-   **STOP** to stop. Releasing the drive button stops the car. Tilt steering and
-   haptics are optional.
+- **On the real track: a few at a time.** One laptop drives up to **4 cars**, and the
+  track only fits a handful. Take turns in small groups — start with one or two cars.
+- **Everyone at once: the practice simulator** (next section). It needs no car and no
+  track, so nobody has to wait.
 
-The phone needs no Bluetooth of its own, and the QR code never carries the host
-code or key. Phone-controlled *physical* driving is still being validated, so
-keep watching the car and be ready to STOP.
+## Practice with no car
 
-## Investigate the system
+Click **Advanced** → **Add simulated car**. Pick drivers, click **Scan track**,
+choose a game, then **Start round**. Same controls — no hardware needed.
 
-Open **Investigate the system** on the page and work through any of the four
-activities: how the car reads the track, a hardware-capability inventory (an HBOM
-starting point), the declared software dependencies (an SBOM starting point),
-FCC-label research, and the security challenges. These inventories are starting
-points, not complete bills of materials — part of each activity is explaining
-what evidence would actually establish a component or an FCC identity.
+## Want to dig deeper? (optional)
 
-## No car tonight? Use the simulator
+On your page, open **Investigate the system** to explore how the car reads the track,
+what parts and software it uses, its FCC radio label, and some security questions.
 
-Switch to **Advanced**, choose **Add simulated car** (one to four), pick human or
-computer drivers, **Scan track**, choose a feel and challenge, then **Start
-round**. The simulator exercises the same controller code — agreement with it is
-not proof of how real hardware behaves, but you can try the whole flow without any
-car.
+## Safety — every time
 
-## Safety, every time
-
-- Someone stays beside the track, able to stop a car by hand.
-- **STOP ALL** and **Esc** always stop and latch the cars.
-- Keep the laptop awake with the Slipstream tab visible.
-- A software speed limit is not a guarantee of a physical stop — supervise.
+- Someone stands by the track, ready to grab a car.
+- **STOP ALL** and **Esc** always stop the cars.
+- Keep the laptop awake and the page tab open.
