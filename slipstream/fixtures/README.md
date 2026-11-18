@@ -25,6 +25,22 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-computer-crew-2026-11-18.json
+
+Unmodified cumulative 136-event `96fc393` export; SHA-256
+`e4021edf2b7607c414cce747b324d0d3464e7b322af4df584d0ee50098de8aae`.
+Retains the accepted isolated shifts, then a one-car Computer Crew round at
+constant requested 300 mm/s for 31.735 seconds. Two automatic lane targets
+request a 27 mm left move and a 45 mm right move; replies are noncancelled,
+ACKs match and later printed codes confirm the resulting lanes. The new run
+contains 47 positions/22 transitions, maximum position gap 1501 ms, and no
+recovery/off-road/cancellation. UI reaches three laps and automatically stops.
+Independent route reconstruction supports at least three complete traversals;
+the distance-based score and stricter start/finish counter use different anchors.
+The operator subsequently confirms stopped, stayed on track and saw lane changes.
+The raw snapshot's pending note/stop flag predates that confirmation. No
+credentials are present. See [the physical result and scoring audit](../review/RELATIVE-LANE-CONTROLS.md#guardian-computer-round-physically-confirmed).
+
 ### guardian-sdk-left-shift-accepted-2026-11-18.json
 
 Unmodified 32-event `96fc393` export; SHA-256
