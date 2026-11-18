@@ -261,7 +261,9 @@ export class Car {
       }
       this.localizer?.feed(m, now);
       if (this.safetyReason==='Off track') this.localizer?.invalidate('Off track; recover before acquiring a new reference');
-      for (const fn of this.listeners) fn(m, this);
+      // Consumers can match state derived from this observation without
+      // comparing it to a later, independently sampled host clock.
+      for (const fn of this.listeners) fn(m, this, now);
     }
   }
   // Verified piece geometry maps a printed code to a lateral estimate. Use that

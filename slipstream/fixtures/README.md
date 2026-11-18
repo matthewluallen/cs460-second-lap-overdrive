@@ -25,6 +25,35 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-unsolicited-lane-cancel-2026-11-18.json
+
+Unmodified cumulative 52-event export from `835f77b`; SHA-256
+`331055a00d4bc6b4b2d23d5e2ad9500900e7040e48c8fb8ca14f7aa2e1bf77f1`.
+The earlier 29-event trial is retained verbatim. After confirmed physical stop,
+entrance repositioning, explicit stopped pit recovery and a fresh 3894 mV sample,
+the new diagnostic receives no optical position or transition. It reports
+off-track status at +670 ms, an intersection-family packet at +1039 ms and
+lane cancellation state `0x81` at +1279 ms; host STOP follows at +1280 ms.
+There is no host lane, cancel-lane or turn command in the entire capture.
+The operator missed the movement, then confirmed stopped on track; no path or
+lane-completion observation is claimed. This is not rejection of a newly sent
+host lane request. Initial metadata and pre-confirmation flags remain unchanged.
+
+### guardian-sdk-eligible-straight-no-attempt-2026-11-18.json
+
+Unmodified cumulative 72-event export from `835f77b`; SHA-256
+`7d88e6b51d74530c03f21cbcd5f230a133c8b92008fe7e731d28f79cf7a2f4e6`.
+The operator requested a watched repeat after confirming stopped on track.
+Battery is 3814 mV. The four-second diagnostic reads ordinary straight 39/code
+20 then 19, reverse, with 440.16 and 280 mm remaining; both geometrically
+qualify for a +9 mm target from the measured −13.5 mm lane. No lane request is
+sent. One optical calibration is sent; no new cancellation or recovery event
+occurs, and the normal deadline stops the run. The operator confirms physically
+stopped, moved normally and stayed on track. This evidence prompted the
+advancing-clock regression; a fixed-clock replay must not be presented as an
+exact reproduction of the recorded no-attempt behavior. Neither recording
+contains credentials. See [the paired-trial report](../review/RELATIVE-LANE-CONTROLS.md#entrance-attempt-and-watched-repeat).
+
 ### guardian-sdk-lane-no-attempt-late-straight-2026-11-18.json
 
 Unmodified 29-event export from `835f77b`; SHA-256

@@ -25,7 +25,7 @@ export class Game {
     const color = TEAM_COLORS.find(color => !this.drivers.some(d => d.car.color === color));
     const car = new Car(transport, {name: name || this.modelName(model), model, color, pieces: this.pieces, simulated, clock: this.clock});
     const driver = {id: this.nextId++, car, input: emptyInput(), control, bot: null, previous: emptyInput()};
-    car.on(message => this.#message(driver, message));
+    car.on((message, _car, observedAt) => this.#message(driver, message, observedAt));
     this.drivers.push(driver);
     if (this.track) car.useTrack(this.track);
     if (this.battle) this.battle.add(car);
@@ -57,7 +57,7 @@ export class Game {
     driver.gamepadBinding = null; driver.cpuArmed = false; driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
-  #message(driver, message) {
+  #message(driver, message, observedAt) {
     // A recovered optical frame must not inherit a discrete target from before
     // reference loss, even when forward driving continues in the same epoch.
     if(driver.laneNudge && (message.type==='hostStopped' || message.type==='delocRecoveryEntered' ||
@@ -106,7 +106,10 @@ export class Game {
       const now=this.clock(), car=driver.car, definition=this.pieces.get(message.pieceId);
       const spot=definition?.kind==='straight' && !definition.unverified ? this.pieces.locate(message.pieceId,message.locationId,message.reverse) : null;
       const target=spot ? spot.lateral+trial.direction*LANE_STEP : Infinity;
-      if (now>trial.started && now<trial.until && trial.until-now>=750 && message.speed>0 && spot && (1-spot.progress)*definition.length>=250 && Math.abs(target)<=LANE_LIMIT && car.lateralEstimate?.source==='printed-code' && car.lateralEstimate.at===now) {
+      // Match this exact receive stamp, not a later performance.now() sample.
+      // Current time independently enforces freshness and the diagnostic window.
+      const sameObservation=Number.isFinite(observedAt) && observedAt>=trial.started && now>=observedAt && now-observedAt<=POSITION_MAX_AGE_MS && car.lateralEstimate?.source==='printed-code' && car.lateralEstimate.at===observedAt;
+      if (now>trial.started && now<trial.until && trial.until-now>=750 && message.speed>0 && spot && (1-spot.progress)*definition.length>=250 && Math.abs(target)<=LANE_LIMIT && sameObservation) {
         // Commit the single attempt before any queued write can produce a reply.
         trial.laneRequested=true; trial.until=Math.min(trial.until,now+750); car.diagnosticUntil=trial.until;
         trial.laneTimer=this.schedule(()=>this.#diagnosticDeadline(trial),trial.until-now);
