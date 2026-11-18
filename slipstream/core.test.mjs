@@ -365,9 +365,9 @@ test('a recorded session replays to the same map, lane sign and commands', async
     {format: TRACE_FORMAT, cars: [{}], events: [[0, 0, 'rx', 'zz']]}, {format: TRACE_FORMAT, cars: [{}], events: [[0, 0, 'up', '01 17']]}]) assert.throws(() => validate(bad));
 });
 
-// Every trace in fixtures/ must decode cleanly and map to a closed loop. Traces
-// recorded from real cars are the only test here that does not rest on the
-// simulator's assumptions; the suite says plainly when there are none.
+// Replay successful and failed captures. Only an explicit expected map requires
+// closure; an observed acquisition failure must never invent one. Hardware
+// traces preserve observations beyond the simulator's assumptions.
 test('fixture traces replay through the real pipeline', async t => {
   const dir = new URL('./fixtures/', import.meta.url);
   const files = readdirSync(dir).filter(f => f.endsWith('.json'));
@@ -379,6 +379,15 @@ test('fixture traces replay through the real pipeline', async t => {
     for (let index = 0; index < trace.cars.length; index++) {
       const {mapper, seen, car} = await replayCar(trace, index);
       if (seen.position + seen.transition === 0) continue;       // a parked car
+      if (file === 'groundshock-sdk-cold-curve-scan-no-position.json') {
+        // This frozen hardware failure has transitions but no printed codes.
+        // Keep exact expectations instead of relaxing other fixtures' checks.
+        assert.equal(seen.position, 0, file);
+        assert.equal(seen.transition, 4, file);
+        assert.equal(mapper.track, null, file + ': no invented map');
+        assert.equal(car.localizer, null, file + ': no invented location');
+        continue;
+      }
       assert.ok(seen.position > 0, file + ': position updates decoded');
       for (const id of seen.pieces) assert.ok(P.get(id), file + ': piece ' + id + ' is in the table');
       if (trace.expect?.pieces) {

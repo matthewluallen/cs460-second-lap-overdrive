@@ -1,6 +1,6 @@
 # Supervised forward baseline — 18 November 2026
 
-This is a new **software-tested diagnostic**, not a physical acceptance result. The latest Groundshock observation remains the reference-confirmation spin followed by STOP. No hardware was operated while implementing this baseline.
+This is a new **software-tested diagnostic**, not a physical acceptance result. No hardware was operated while implementing it. The subsequent normal SDK scan on `5f3ebbf` failed before any optical code arrived; the operator reported a spin-off entering a curve and then powered Groundshock off. Consequently the three-lap baseline was **not started**. Read [the cold-scan evidence and acquisition-first next step](GROUNDSHOCK-COLD-CURVE-SCAN.md) before another physical attempt.
 
 ## Purpose and behavior
 
@@ -16,7 +16,9 @@ STOP, a lost link, off-track/recovery status, lane cancellation, low-battery/cha
 
 Special pieces may remain on the identified map for this unscored check. Their calibration and game effects remain disabled, and their presence still blocks scored rounds.
 
-## Next hardware procedure
+## Conditional hardware procedure — blocked by failed cold acquisition
+
+Do not repeat this full procedure unchanged after the failed 18 November scan. First resolve the acquisition issue described in the cold-scan report. These are the acceptance steps to resume only after that prerequisite is established.
 
 1. Use a charged, power-cycled Groundshock on the clear track, with an observer beside it. Use the previously accepted **Classic SDK connection** for this comparison; changing profiles introduces another variable.
 2. Start from a fresh connection. Connect automatically records initialization. Keep this recording active through the scan, baseline and STOP. A recording restarted at the baseline button is explicitly labeled as starting after connection and cannot rule out initialization or retained-state issues.

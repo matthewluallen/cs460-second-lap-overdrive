@@ -29,6 +29,10 @@ The 13 November reference-confirmation trial subsequently spun on the track befo
 
 The supervised forward baseline uses a separate maneuver lock so disabling turns and lane changes does not accidentally suppress ordinary optical calibration. It invalidates queued SDK lane preambles and maneuver packets at the last transport boundary, even after unlocking. Acquisition and overall deadlines prevent a delayed positive-speed write from starting after the relevant host window. STOP clears the baseline, invalidates pending motion and preserves its priority; there is no automatic retry or rearm. The shared pit, normal lane-cancellation STOP and telemetry watchdogs remain active. See [FORWARD-BASELINE.md](slipstream/review/FORWARD-BASELINE.md) for limitations and operator acceptance requirements.
 
+## Initialization control isolation — 18 November 2026
+
+Ordinary driver/planner ticks now wait for a car's initialization to finish, preventing scheduler-dependent zero-speed writes inside setup phases. Explicit STOP, the existing watchdog pass and shared-pit behavior remain available during initialization. The cold-curve scan evidence and replay regression retain the failed hardware result; this repair does not establish its physical cause or authorize another run. No firmware recovery setting, speed limit, watchdog threshold or arming rule is relaxed. See [the hardware report](slipstream/review/GROUNDSHOCK-COLD-CURVE-SCAN.md).
+
 ## Drive-state and calibration audit — 13 November 2026
 
 The APK/SDK comparison reproduced a last-microtask STOP race and a separate queue race that could replace an undelivered STOP with a fresh speed request. Motion generations now invalidate older work immediately before transport entry, and STOP has an independent priority queue key. Already-entered GATT writes remain uncancellable; the next serial command is STOP. Tests explicitly distinguish entry from completion and cover STOP/recovery/restart, closing, and queued lateral work.

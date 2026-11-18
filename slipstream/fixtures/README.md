@@ -25,6 +25,19 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### groundshock-sdk-cold-curve-scan-no-position.json
+
+Unmodified 18 November 2026 final export from build `5f3ebbf`, 42 events with
+zero drops; SHA-256 `8ffa6240c75eae7a2fb8300cefe46b2888127edbdb97d4f457bda43dae9c2c03`.
+Records full SDK connection, firmware 11866, battery 4106 mV, one 300 mm/s scan
+command, no optical positions and no lateral commands. Unknown-offset transitions
+precede the normal two-second gap stop. A late transition caused another STOP;
+it does not prove continuing motor activity. The operator observed spin-off
+entering a curve and then confirmed power-off. No map or forward baseline passed.
+Initial unknown-model metadata is preserved; Groundshock is operator-identified.
+No host/player credentials are present. See
+[the evidence report](../review/GROUNDSHOCK-COLD-CURVE-SCAN.md).
+
 ## Inspect a capture before interpreting it
 
 ```sh
@@ -32,7 +45,13 @@ node slipstream/tools/inspect_trace.mjs path/to/recording.json
 ```
 
 The offline report lists each car separately, firmware replies, seen piece IDs,
-message counts, malformed notifications, and supercode observations. `0x4f` and
+message counts, malformed notifications, and supercode observations. Its bounded
+`acquisition` report separates positive-speed command intervals, first raw and
+decoded optical readings, unknown-offset transitions, wheel-distance samples,
+offset/lateral command counts, and track traffic after requested STOP. These are
+packet observations, not evidence of physical movement, braking or cause of a
+departure. An offset opcode does not identify an optical-calibration purpose.
+Truncation counters make omitted intervals/samples explicit. `0x4f` and
 `0x53` remain distinct; their unsigned code and final raw byte are preserved.
 They do not identify a Power Zone location or enable attacks. The examples in
 tests are synthetic native-layout vectors, not real-car recordings.

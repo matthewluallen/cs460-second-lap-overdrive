@@ -17,5 +17,7 @@ int main(void) {
  CASE("battery",anki_vehicle_msg_get_battery_level(&m));
  CASE("cancel",anki_vehicle_msg_cancel_lane_change(&m));
  CASE("disconnect",anki_vehicle_msg_disconnect(&m));
+ CASE("config-plastic-no-supercodes",anki_vehicle_msg_set_config_params(&m,0,TRACK_MATERIAL_PLASTIC));
+ CASE("config-vinyl-no-supercodes",anki_vehicle_msg_set_config_params(&m,0,TRACK_MATERIAL_VINYL));
  return 0;
 }

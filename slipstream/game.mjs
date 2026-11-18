@@ -432,7 +432,10 @@ export class Game {
     }
     for (const d of this.drivers) {
       const car = d.car;
-      if (!car.connected || (this.phase === 'scanning' && d === this.scanner)) continue;
+      // Initialization owns its command sequence. Ordinary control ticks must
+      // not insert parked-speed writes, CPU intent or weapons between phases.
+      // Explicit STOP and the watchdog/shared-pit checks above remain active.
+      if (!car.connected || car.initializing || (this.phase === 'scanning' && d === this.scanner)) continue;
       if (car.safetyReason) { d.input = emptyInput(); continue; }
       if (d.control === 'bot' && !d.cpuArmed) { d.input = emptyInput(); car.setSpeed(0); continue; }
       let cpuTrackCeiling=1;
