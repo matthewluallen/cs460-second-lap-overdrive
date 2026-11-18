@@ -3,12 +3,23 @@
 import {api, channel} from './net.mjs';
 
 const $ = id => document.getElementById(id);
+const student = new URLSearchParams(location.search || '').get('view') === 'student';
+if (student) {
+  document.body.classList.add('student');
+  for (const id of ['studentHeader','drive','studentGuide','studentOptions','studentGame']) $(id).hidden = false;
+  $('throttle').hidden = true; $('options').hidden = true;
+  $('go').textContent = 'Connect controller';
+  $('left').textContent = '◀ Left'; $('right').textContent = 'Right ▶'; $('brake').textContent = 'STOP';
+  $('feedback').textContent = 'Keep your eyes on the track. Release to stop.';
+  $('studentOptionsButtons').append(...['tilt','flip','centerTilt','haptics','uturn','leave'].map($));
+  $('studentGame').append($('fire'),$('score'));
+}
 const params = new URLSearchParams(location.hash.slice(1));
 const room = params.get('r') || '', joinKey = params.get('s') || params.get('j') || '', seated = params.has('s');
 const KEY = 'slipstream.pad.' + room + '.' + joinKey.slice(0, 8);
 const state = {throttle: 0, steer: 0, attack: false, support: false, special: false};
 let lastStateAt = 0;
-let throttlePointer = null, releasePending = false, releaseCar = null;
+let throttlePointer = null, drivePointer = null, driveKey = null, releasePending = false, releaseCar = null;
 let online = false, driveReady = false, previousView = null, previousRoundStatus = null, tiltNeutral = null, tiltSample = null, tiltAngle = null;
 let haptics = false, lastBuzz = -Infinity;
 try { haptics = localStorage.getItem('slipstream.haptics') === 'on'; } catch {}
@@ -27,14 +38,24 @@ function showHaptics() {
 }
 $('haptics').onclick = () => { haptics = !haptics; try { localStorage.setItem('slipstream.haptics', haptics ? 'on' : 'off'); } catch {} showHaptics(); feedback(haptics ? 'Haptics on. Visual cues always remain available.' : 'Haptics off.', 'ready'); };
 showHaptics();
-let me = null, link = null, allowed = false, once = {}, tiltOn = false, tiltWanted = false, listening = false, flip = 1, lastSent = '', lastSentAt = 0, hasCar = false;
+let me = null, link = null, allowed = false, invitationChanging = false, once = {}, tiltOn = false, tiltWanted = false, listening = false, flip = 1, lastSent = '', lastSentAt = 0, hasCar = false;
 try { flip = sessionStorage.getItem('slipstream.flip') === '-1' ? -1 : 1; } catch {}
 
 const say = text => { $('msg').textContent = text; };
+const throttleCue = () => student ? 'Hold to drive when ready.' : 'Raise the throttle when ready.';
+function syncStudentControls() {
+  if (!student) return;
+  const enabled = driveReady && !document.hidden;
+  for (const id of ['drive','left','right']) $(id).disabled = !enabled;
+  $('drive').setAttribute('aria-pressed', String(enabled && state.throttle > 0));
+  $('drive').classList.toggle('on', enabled && state.throttle > 0);
+  $('connection').textContent = !online ? 'Not connected' : !allowed ? 'Waiting for approval' : releasePending ? 'Leaving car' : !hasCar ? 'Choose a car' : !enabled ? 'Connected · waiting' : state.throttle > 0 ? 'Driving · release to stop' : 'Ready to drive';
+}
 if (!/^[0-9a-f]{8}$/.test(room) || !/^[0-9a-f]{24}$/.test(joinKey)) { say('This link is incomplete. Scan the QR code on the host screen again.'); $('go').disabled = true; }
 try { const saved = JSON.parse(sessionStorage.getItem(KEY)); if (saved?.playerKey) { me = saved; start(); } } catch {}
 
 $('go').onclick = async () => {
+  if (invitationChanging) return;
   $('go').disabled = true; say('Joining…');
   try {
     me = await api('/rooms/' + room + '/join', {method: 'POST', body: {joinKey, name: $('name').value}});
@@ -48,8 +69,10 @@ window.slipstreamPad = {get transport() { return link?.transport ?? null; }};   
 function start() {
   $('join').hidden = true; $('play').hidden = false;
   link = channel({room, key: me.playerKey, role: 'player', onMessage, onStatus: status => {
+    if (invitationChanging) return;
     online = status === 'online';
     if (!online) { lockControls(); feedback('Connection lost. Throttle reset; wait for the host.', 'disabled'); }
+    syncStudentControls();
     $('link').textContent = status === 'online' ? '' : status === 'refused' ? 'Room closed' : 'Reconnecting…';
     if (status === 'refused') { try { sessionStorage.removeItem(KEY); } catch {} }
   }});
@@ -58,9 +81,10 @@ function start() {
 }
 
 function onMessage(m) {
-  if (m.type === 'kicked') { lockControls(); $('car').textContent = 'Removed'; $('status').textContent = 'The host removed you.'; allowed = false; return; }
-  if (m.type === 'pending') { lockControls(); allowed = false; $('car').textContent = 'Waiting…'; $('status').textContent = 'Waiting for the host to let you in.'; return; }
-  if (m.type === 'approved') { allowed = true; feedback('Approved. Wait for a car, then raise the throttle.', 'ready'); $('status').textContent = 'You are in.'; return; }
+  if (invitationChanging) return;
+  if (m.type === 'kicked') { allowed = false; lockControls(); $('car').textContent = 'Removed'; $('status').textContent = 'The host removed you.'; return; }
+  if (m.type === 'pending') { allowed = false; lockControls(); $('car').textContent = 'Waiting…'; $('status').textContent = 'Waiting for the host to let you in.'; return; }
+  if (m.type === 'approved') { allowed = true; feedback(student ? 'Approved. Wait for your car, then hold to drive.' : 'Approved. Wait for a car, then raise the throttle.', 'ready'); $('status').textContent = 'You are in.'; syncStudentControls(); return; }
   if (m.type !== 'state') return;
   lastStateAt = Date.now();
   const mine = m.me, lobby = m.lobby ?? {};
@@ -69,12 +93,12 @@ function onMessage(m) {
   const ready = online && allowed && !releasePending && hasCar && !mine.needsNeutral && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
   const changedCar = !!mine && mine.id !== previousView?.id;
   if (!ready || changedCar) resetInputs({keepSelection: !mine});
-  if (changedCar) { setSteer(0); tiltNeutral = null; feedback('Car changed. Raise the throttle when ready.', 'ready'); }
+  if (changedCar) { setSteer(0); tiltNeutral = null; feedback('Car changed. ' + throttleCue(), 'ready'); }
   driveReady = ready;
   $('throttle').setAttribute('aria-disabled', String(!ready));
   if (mine && previousView && previousView.id === mine.id) {
     if (mine.disabled && !previousView.disabled) feedback('Car disabled. Throttle reset.', 'disabled');
-    else if (!mine.disabled && previousView.disabled) feedback('Recovered. Raise the throttle when ready.', 'recovered');
+    else if (!mine.disabled && previousView.disabled) feedback('Recovered. ' + throttleCue(), 'recovered');
     else if (mine.assists > previousView.assists) feedback('Crew assist!', 'score');
     else if (mine.kills > previousView.kills) feedback('Knockout scored!', 'score');
     else if (Number.isFinite(mine.score) && Number.isFinite(previousView.score) && mine.score > previousView.score) feedback('+' + (mine.score - previousView.score) + ' points!', 'score');
@@ -83,7 +107,7 @@ function onMessage(m) {
   previousView = mine ? {...mine} : null;
   const round = lobby.round;
   if (round?.status !== previousRoundStatus) {
-    if (round?.status === 'running') feedback('GO! Raise the throttle when ready.', 'ready');
+    if (round?.status === 'running') feedback('GO! ' + throttleCue(), 'ready');
     else if (round?.status === 'paused') feedback('Shared pit stop. Cars stopped. Wait for the host to clear the track and resume.', 'ready');
     else if (round?.status === 'finished') feedback('Round complete. Cars stopped — check the host for results.', 'finish');
   }
@@ -96,7 +120,7 @@ function onMessage(m) {
     $('missionTime').textContent = round.status === 'finished' ? 'Finished' : round.status === 'paused' ? 'Paused · ' + time : time;
     const objective = typeof round.objective === 'string' && round.objective.trim() ? round.objective : round.mode === 'team' ? (round.teamLaps ?? 0) + ' / ' + round.goal + ' crew laps' : round.mode === 'solo' ? 'Complete laps. Find your rhythm.' : round.mode === 'race' ? 'Most complete laps wins.' : '100 per knockout · 25 per lap';
     const task = typeof mine?.task === 'string' && mine.task.trim() ? 'Your task: ' + mine.task + ' · ' : '';
-    $('missionGoal').textContent = round.status === 'countdown' ? 'Cars stay stopped. Apply throttle after GO.' : round.status === 'paused' ? 'Shared pit stop. Wait for the host to clear the track and resume.' : round.status === 'finished' ? 'Round complete. Check the host for results.' : task + objective;
+    $('missionGoal').textContent = round.status === 'countdown' ? (student ? 'Cars stay stopped. Hold to drive after GO.' : 'Cars stay stopped. Apply throttle after GO.') : round.status === 'paused' ? 'Shared pit stop. Wait for the host to clear the track and resume.' : round.status === 'finished' ? 'Round complete. Check the host for results.' : task + objective;
   }
   document.body.classList.toggle('down', !!mine?.disabled);
   if (mine) {
@@ -105,6 +129,10 @@ function onMessage(m) {
     $('car').textContent = (mine.id ? mine.id + ' · ' : '') + mine.name + (mine.crew ? ' · ' + mine.crew + ' crew' : '');
     $('energy').style.width = Math.round(mine.energy * 100) + '%'; $('energy').className = mine.energy < 0.33 ? 'low' : mine.energy < 0.66 ? 'mid' : '';
     $('status').textContent = releasePending ? 'Leaving car. Waiting for the host to confirm.' : round?.status === 'paused' ? 'Shared pit stop. All cars stopped; wait for the host.' : mine.connected === false ? 'Car disconnected. Ask the host to reconnect.' : mine.safetyReason === 'Host stopped' ? 'Cars stopped. Wait for GO or host Free drive.' : mine.safetyReason ? 'Safety stop: ' + mine.safetyReason : ({battle: 'Battle', ready: round?.status === 'running' ? 'Round live' : 'Free drive', scanning: 'Host is mapping the track', garage: 'Waiting for the track map', stopped: 'Host pressed STOP'})[lobby.phase] + ' · ' + mine.speed + ' mm/s';
+    if (student && ready) $('status').textContent = 'You control this car. Hold to drive; release to stop.';
+    else if (student && mine.safetyReason === 'Host stopped') $('status').textContent = 'Stopped. Choose Start driving on the laptop when ready.';
+    else if (student && mine.needsNeutral && !mine.safetyReason) $('status').textContent = 'Keep controls released while your car gets ready.';
+    if (student && !allowed) $('status').textContent = 'Waiting for the host to approve your controller.';
     $('hits').textContent = Number.isFinite(mine.score) ? 'Score ' + mine.score + ' · Laps ' + mine.laps : 'Hits ' + mine.kills + ' · Lost ' + mine.deaths + ' · Laps ' + mine.laps;
     if (mine.assists) $('hits').textContent += ' · Assists ' + mine.assists;
     if (mine.targets?.length) $('hits').textContent += ' · Target ' + mine.targets.join(', ');
@@ -125,10 +153,11 @@ function onMessage(m) {
     $('status').textContent = free.length ? 'Pick a car:' : 'Ask the host to set a car to “Phone”.';
     $('cars').replaceChildren(...free.map(c => { const b = document.createElement('button'); b.textContent = c.name; b.onclick = () => { once.car = c.id; }; return b; }));
   }
+  syncStudentControls();
 }
 
 function send() {
-  if (!me || !link || !allowed || !online) return;
+  if (invitationChanging || !me || !link || !allowed || !online) return;
   if (Date.now() - lastStateAt > 1000) lockControls();
   const body = {...state, throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once, ...(releasePending ? {release:true} : {})};
   // Tilt samples and arrow buttons can change steering while controls are locked.
@@ -148,19 +177,23 @@ function setThrottle(value) {
   state.throttle = driveReady && !document.hidden ? Math.max(0, Math.min(1, value)) : 0;
   $('throttle').setAttribute('aria-valuenow', String(Math.round(state.throttle * 100)));
   $('fill').style.height = Math.round(state.throttle * 100) + '%'; $('pct').textContent = Math.round(state.throttle * 100);
+  syncStudentControls();
 }
 function lockControls() {
   driveReady = false; resetInputs();
   $('throttle').setAttribute('aria-disabled', 'true');
   for (const bay of ['attack', 'support', 'special']) $(bay).disabled = true;
+  syncStudentControls();
 }
 function resetInputs({keepSelection = false} = {}) {
-  throttlePointer = null;
+  throttlePointer = null; drivePointer = null; driveKey = null;
   const selection = keepSelection ? Object.fromEntries(Object.entries(once).filter(([key]) => key === 'car' || key === 'release')) : {};
   state.throttle = 0; state.attack = state.support = state.special = false; once = selection;
   down.clear();
   $('fill').style.height = '0%'; $('pct').textContent = '0'; $('throttle').setAttribute('aria-valuenow', '0');
   for (const bay of ['attack', 'support', 'special']) $(bay).classList.remove('on');
+  if (student) { setSteer(0); $('drive').classList.remove('on'); $('drive').setAttribute('aria-pressed','false'); }
+  syncStudentControls();
   lastSent = '';
 }
 slider.addEventListener('keydown', event => {
@@ -178,6 +211,32 @@ for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) slider.
   if (throttlePointer === event.pointerId) throttlePointer = null;
 });
 $('brake').onclick = () => { resetInputs(); send(); feedback('Braking. Throttle reset.', 'ready'); };
+
+// Student throttle is held, never latched. A stopped/reassigned/disconnected
+// controller discards its gesture; readiness cannot restart it without a press.
+const drive = $('drive');
+drive.addEventListener('pointerdown', event => {
+  if (!student || !driveReady || document.hidden || drivePointer !== null || (event.button !== undefined && event.button !== 0)) return;
+  event.preventDefault(); drivePointer = event.pointerId; drive.setPointerCapture(event.pointerId); setThrottle(1); send();
+});
+for (const type of ['pointerup','pointercancel','lostpointercapture']) drive.addEventListener(type, event => {
+  if (drivePointer !== event.pointerId) return;
+  drivePointer = null; setThrottle(0); send();
+});
+drive.addEventListener('keydown', event => {
+  if (!student || !['Space','Enter'].includes(event.code)) return;
+  event.preventDefault(); event.stopPropagation();
+  if (!event.repeat && driveReady && !document.hidden) { driveKey=event.code; setThrottle(1); send(); }
+});
+drive.addEventListener('keyup', event => {
+  if (!student || !['Space','Enter'].includes(event.code)) return;
+  event.preventDefault(); event.stopPropagation(); driveKey=null; setThrottle(0); send();
+});
+drive.addEventListener('blur', () => {
+  // Tab can move focus before Space/Enter is released, so that keyup may go to
+  // another element. Keep a held touch usable with the other hand's arrows.
+  if (student && driveKey !== null) { resetInputs(); send(); }
+});
 
 // --- weapons --------------------------------------------------------------------
 for (const bay of ['attack', 'support', 'special']) {
@@ -197,12 +256,14 @@ $('leave').onclick = () => {
 
 // --- keyboard, for players on a laptop --------------------------------------------
 const down = new Set();
-const KEYS = {attack: ['KeyF', 'Space'], support: ['KeyG'], special: ['KeyR']};
+const KEYS = {attack: student ? ['KeyF'] : ['KeyF', 'Space'], support: ['KeyG'], special: ['KeyR']};
 addEventListener('keydown', event => {
-  if (event.target?.tagName === 'INPUT' || !me) return;
+  if (event.target?.tagName === 'INPUT' || event.target === drive || !me) return;
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) event.preventDefault();
   if (event.repeat) return;
   down.add(event.code);
+  if (student && ['KeyW','ArrowUp'].includes(event.code)) { setThrottle(1); send(); }
+  if (student && ['KeyS','ArrowDown'].includes(event.code)) { resetInputs(); send(); }
   if (event.code === 'KeyA' || event.code === 'ArrowLeft') $('left').click();
   if (event.code === 'KeyD' || event.code === 'ArrowRight') $('right').click();
   if (event.code === 'KeyX' && driveReady) once.uturn = true;
@@ -213,18 +274,20 @@ addEventListener('keydown', event => {
 });
 addEventListener('keyup', event => {
   down.delete(event.code);
+  if (student && ['KeyW','ArrowUp'].includes(event.code)) { setThrottle(0); send(); }
   for (const [bay, codes] of Object.entries(KEYS)) if (codes.includes(event.code)) { state[bay] = false; $(bay).classList.remove('on'); }
 });
 addEventListener('blur', () => { resetInputs(); send(); });
 setInterval(() => {
+  if (student) return;
   const up = down.has('KeyW') || down.has('ArrowUp'), slower = down.has('KeyS') || down.has('ArrowDown');
   if (up || slower) setThrottle(state.throttle + (up ? 0.045 : 0) - (slower ? 0.08 : 0));
 }, 50);
 
 // --- steering ---------------------------------------------------------------------
 function setSteer(value) { state.steer = Math.max(-1, Math.min(1, value)); $('dot').style.left = (50 + state.steer * 44) + '%'; }
-$('left').onclick = () => setSteer(Math.round(state.steer * 3 - 1) / 3);
-$('right').onclick = () => setSteer(Math.round(state.steer * 3 + 1) / 3);
+$('left').onclick = () => { if (!student || driveReady) setSteer(Math.round(state.steer * 3 - 1) / 3); };
+$('right').onclick = () => { if (!student || driveReady) setSteer(Math.round(state.steer * 3 + 1) / 3); };
 function onTilt(event) {
   if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
   // Only a device that really reports motion counts as having tilt steering.
@@ -255,4 +318,21 @@ $('tilt').onclick = async () => {
 $('centerTilt').onclick = () => { if (tiltSample !== null) { tiltNeutral = tiltSample; setSteer(0); feedback('Steering centered. Hold the phone comfortably.', 'ready'); } };
 $('flip').onclick = () => { flip = -flip; try { sessionStorage.setItem('slipstream.flip', String(flip)); } catch {} };
 document.addEventListener('visibilitychange', () => { if (document.hidden) { resetInputs(); send(); } });
+addEventListener('hashchange', async () => {
+  // A browser can reuse this page for a different car's QR fragment without
+  // rerunning the module. Never keep driving or joining with the old binding.
+  if (invitationChanging) return;
+  invitationChanging = true;
+  const previousLink = link, couldSend = allowed && online;
+  allowed = false; lockControls(); $('go').disabled = true;
+  if (previousLink && couldSend) {
+    try {
+      await Promise.race([
+        previousLink.send({throttle:0,steer:0,attack:false,support:false,special:false,uturn:false}),
+        new Promise(resolve => setTimeout(resolve,250))
+      ]);
+    } catch {} // A lost connection still closes; the host's dead-man remains active.
+  }
+  previousLink?.stop?.(); location.reload();
+});
 addEventListener('contextmenu', event => event.preventDefault());

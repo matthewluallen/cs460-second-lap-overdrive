@@ -4,44 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#101520">
-<title>Slipstream · Race together</title>
+<title>Slipstream · Student drive</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-view="student">
 <header>
-  <div class="brand"><span class="mark"></span><h1>SLIPSTREAM <small>tiny cars. big moments.</small></h1></div>
+  <div class="brand"><span class="mark"></span><h1>SLIPSTREAM <small>connect. explore. drive.</small></h1></div>
+  <div class="workspace-switch" role="group" aria-label="Workspace"><button id="studentView" aria-pressed="true">Student</button><button id="advancedView" aria-pressed="false">Advanced</button></div>
   <span id="phase" class="chip">Garage</span>
   <div class="actions">
-    <button id="scan" title="Drive one car round to map the track">Scan track</button>
-    <button id="loadMap" hidden>Use saved map</button>
-    <button id="battle" class="primary" disabled>Start round</button>
-    <button id="resume" hidden>Free drive</button>
+    <button id="battle" class="primary advanced-only" disabled>Start round</button>
+    <button id="resume" class="primary" hidden>Start driving</button>
     <button id="stop" class="danger" title="Esc">STOP ALL</button>
   </div>
 </header>
 <div id="scanStatus" class="scan-status" role="status" aria-live="polite" hidden></div>
+<section id="studentIntro" class="student-only student-intro"><div><span class="eyebrow">THE CONNECTED CAR LAB</span><h2>Your car. Your code. Your circuit.</h2><p>Connect on this laptop, scan your track, then drive here or use your phone.</p></div><ol aria-label="Getting started"><li><span>01</span> Connect &amp; color</li><li><span>02</span> Scan your track</li><li><span>03</span> Start driving</li></ol></section>
 <main>
   <aside id="garage">
-    <div class="section-heading"><h2>Pit crew</h2><span id="carCount" class="counter">0 / 4 cars</span></div>
-    <label class="field">Kit connection<select id="kit" aria-describedby="kitNote"><option value="fast-furious">Fast &amp; Furious · experimental</option><option value="sdk">Classic SDK connection</option><option value="sdk-plastic">Classic SDK · plastic-track comparison</option></select></label>
-    <p id="kitNote" class="note">This choice applies to the next Connect car, separately from Car model. Classic SDK previously scanned Groundshock; current reliability is unverified.</p>
+    <div class="section-heading"><h2>Your car</h2><span id="carCount" class="counter">0 / 4 cars</span></div>
+    <details class="connection-settings"><summary>Connection settings</summary>
+    <label class="field">Kit connection<select id="kit" aria-describedby="kitNote"><option value="fast-furious">Fast &amp; Furious · experimental</option><option value="sdk" selected>Classic SDK connection</option><option value="sdk-plastic">Classic SDK · plastic-track comparison</option></select></label>
+    <p id="kitNote" class="note">This choice applies to the next Connect car, separately from Car model. Classic SDK is the classroom starting point; the model is chosen separately.</p>
+    </details>
     <div class="row">
       <button id="connect" class="primary">Connect car</button>
-      <button id="addSim">Add simulated car</button>
+      <button id="addSim" class="advanced-only">Add simulated car</button>
     </div>
-    <button id="demo" class="demo">Try a two-car simulation →</button>
-    <label class="field">Connected car to scan<select id="scanCar"></select></label>
-    <details><summary>Scan-start calibration (experimental)</summary>
-      <p class="note">Only on a straight piece: measure the car's centre from the track centre, looking in its driving direction. Left is positive; right is negative. Leave blank for no calibration. Left/right hardware sign is still unverified.</p>
-      <label class="field">Starting position (mm)<input id="scanLateral" type="number" min="-68" max="68" step="0.5" placeholder="Unchanged"></label>
-      <label><input id="scanCalibrationConfirmed" type="checkbox"> I measured this starting position; car is stationary</label>
-    </details>
-    <label><input id="scanClear" type="checkbox"> Track clear; other cars removed before scanning</label>
+    <button id="demo" class="demo advanced-only">Try a two-car simulation →</button>
     <p id="bleNote" class="note"></p>
-    <label class="field">Practice layout (simulated cars)
+    <label class="field advanced-only">Practice layout (simulated cars)
       <select id="layout"></select>
     </label>
-    <details id="planBuilder" class="side-block"><summary>Build a circuit</summary>
+    <details id="planBuilder" class="side-block advanced-only"><summary>Build a circuit</summary>
       <p class="note">Plan in driving order. Test your design in the simulator; build and scan it before using real cars. Start (34) and finish (33) are two coded sections of one physical piece.</p>
       <label class="field">Section<select id="planPiece"></select></label>
       <label class="field">Direction<select id="planDirection"><option value="forward">Forward · curves left</option><option value="reverse">Reverse · curves right</option></select></label>
@@ -50,12 +45,36 @@
       <button id="planUse" disabled>Try this circuit</button>
     </details>
     <div id="cars"></div>
-    <p class="note" id="empty">No cars yet. Connect a real car over Bluetooth, or add simulated cars to try everything without hardware.</p>
+    <p class="note" id="empty">Switch your car on, take it off the charger, then choose it in the Bluetooth picker. Match the model to the name on your car.</p>
+    <section class="scan-setup"><h2><span class="step-number">02</span> Scan your track</h2>
+    <label class="field">Connected car to scan<select id="scanCar"></select></label>
+    <details class="advanced-only"><summary>Scan-start calibration (experimental)</summary>
+      <p class="note">Only on a straight piece: measure the car's centre from the track centre, looking in its driving direction. Left is positive; right is negative. Leave blank for no calibration. Left/right hardware sign is still unverified.</p>
+      <label class="field">Starting position (mm)<input id="scanLateral" type="number" min="-68" max="68" step="0.5" placeholder="Unchanged"></label>
+      <label><input id="scanCalibrationConfirmed" type="checkbox"> I measured this starting position; car is stationary</label>
+    </details>
+    <label><input id="scanClear" type="checkbox"> Car on a printed lane; hands clear; I’m watching</label>
+    <div class="row"><button id="scan" class="primary" title="Drive one car round to map the track">Scan track</button><button id="loadMap" hidden>Use saved map</button></div>
+    <p class="note">The car drives around to read the printed codes, then stops. Check that the map matches your track.</p></section>
+    <section id="remotePlayers" class="side-block phone-setup"><h2><span class="step-number">03</span> Drive with your phone</h2><p class="note">Choose <b>Phone / QR</b> on your car, scan its code, then approve your name here. Choose <b>Start driving</b> on this laptop. Keep this tab open while your phone controls the car.</p>
+    <label class="field" id="codeField">Class host code · from your instructor
+      <input id="hostCode" type="text" autocomplete="off" spellcheck="false" placeholder="ABCDE-FGHJK">
+    </label>
+    <button id="invite" class="advanced-only">Show shared code</button>
+    <div id="room" hidden>
+      <canvas class="advanced-only" id="qr" width="220" height="220" aria-label="QR code to join"></canvas>
+      <p class="note advanced-only">Any free car: scan this and you get the next car whose driver is <b>Phone</b>. For a specific car, use the <b>Code</b> button on that car's card.</p>
+      <input class="advanced-only" id="joinUrl" readonly aria-label="Join link">
+      <ul id="players"></ul>
+      <button id="closeRoom">Close room</button>
+    </div>
+    <p id="roomNote" class="note"></p>
+    </section>
   </aside>
   <div id="garageResize" class="panel-resize" role="separator" aria-label="Resize pit crew" aria-orientation="vertical" tabindex="0"></div>
   <section id="stage">
-    <div class="stage-heading"><div><span class="eyebrow">YOUR TABLE. YOUR CIRCUIT.</span><h2 id="arenaTitle">Make room for a little rivalry.</h2></div><span id="liveTag" class="chip">Simulation ready</span></div>
-    <section class="challenge-panel">
+    <div class="stage-heading"><div><span class="eyebrow">LIVE FROM THE TRACK</span><h2 id="arenaTitle">Your live track</h2></div><span id="liveTag" class="chip">Simulation ready</span></div>
+    <section class="challenge-panel advanced-only">
     <h2>Pick your experience</h2>
     <div class="experience-tabs" role="group" aria-label="Game experience"><button data-experience="arcade" aria-pressed="true">Arcade</button><button data-experience="competition" aria-pressed="false">Competition</button><button data-experience="story" aria-pressed="false">Story</button></div>
     <label class="field">Your next challenge<select id="mode"></select></label>
@@ -64,42 +83,28 @@
     <p id="roundHelp" class="note">Human, computer, or a mix. Up to four cars.</p>
     <button id="endRound" hidden>Finish round &amp; stop</button>
     </section>
-    <section id="pitPanel" class="pit-panel" hidden aria-live="polite"><strong>Shared pit stop</strong><p id="pitMessage"></p><button id="pitClearStopped">Clear pit · keep stopped</button><button id="pitResume" class="primary">Track clear · Continue round</button></section>
+    <section id="pitPanel" class="pit-panel" hidden aria-live="polite"><strong>Check the track before resuming</strong><p id="pitMessage"></p><button id="pitClearStopped">Clear pit · keep stopped</button><button id="pitResume" class="primary">Track clear · Continue round</button></section>
     <div class="view-toolbar"><div class="view-switch" role="group" aria-label="Circuit view"><button id="view3d" aria-pressed="false">3D studio</button><button id="view2d" aria-pressed="true">2D map</button></div><div class="camera-tools"><button id="cameraOut" aria-label="Zoom out">−</button><button id="cameraReset">Reset view</button><button id="cameraIn" aria-label="Zoom in">+</button></div></div>
     <p id="powerZoneStatus" class="note" hidden></p>
-    <p id="mapPositionStatus" class="note" role="status" hidden></p>
-    <div id="circuitViewport"><canvas id="map" aria-label="Live circuit map and car positions"></canvas><canvas id="map3d" hidden tabindex="0" aria-label="3D circuit visualization. Drag or use arrow keys to orbit. Escape stops all cars."></canvas><div id="sceneNote">2D telemetry map</div></div>
-    <div id="roundHud" class="round-hud"><div><span id="roundLabel" class="eyebrow">READY WHEN YOU ARE</span><strong id="roundTitle">Choose your kind of fun</strong><span id="roundGoal">Add cars, map the circuit, then start a round.</span></div><div class="clock"><strong id="roundClock">—</strong><span id="roundState">Free drive</span></div></div>
+    <p class="map-caption note" id="mapPositionStatus" role="status" hidden></p>
+    <div id="circuitViewport"><canvas id="map" aria-label="Live circuit map and car positions"></canvas><canvas id="map3d" hidden tabindex="0" aria-label="3D circuit visualization. Drag or use arrow keys to orbit. Escape stops all cars."></canvas><div id="sceneNote">Position estimated from the car’s optical readings</div></div>
+    <div id="roundHud" class="round-hud advanced-only"><div><span id="roundLabel" class="eyebrow">READY WHEN YOU ARE</span><strong id="roundTitle">Choose your kind of fun</strong><span id="roundGoal">Add cars, map the circuit, then start a round.</span></div><div class="clock"><strong id="roundClock">—</strong><span id="roundState">Free drive</span></div></div>
     <div id="countdown" class="countdown" hidden role="status" aria-live="assertive"></div>
     <section id="results" class="results" hidden aria-labelledby="resultTitle"><span class="eyebrow">ROUND COMPLETE · CARS STOPPED</span><h2 id="resultTitle">Nice run.</h2><p id="resultSummary"></p><ol id="resultRows"></ol><button id="rematch" class="primary">Play again</button><button id="dismissResults">Back to pit crew</button></section>
-    <div id="keys" class="keys">
+    <div id="keys" class="keys advanced-only">
       <span><b>Player 1</b> W S speed · A D lane · F fire · G support · R special · Q E switch weapon · X U-turn</span>
       <span><b>Player 2</b> arrows · K fire · L support · O special · I P switch weapon · M U-turn</span>
     </div>
   </section>
   <div id="telemetryResize" class="panel-resize" role="separator" aria-label="Resize telemetry" aria-orientation="vertical" tabindex="0"></div>
-  <aside id="side">
+  <aside id="side" class="advanced-only">
 
-    <section class="side-block"><h2>On the grid</h2>
+    <section class="side-block advanced-only"><h2>On the grid</h2>
     <table id="scores"><thead><tr><th>Car</th><th id="scoreCol" title="Virtual knockouts">KOs</th><th id="detailCol">Lost</th><th>Laps</th></tr></thead><tbody></tbody></table>
     <h2>Speed limit</h2>
-    <label class="field"><span id="topLabel">Speed ceiling 400 mm/s</span>
-      <input id="top" type="range" min="300" max="1200" step="50" value="400">
+    <label class="field"><span id="topLabel">Speed ceiling 300 mm/s</span>
+      <input id="top" type="range" min="300" max="1200" step="50" value="300">
     </label>
-    </section>
-    <section class="side-block"><h2>Remote players</h2>
-    <label class="field" id="codeField">Host code (printed where the server was started)
-      <input id="hostCode" type="text" autocomplete="off" spellcheck="false" placeholder="ABCDE-FGHJK">
-    </label>
-    <button id="invite">Show shared code</button>
-    <div id="room" hidden>
-      <canvas id="qr" width="220" height="220" aria-label="QR code to join"></canvas>
-      <p class="note">Any free car: scan this and you get the next car whose driver is <b>Phone</b>. For a specific car, use the <b>Code</b> button on that car's card.</p>
-      <input id="joinUrl" readonly aria-label="Join link">
-      <ul id="players"></ul>
-      <button id="closeRoom">Close room</button>
-    </div>
-    <p id="roomNote" class="note"></p>
     </section>
     <section class="side-block"><h2>Live car checks</h2>
       <div id="liveDiagnostics" class="note" style="white-space:pre-line">Connect a car to see telemetry health.</div>
@@ -112,6 +117,7 @@
     <h2>Log</h2>
     <ol id="log"></ol></details>
   </aside>
+  <section id="studentLab" class="student-only student-lab" aria-label="Investigate your connected car"></section>
 </main>
 <script type="module" src="app.mjs"></script>
 </body>

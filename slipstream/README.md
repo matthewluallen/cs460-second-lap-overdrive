@@ -4,7 +4,23 @@ Control one to four robotic race cars from a browser, with human or computer
 drivers, a live track map, and phone controllers. Choose Arcade, Competition or
 Story missions. Simulated practice works without owning any hardware.
 
-**Status: limited supervised hardware acceptance.** Groundshock SDK firmware 11866 has scanned one 11-piece circuit and completed one observed leftward maneuver and stop. See [the hardware evidence](review/GROUNDSHOCK-LEFT-STEERING-ACCEPTED.md). Repeated autonomous driving, right steering, multi-car races, attacks and other models remain unverified. Automated transports and captured traces do not establish general physical compatibility. Packet layouts use the published SDK and static app reviews ([standard OVERDRIVE](review/INDEPENDENT-REVIEW.md), [Fast & Furious](review/FAST-FURIOUS-REVIEW.md)); complete original-app parity is not claimed. See [First run with real cars](#first-run-with-real-cars).
+**Status: limited supervised hardware acceptance.** Guardian on Classic SDK firmware11866 has scanned the seven-section test circuit, completed three forward laps, shifted left and right, and completed a three-lap Computer round with observed lane changes. See [the dated hardware evidence](review/RELATIVE-LANE-CONTROLS.md). Groundshock also spins independently in the manufacturer's Drone Mode and is excluded from acceptance. Multi-car driving, attacks and phone-controlled physical driving remain unverified. Automated checks and captured traces do not establish general physical compatibility. Packet layouts use the published SDK and static app reviews; complete original-app parity is not claimed.
+
+## Student view (default)
+
+1. Open `/slipstream/` on the Bluetooth laptop in Chrome or Edge. The default is **Student** view with **Classic SDK** for new installations and a300 mm/s ceiling. A previously saved connection choice is respected; expand **Connection settings** to check it. Keep this laptop awake and its controller tab visible.
+2. Switch on one charged car normally, off its charger. Choose **Connect car**, then select it in the browser's Bluetooth picker and finish Connect/Pair. The Bluetooth device name can repeat across physical models; use the card's **Car model** selector to match the physical car. Do not infer the model from a name such as “Z. Drive.”
+3. Match the card's LED color to the car. Choose a custom color while stopped if wanted. Its card and map marker use that color too. A color command is not an independent identity check: look at the physical light.
+4. Place the car on a printed lane. Confirm the printed-lane/hands-clear checkbox, then **Scan track**. The three-second countdown leads into discovery. At completion, confirm the car is physically stopped and the map matches your circuit. Use **STOP ALL** whenever needed; it addresses this page's connected cars.
+5. Choose **Drive here**, then **Start driving**. Use the throttle and left/right controls. Start driving enables controls; it does not itself apply human throttle. Return the throttle to zero after any stop before driving again.
+6. To use a phone or iPad instead, enter the **Class host code** from the instructor, then choose **Phone / QR** on the car. Scan the displayed QR code with the phone camera, open the link, enter a driver name, and join. On the laptop, choose **Let in** for that name, then **Start driving**. The phone uses **Hold to drive**, left/right steering and **STOP**. Release the drive button to stop; tilt and feedback options are optional. The phone does not need its own Bluetooth connection to the car.
+
+Phones must be able to reach the same HTTPS address as the host page. Localhost QR links work only on the host machine; for class use the already-public Codespaces forwarded address described in [DEPLOYMENT.md](DEPLOYMENT.md). Never place a host code or host key in a shared QR. Invitations contain only the existing per-seat/join capability; approval remains required.
+
+**Investigate the system** has four expandable activities: how the car reads the track, a hardware-capability inventory, direct software dependencies, FCC-label research, and security evidence. The dependency inventory is an SBOM starting point, not a complete SBOM; exact hardware components and FCC identity must be established from the specific car's evidence.
+
+**Advanced** retains simulation, games, diagnostic tools, telemetry and traces. Switching between Student and Advanced requests STOP and clears driving intent. It never starts a car.
+
 
 ## Start it
 
@@ -16,7 +32,7 @@ npm run slipstream        # serves http://127.0.0.1:8000/slipstream/
 Open the page in desktop Chrome or Edge. Plain `npm start` does not serve this page or
 its relay; the hardened stationary course bench remains available separately.
 
-To try it without hardware: add one to four simulated cars, choose their human or
+To try it without hardware: choose **Advanced**, add one to four simulated cars, choose their human or
 computer drivers, **Scan track**, choose a feel and challenge, then **Start round**.
 The countdown leads into a short round and a result card. **Play again** explicitly
 starts a new round. Simulated cars exercise the controller code; agreement with
@@ -193,7 +209,7 @@ suite prints "NO HARDWARE TRACES YET".
 
 ## First run with real cars
 
-1. One charged car on a closed loop, someone beside the track, **Top speed** at 400.
+1. One charged car on a closed loop, someone beside the track, **Speed ceiling** at300.
 2. **Connect car**, pick it in the browser's chooser. Its engine light should turn
    to its team colour. If nothing changes, stop and check the log.
 3. Set the driver to keyboard, explicitly choose **Free drive** if stopped, then
@@ -301,8 +317,8 @@ then release buttons/triggers and center the stick; unsupported mappings stay
 stopped. Selecting Computer does not start a car: use Start round or Free drive
 and wait for the three-second countdown.
 
-Choose the scan car and confirm the track is clear with other cars removed before
-scanning. Scans and shared-pit resume use the same three-second countdown. Scan
+Choose the scan car and confirm it is on a printed lane, hands are clear and you
+are watching before scanning. Scans and shared-pit resume use the same three-second countdown. Scan
 completion or cancellation latches STOP. Moving cars request a shared pit after
 5 seconds without a first position/transition or a 2-second gap thereafter.
 Scans are bounded to 45 seconds and three anchor returns. Continued track telemetry

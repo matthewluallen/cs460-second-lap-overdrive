@@ -79,6 +79,11 @@ test('3D hides an existing car mesh and its effects after stale, ambiguous or in
   }
   now+=40;renderer.draw({track,cars:[car()],now});
   assert.equal(renderer.carMeshes.get(1).group.visible,true,'a later trusted pose can display again');
+  const recolored=car();recolored.color=[1,0,0.5];
+  renderer.draw({track,cars:[recolored],now:now+40});
+  const mesh=renderer.carMeshes.get(1),expected=new THREE.Color(1,0,0.5);
+  assert.equal(mesh.shell.color.getHex(),expected.getHex(),'body follows the current identification color');
+  assert.equal(mesh.ring.material.color.getHex(),expected.getHex(),'existing ring follows the same color after customization');
   renderer.dispose();
 });
 

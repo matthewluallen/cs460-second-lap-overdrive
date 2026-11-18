@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
-import {Game} from './game.mjs';
+import {Game, TEAM_COLORS} from './game.mjs';
+import {rgb} from './protocol.mjs';
 import {FaultTransport, FaultRelay} from './faults.mjs';
 import {trackFromPlan, trackValidation} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
@@ -12,7 +13,7 @@ import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 
 // Execute the actual host handlers and loop with DOM stubs and the simulated
 // transport. These verify control logic, not browser rendering or real hardware.
-function host({injectFaults = false, advancingClock = false, bluetoothLink = null, stored = {}} = {}) {
+function host({injectFaults = false, advancingClock = false, bluetoothLink = null, stored = {}, view = 'advanced', apiCall = async () => ({})} = {}) {
   const transports = [];
   const nodes = new Map(), documentEvents = {}, windowEvents = {}, intervals = [];
   let now = 0, reads = 0;
@@ -20,7 +21,7 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
   function element(tag = 'div') {
     const n = {tagName: tag.toUpperCase(), children: [], textContent: '', value: '', hidden: false, disabled: false,
       style: {setProperty() {}}, classList: {add() {}, remove() {}, toggle() {}}, dataset: {},
-      setAttribute() {}, addEventListener() {}, setPointerCapture() {}, select() {}, remove() {},
+      attributes:{}, setAttribute(key,value) { this.attributes[key]=value; }, addEventListener() {}, setPointerCapture() {}, select() {}, remove() {}, focus() { this.focused=true; }, blur() { this.blurred=true; }, scrollIntoView() {},
       append(...items) { this.children.push(...items); if (this.tagName === 'SELECT' && !this.value && items.length) this.value = items[0].value; },
       prepend(...items) { this.children.unshift(...items); },
       replaceChildren(...items) { this.children = []; if (this.tagName === 'SELECT') this.value = ''; this.append(...items); },
@@ -37,15 +38,16 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
     return nodes.get(id);
   };
   const storage = {getItem(key) { return stored[key] ?? null; }, setItem(key,value) { stored[key]=value; }, removeItem(key) { delete stored[key]; }};
-  const document = {hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
+  const document = {body:element('body'), hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
+  document.body.dataset.view=view;
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
   const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, trackValidation, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
-    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage,
+    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, mountStudentLab() {},
     performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
     Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => !!bluetoothLink, chooseCar: async () => bluetoothLink,
-    api: async () => ({}), channel: () => ({send: async () => {}, stop() {}}),
+    api: apiCall, channel: () => ({send: async () => {}, stop() {}}),
     setTimeout() {}, setInterval(fn) { intervals.push(fn); }, requestAnimationFrame() {},
     addEventListener(name, fn) { (windowEvents[name] ??= []).push(fn); }
   });
@@ -511,7 +513,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-diagnostic-observation');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-student-drive');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
@@ -651,4 +653,153 @@ test('STOP cancels a right-lane diagnostic countdown without invoking a driver',
   h.node('stop').click();h.tick(4000);await settle();
   assert.equal(h.run('countdown'),null);assert.equal(h.run('game.diagnostic'),null);
   assert.equal(h.run('game.drivers[0].car.speed'),0);assert.equal(h.run('game.halted'),true);
+});
+
+test('student workspace starts stopped at 300 with SDK while respecting an explicit saved kit',async()=>{
+  const h=host({view:'student'});
+  assert.equal(h.node('kit').value,'sdk');assert.equal(h.run('game.topSpeed'),300);
+  assert.equal(h.run('game.halted'),true);assert.equal(h.run('session.status'),'idle');
+  assert.equal(h.node('roundTitle').textContent,'Free drive');
+  assert.equal(h.node('arenaTitle').textContent,'Your live track');
+  h.node('addSim').click();await settle();
+  assert.equal(h.run('game.drivers[0].control'),'browser');
+  assert.equal(h.node('resume').hidden,false);assert.equal(h.node('resume').disabled,true);
+  h.node('resume').click();assert.equal(h.run('game.halted'),true,'an unmapped track cannot start student driving');
+  h.run('game.useTrack(world.track);refresh()');assert.equal(h.node('resume').disabled,false);
+  h.node('resume').click();
+  h.run('cards.get(game.drivers[0]).throttle.value=100;cards.get(game.drivers[0]).throttle.oninput()');h.tick(40);await settle();h.run('refresh()');
+  assert.equal(h.run('!!game.drivers[0].armed'),false);assert.equal(h.run('game.drivers[0].car.speed'),0,'early held throttle cannot bypass the neutral gate');
+  assert.equal(h.run('cards.get(game.drivers[0]).phoneStatus.textContent'),'Return throttle to zero to enable driving.');
+  h.run('cards.get(game.drivers[0]).throttle.value=0;cards.get(game.drivers[0]).throttle.oninput()');h.tick(80);await settle();h.run('refresh()');
+  assert.equal(h.run('game.halted'),false);assert.equal(h.run('game.drivers[0].car.speed'),0,'Start driving does not apply throttle');
+  assert.equal(h.run('game.drivers[0].armed'),true,'fresh on-screen neutral arms the control');
+  assert.equal(h.run('cards.get(game.drivers[0]).phoneStatus.textContent'),'Raise throttle to drive. Brake returns it to zero.');
+  h.run('cards.get(game.drivers[0]).throttle.value=50;cards.get(game.drivers[0]).throttle.oninput()');h.tick(120);await settle();
+  assert.ok(h.run('game.drivers[0].car.speed')>0);h.node('stop').click();
+  for(const kit of ['fast-furious','sdk-plastic'])assert.equal(host({view:'student',stored:{'slipstream.kit.v1':kit}}).node('kit').value,kit);
+});
+
+test('student hardware pairing separates Bluetooth identity from selected model and remains stopped',async()=>{
+  const radio=connectionRadio();radio.name='Z. Drive';const h=host({view:'student',bluetoothLink:radio});
+  await h.node('connect').click();await h.run('game.drivers[0].car.pumpPromise');
+  assert.equal(radio.initializationProfile,'sdk');assert.equal(h.run('game.drivers[0].car.model'),0);
+  assert.equal(h.run('game.drivers[0].control'),'browser');assert.equal(h.run('game.halted'),true);
+  assert.equal(h.run('cards.get(game.drivers[0]).pairing.textContent'),'Paired Bluetooth name: Z. Drive');
+  assert.match(h.run('cards.get(game.drivers[0]).modelNote.textContent'),/Choose the model printed on your car/);
+  h.run("cards.get(game.drivers[0]).model.value='8';cards.get(game.drivers[0]).model.onchange()");
+  assert.equal(h.run('game.drivers[0].car.name'),'Groundshock');
+  assert.match(h.run('cards.get(game.drivers[0]).modelNote.textContent'),/Model selected by you: Groundshock/);
+  assert.equal(h.run('cards.get(game.drivers[0]).pairing.textContent'),'Paired Bluetooth name: Z. Drive');
+  assert.ok(radio.sent.some(packet=>packet[1]===0x33),'initialization requests the assigned LED color');
+  assert.equal(radio.sent.some(packet=>packet[1]===0x24&&(packet[2]||packet[3])),false);
+  await h.run('game.removeCar(game.drivers[0])');
+});
+
+test('student LED changes validate color and stopped state and preserve distinct encoded colors on later connections',async()=>{
+  const radio=connectionRadio(),h=host({view:'student',bluetoothLink:radio});await h.node('connect').click();await h.run('game.drivers[0].car.pumpPromise');
+  h.run('const d=game.drivers[0],ui=cards.get(d)');
+  const colors=()=>radio.sent.filter(p=>p[1]===0x33).length;
+  const before=colors();h.run("ui.color.value='#0066ff';ui.color.onchange()");await h.run('d.car.pumpPromise');
+  assert.equal(colors(),before+1);assert.equal(h.run('colorHex(d.car.color)'),'#0066ff');
+  assert.deepEqual(radio.sent.filter(p=>p[1]===0x33).at(-1),[...rgb(0,.4,1)]);
+  assert.match(h.run('ui.colorStatus.textContent'),/#0066FF requested.*check the light/);
+  for(const invalid of ['bad','#00ff00<script>','#000000','#010101']) {
+    h.run('ui.color.value='+JSON.stringify(invalid)+';ui.color.onchange()');await settle();assert.equal(colors(),before+1,invalid);
+  }
+  assert.match(h.run('ui.colorStatus.textContent'),/brighter color/);
+  h.run("game.resume();ui.color.value='#ff00ff';ui.color.onchange()");await settle();assert.equal(colors(),before+1);assert.match(h.run('ui.colorStatus.textContent'),/Stop the cars/);
+  h.node('stop').click();
+  h.node('addSim').click();h.node('addSim').click();h.node('addSim').click();await settle();
+  assert.equal(h.run('new Set(game.drivers.map(d=>colorPacketKey(d.car.color))).size'),4,'custom blue cannot collide with a later default blue');
+  h.run("ui.color.value='#01ff00';ui.color.onchange()");await settle();
+  assert.equal(colors(),before+1);assert.match(h.run('ui.colorStatus.textContent'),/already uses this LED color/,'near-green quantizes to the same physical LED values');
+  await h.run('game.removeCar(d)');
+});
+
+test('student Phone QR keeps approval and neutral-input arming and Drive here revokes the previous seat',async()=>{
+  const requests=[];const h=host({view:'student',apiCall:async(path,options)=>{requests.push({path,options});return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:path.endsWith('/seats')?{seatKey:'one-car'}:{};}});
+  h.node('addSim').click();await settle();h.node('hostCode').value='CLASS';
+  h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d);game.useTrack(world.track);');
+  await h.run('ui.phone.click()');
+  assert.equal(h.run('d.control'),'phone');assert.equal(h.run('game.halted'),true);assert.equal(h.run('d.armed'),false);
+  assert.equal(h.run('ui.seatLink.value'),'http://localhost/slipstream/pad.html?view=student#r=classroom&s=one-car');
+  assert.equal(h.node('joinUrl').value,'http://localhost/slipstream/pad.html?view=student#r=classroom&j=join');
+  assert.equal(h.run('ui.seatBox.hidden'),false);assert.equal(requests.filter(r=>r.path.endsWith('/seats')).length,1);
+  h.run("onRelay({type:'joined',id:91,name:'Student',car:d.id});onRelay({type:'online',player:91});onRelay({type:'input',player:91,throttle:1});refresh()");
+  assert.equal(h.run('!!d.pad'),false);assert.equal(h.node('resume').disabled,true,'an unapproved phone cannot enable driving');
+  await h.run('approve(players.get(91))');h.run('refresh()');assert.equal(h.node('resume').disabled,false);
+  h.node('resume').click();h.run("onRelay({type:'input',player:91,throttle:1});readControls(.04);game.tick(.04)");await settle();
+  assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('d.armed'),false,'held phone throttle cannot arm after Start');
+  h.run("onRelay({type:'input',player:91,throttle:0,steer:0});onRelay({type:'input',player:91,throttle:.5});readControls(.04);game.tick(.04)");await settle();assert.ok(h.run('d.car.speed')>0);
+  h.run('ui.screen.click()');await settle();assert.equal(h.run('game.halted'),true);assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('d.control'),'browser');assert.equal(h.run('d.pad'),null);
+  h.run("onRelay({type:'online',player:91});onRelay({type:'input',player:91,car:d.id,throttle:1});");
+  assert.equal(h.run('d.control'),'browser');assert.equal(h.run('d.pad'),null);assert.equal(h.run('ui.screen.blurred'),true);
+});
+
+test('student Phone QR shows missing class code and can retry after the code is supplied',async()=>{
+  let requests=0;const h=host({view:'student',apiCall:async path=>{requests++;return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'};}});
+  h.node('addSim').click();await settle();h.run('drawQr=async()=>{};const ui=cards.get(game.drivers[0]);');
+  await h.run('ui.phone.click()');assert.equal(requests,0);assert.match(h.node('roomNote').textContent,/enter the host code/);assert.equal(h.node('hostCode').focused,true);
+  assert.equal(h.run('game.halted'),true);h.node('hostCode').value='CLASS';await h.run('ui.phone.click()');
+  assert.equal(requests,2);assert.equal(h.run('ui.seatBox.hidden'),false);assert.equal(h.run('game.drivers[0].car.speed'),0);
+});
+
+test('changing workspace stops active driving and entering student mode parks existing computer controls',async()=>{
+  const h=host();h.node('demo').click();h.node('battle').click();h.tick(3001);h.tick(3041);await settle();
+  assert.equal(h.run('session.status'),'running');assert.ok(h.run('game.drivers.some(d=>d.car.speed>0)'));
+  h.node('studentView').click();h.tick(3081);await settle();assert.equal(h.document.body.dataset.view,'student');assert.equal(h.run('session.status'),'idle');
+  assert.equal(h.run('game.drivers.every(d=>d.car.speed===0&&d.control==="browser")'),true);assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.topSpeed'),300);
+  h.node('advancedView').click();assert.equal(h.document.body.dataset.view,'advanced');assert.equal(h.run('game.halted'),true);assert.equal(h.run('countdown'),null);
+});
+
+test('student scan maps at the default pace, stays stopped and needs explicit Start driving',async()=>{
+  const h=host({view:'student'});h.node('addSim').click();await settle();h.node('scanCar').value='1';h.node('scanClear').checked=true;
+  h.node('scan').click();h.run('refresh()');assert.equal(h.node('resume').hidden,false);assert.equal(h.node('resume').disabled,true);
+  h.tick(3001);await settle();
+  for(let now=3041;now<45000&&h.run("game.phase==='scanning'");now+=40){h.tick(now);await settle();}
+  h.run('refresh()');assert.ok(h.run('game.track?.closed'));assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.drivers[0].car.speed'),0);
+  assert.equal(h.node('resume').disabled,false);assert.match(h.node('scanStatus').textContent,/Scan mapped/);
+  assert.equal(h.run('session.status'),'idle');assert.equal(h.run('game.drivers[0].control'),'browser');
+});
+
+test('late student phone-code responses cannot replace Drive here and workspace changes update shared URLs',async()=>{
+  let release;const seatPending=new Promise(resolve=>{release=resolve;});
+  const h=host({view:'student',apiCall:async path=>path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:seatPending});
+  h.node('addSim').click();await settle();h.node('hostCode').value='CLASS';h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d)');
+  const pending=h.run('ui.phone.click()');await settle();h.run('ui.screen.click()');release({seatKey:'late'});await pending;
+  assert.equal(h.run('d.control'),'browser');assert.equal(h.run('ui.seatBox.hidden'),true);assert.match(h.run('ui.phoneStatus.textContent'),/On-screen controls selected/);
+  assert.equal(h.run('game.halted'),true);assert.equal(h.run('d.car.speed'),0);
+  h.node('advancedView').click();await settle();assert.equal(h.node('joinUrl').value,'http://localhost/slipstream/pad.html#r=classroom&j=join');
+  h.node('studentView').click();await settle();assert.equal(h.node('joinUrl').value,'http://localhost/slipstream/pad.html?view=student#r=classroom&j=join');
+});
+
+test('student phone-code service failures stay visible and do not arm a car',async()=>{
+  const h=host({view:'student',apiCall:async()=>{throw new Error('Class host code was rejected');}});
+  h.node('addSim').click();await settle();h.node('hostCode').value='WRONG';h.run('const d=game.drivers[0],ui=cards.get(d)');
+  await h.run('ui.phone.click()');
+  assert.match(h.node('roomNote').textContent,/Class host code was rejected/);assert.match(h.run('ui.phoneStatus.textContent'),/Class host code was rejected/);
+  assert.equal(h.run('ui.seatBox.hidden'),true);assert.equal(h.run('game.halted'),true);assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('d.armed'),false);
+});
+
+test('student status copy stays concise while advanced retains scan evidence and optical details',async()=>{
+  const h=host({view:'student'});h.node('addSim').click();await settle();
+  h.run("const d=game.drivers[0];scanAttempt={driver:d,stage:'complete',pieces:11,positions:42,transitions:17};game.useTrack(world.track);refresh()");
+  assert.equal(h.node('scanStatus').textContent,'Scan mapped 11 pieces. STOP requested; confirm the physical stop and map. ');
+  assert.match(h.node('mapPositionStatus').textContent,/^Waiting for a fresh position:/);
+  h.run('refresh(game.snapshot().map(row=>({...row,located:true})))');
+  assert.equal(h.node('mapPositionStatus').textContent,'Positions estimated from recent track readings.');
+  h.node('advancedView').click();
+  assert.match(h.node('scanStatus').textContent,/42 optical positions.*17 transitions/);
+  assert.match(h.node('mapPositionStatus').textContent,/Unconfirmed map markers are hidden/);
+  assert.equal(h.node('resume').textContent,'Free drive');
+  h.node('studentView').click();h.run("scanAttempt.stage='stopped';scanAttempt.reason='Telemetry timeout';scanAttempt.positions=0;game.pitReason='Telemetry timeout';renderScanStatus()");
+  assert.match(h.node('scanStatus').textContent,/No printed track codes.*Recover.*Clear pit.*Scan track to retry/);
+});
+
+test('approved student phone status replaces invitation instructions and room close clears the old QR',async()=>{
+  const h=host({view:'student',apiCall:async path=>path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'}});
+  h.node('addSim').click();await settle();h.node('hostCode').value='CLASS';h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d)');
+  await h.run('ui.phone.click()');h.run("onRelay({type:'joined',id:9,name:'Avery',car:d.id})");await h.run('approve(players.get(9))');h.run('refresh()');
+  assert.equal(h.run('ui.phoneStatus.textContent'),'Avery paired to this car. Choose Start driving on the laptop; then hold to drive on the phone.');
+  await h.node('closeRoom').click();assert.equal(h.run('ui.phoneStatus.textContent'),'');assert.equal(h.run('ui.seatLink.value'),'');assert.equal(h.run('ui.seatBox.hidden'),true);assert.equal(h.run('game.halted'),true);
 });

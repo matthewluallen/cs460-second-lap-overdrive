@@ -57,7 +57,7 @@ async function start(t, options = {slipstream: true, hostCode: CODE}) {
 
 test('controller and relay do not exist unless the server is started with the slipstream option', async t => {
   const {call} = await start(t, {});
-  for (const path of ['/slipstream/', '/slipstream/app.mjs', '/slipstream/pad.html', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js'])
+  for (const path of ['/slipstream/', '/slipstream/app.mjs', '/slipstream/student-lab.mjs', '/slipstream/pad.html', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js'])
     assert.equal((await call(path)).status, 404, path);
   assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 404);
   for (const value of ['true', 1, 'yes']) {
@@ -68,7 +68,7 @@ test('controller and relay do not exist unless the server is started with the sl
 
 test('enabled controller serves only its browser assets, with security headers', async t => {
   const {origin, host} = await start(t);
-  for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs',
+  for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs', '/slipstream/student-lab.mjs',
     '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 200, path);
@@ -77,7 +77,7 @@ test('enabled controller serves only its browser assets, with security headers',
     assert.ok(!/connect-src[^;]*\*/.test(csp)); assert.match(csp, /script-src 'self';/);
     assert.equal(response.headers.get('cache-control'), 'no-store', path);
   }
-  for (const path of ['/slipstream/core.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
+  for (const path of ['/slipstream/core.test.mjs', '/slipstream/student-lab.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
     '/slipstream/../package.json', '/slipstream/data/../core.test.mjs', '/slipstream/vendor/qrcode.js', '/slipstream/vendor/three.cjs', '/slipstream/vendor/../package.json', '/slipstream/.git/config']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 404, path);

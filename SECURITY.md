@@ -9,6 +9,14 @@ of scope.
 preserved as `course-vulnerable-baseline`. Check that tag or commit out to
 reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
+## Student controller and phone handoff — 18 November 2026
+
+The default Student workspace exposes connection, model/LED identification, scanning, map position and explicit human driving. New sessions use the existing Classic SDK profile at300 mm/s; saved explicit kit choices remain respected. Changing workspace or controller requests STOP and clears intent. Student driving requires a mapped track and a connected, initialized controller; phone selection alone cannot move a car. Existing host approval, per-seat capability tokens, fresh-neutral arming, dead-man, telemetry watchdogs, pit and command queue rules remain in force. No motor protocol or recovery policy is changed by this interface.
+
+The phone's hold-to-drive input resets on release/cancel/lost pointer capture, keyboard focus loss, hidden/blurred pages, stale host state, revocation and disconnect. Changing an invitation fragment neutralizes and closes the previous connection before reloading, preventing a reused browser page from retaining the prior car binding. The new UI also repairs retry after a missing host code and discards stale in-flight QR responses after controller/workspace changes. QR links never include the host code/key, and requests still require explicit host approval.
+
+Custom identification colors use the existing RGB LED command while stopped. Duplicate colors are compared after actual wire quantization; effectively-off colors are rejected. The model picker distinguishes a human choice from an advertisement, and the Bluetooth display name is not treated as proof of physical model or FCC identity. Classroom inventories explicitly distinguish declared software dependencies and hardware capabilities from complete SBOM/HBOM evidence. Only the new browser lesson module is added to the asset allowlist; tests, tools and private files remain excluded.
+
 ## Computer-driver track constraints — 13 November 2026
 
 Automatic lane requests now require a fresh printed-code match on a known ordinary straight, positive position-reported speed and sufficient remaining straight geometry. Curves, special sections, stale readings and transition-only prediction cannot authorize steering. CPU steering also waits for a matching speed-command reply and a later fresh optical reading, without consuming a lane attempt while waiting. The final CPU speed ceiling also caps battle boosts; STOP, neutral arming, shared-pit recovery and telemetry watchdogs are unchanged. These software checks are not a physical stopping guarantee or a car-side connection-loss failsafe. Scored rounds with unverified special tiles remain blocked.

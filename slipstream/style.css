@@ -108,3 +108,77 @@ main { grid-template-columns: minmax(220px,var(--garage-width,280px)) 6px minmax
 /* Test-session notes remain usable on narrow host screens. */
 #operatorNotes{width:100%;min-height:5rem;box-sizing:border-box;resize:vertical;font:inherit}
 #liveDiagnostics{overflow-wrap:anywhere}
+
+/* Student workspace: one car, one map, a small set of deliberate controls. */
+body[data-view="student"] .advanced-only,body[data-view="student"] .panel-resize,
+body[data-view="advanced"] .student-only{display:none!important}
+.workspace-switch{display:flex;gap:3px;padding:3px;border:1px solid var(--line);border-radius:11px;background:#0a111b}
+.workspace-switch button{min-height:34px;padding:.35rem .7rem;font-size:.76rem;border:0;background:transparent;color:var(--dim)}
+.workspace-switch button[aria-pressed="true"]{background:#26394a;color:#effaff}
+body[data-view="student"]{height:auto;min-height:100svh;overflow:auto;background:#0d1520}
+body[data-view="student"] header{position:sticky;top:0;z-index:10;min-height:76px;background:#101a27f5;backdrop-filter:blur(14px);border-color:#283a4d}
+body[data-view="student"] header #stop{min-height:44px;min-width:112px}
+body[data-view="student"] header .actions{margin-left:auto}
+.student-intro{width:100%;max-width:1480px;margin:0 auto;padding:30px 30px 24px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.student-intro h2{margin:7px 0;font-size:clamp(22px,2.4vw,32px);font-weight:650;line-height:1.2;text-transform:none;letter-spacing:-.04em;color:#f0f6fc}
+.student-intro p{color:#a9bed0;font-size:13px;margin:9px 0 0}
+.student-intro .eyebrow{font-size:10px;letter-spacing:.2em;color:#a8dec9}
+.student-intro ol{display:flex;gap:22px;list-style:none;margin:0;padding:0;font-size:12px;color:#d2e0eb}
+.student-intro li{display:flex;flex-direction:column;gap:7px;white-space:nowrap}
+.student-intro li span{font-size:11px;letter-spacing:.1em;color:#9aaec1}
+body[data-view="student"] main{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);grid-template-rows:auto 1fr;gap:20px;max-width:1480px;width:100%;margin:0 auto;padding:0 30px 30px;flex:none;align-items:start}
+body[data-view="student"] #garage{grid-column:1;grid-row:1/3;border:1px solid #2c3c4e;border-radius:16px;padding:20px;overflow:visible;background:#141f2d;min-width:0}
+body[data-view="student"] #stage{grid-column:2;grid-row:1;min-height:0;border:1px solid #2c3c4e;border-radius:16px;overflow:hidden;background:#101b29;align-self:start}
+body[data-view="student"] #circuitViewport{flex:none;height:clamp(300px,43vw,490px);min-height:0;background:radial-gradient(ellipse at center,#21384b,#111d2c)}
+body[data-view="student"] .stage-heading{padding:22px 24px 10px}
+body[data-view="student"] .stage-heading h2{font-size:21px;font-weight:600}
+body[data-view="student"] .stage-heading .chip{display:block;font-size:9px}
+body[data-view="student"] .view-toolbar{padding:8px 20px 10px}
+body[data-view="student"] .map-caption,body[data-view="student"] #powerZoneStatus{padding:0 22px;margin:5px 0 14px;font-size:12px;color:#b0c3d4}
+body[data-view="student"] #garage h2{font-size:13px;text-transform:none;letter-spacing:0;color:#e6eff8;font-weight:650}
+body[data-view="student"] #garage .section-heading h2{font-size:18px}
+body[data-view="student"] #garage>.row{display:flex}
+body[data-view="student"] #connect{width:100%;font-size:14px;min-height:46px}
+.connection-settings{font-size:12px;color:var(--dim);margin:0 0 14px}
+.connection-settings summary{cursor:pointer;padding:6px 0}
+.connection-settings #kitNote{font-size:11px}
+body[data-view="student"] .car{background:#192838;border-color:#344d63;border-left-color:var(--c);box-shadow:none;margin:17px 0;padding:15px}
+body[data-view="student"] .car .name{font-size:15px}
+body[data-view="student"] .car .tag{font-size:10px}
+body[data-view="student"] .car .meta{font-size:12px;margin-top:10px}
+body[data-view="student"] .car .grid{margin:10px 0}
+body[data-view="student"] .car .field{font-size:12px}
+.car-color{display:block;width:100%;height:38px;padding:3px;border:1px solid #41566a;border-radius:8px;background:#0e1825;cursor:pointer}
+.student-driver-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0 5px}
+.student-driver-actions button{font-size:12px;padding:10px 6px;min-height:44px}
+.student-driver-actions button[aria-pressed=true]{background:#294936;color:#deffd3;border-color:#8fc486}
+body[data-view="student"] .browser-controls label{font-size:12px}
+body[data-view="student"] .browser-controls input{min-height:34px;touch-action:pan-x}
+body[data-view="student"] .browser-controls .row{gap:6px}
+body[data-view="student"] .browser-controls button{font-size:12px;min-height:44px}
+.scan-setup,.phone-setup{margin:23px 0 0;padding-top:18px;border-top:1px solid #304354}
+.step-number{display:inline-grid;place-items:center;width:24px;height:24px;margin-right:6px;border-radius:7px;background:#263e49;color:#b6e7d4;font-size:10px}
+body[data-view="student"] .scan-setup>label:not(.field){display:flex;gap:8px;align-items:start;font-size:12px;line-height:1.5;color:#c1d3e2;margin:14px 0}
+body[data-view="student"] .scan-setup input[type=checkbox]{accent-color:#c1f594;width:17px;height:17px;flex:none;margin-top:2px}
+body[data-view="student"] .scan-setup .row button{flex:1;font-size:12px}
+body[data-view="student"] .seatqr{width:200px;height:200px;max-width:100%}
+body[data-view="student"] .seatlink{font-size:11px}
+body[data-view="student"] #players li{display:flex;flex-wrap:wrap;padding:10px 0;font-size:12px;border-bottom:1px solid #304354}
+body[data-view="student"] #roomNote:not(:empty){padding:10px;border-radius:8px;background:#283349;color:#ffe1ac}
+body[data-view="student"] .phone-setup .note{font-size:12px}
+body[data-view="student"] .pit-panel{margin:12px 20px}
+body[data-view="student"] .pit-panel button{margin:4px 0;max-width:100%;white-space:normal}
+.student-lab{grid-column:2;grid-row:2;min-width:0;background:#141f2d;border:1px solid #2c3c4e;border-radius:16px;padding:22px 24px}
+.student-lab>h2{font-size:17px;letter-spacing:-.02em;text-transform:none;color:#edf6ff;margin:0 0 6px}
+.student-lab>p{color:#a9bed0;font-size:12px;margin:5px 0 18px;line-height:1.6}
+.student-lab-section{border-top:1px solid #304354;padding:3px 0}
+.student-lab-section summary{cursor:pointer;padding:14px 0;font-size:13px;font-weight:650;color:#dbeafa;list-style-position:outside;margin-left:16px}
+.student-lab-section p,.student-lab-section ul,.student-lab-section ol{font-size:12px;color:#b5c9db;line-height:1.7}
+.student-lab-section a{color:#b4e5ff;text-decoration-thickness:1px;text-underline-offset:3px;overflow-wrap:anywhere}
+.student-lab-section li{margin:6px 0}
+.student-lab-inventory{width:100%;font-size:12px;overflow-wrap:anywhere}
+.student-lab-inventory th,.student-lab-inventory td{text-align:left!important;padding:8px 4px}
+.student-lab-links{display:flex;flex-wrap:wrap;gap:8px 18px;padding:0;list-style:none}
+.student-lab-challenge{padding:12px 14px;background:#203b35;border-left:2px solid #a8dba2;border-radius:0 8px 8px 0;color:#d7eddd!important}
+@media(max-width:1050px){.student-intro ol{gap:15px}.student-intro{align-items:start}.student-intro h2{max-width:390px}body[data-view="student"] main{grid-template-columns:300px minmax(0,1fr);gap:14px;padding:0 18px 24px}.student-intro{padding:24px 20px}.student-lab{padding:20px}body[data-view="student"] #garage{padding:16px}body[data-view="student"] #circuitViewport{height:380px}}
+@media(max-width:760px){body[data-view="student"] header{gap:9px;padding:12px 16px}body[data-view="student"] header .brand{flex:1}body[data-view="student"] header h1{font-size:13px}body[data-view="student"] header .chip{display:none}body[data-view="student"] header .actions{width:100%;display:flex;margin:0;gap:9px}body[data-view="student"] .actions button{flex:1;min-height:44px}.student-intro{padding:22px 18px;display:block}.student-intro ol{margin-top:22px;justify-content:space-between;gap:10px}.student-intro li{font-size:11px}.student-intro h2{max-width:none;font-size:26px}.student-intro p{font-size:12px}body[data-view="student"] main{display:flex;flex-direction:column;gap:16px;padding:0 12px 20px}body[data-view="student"] #garage,body[data-view="student"] #stage,.student-lab{width:100%;order:0}body[data-view="student"] #stage{height:auto;min-height:0}body[data-view="student"] #circuitViewport{height:340px}body[data-view="student"] .stage-heading{padding:20px 18px 8px}body[data-view="student"] .view-toolbar{padding-inline:14px}body[data-view="student"] .stage-heading .chip{display:block;font-size:8px}.student-lab{padding:20px}body[data-view="student"] .student-driver-actions button{font-size:14px}}

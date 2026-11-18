@@ -126,7 +126,7 @@ export class Renderer3D {
       if(!m){m=this.#car(row);this.carMeshes.set(row.id,m);}const pose=trustedCarPose(row);m.group.visible=!!pose;
       if(!pose)continue;
       m.group.position.set(pose.x/1000,.03,-pose.y/1000);m.group.rotation.y=pose.heading;
-      m.shell.color.copy(row.disabled?new THREE.Color(0x614052):color(row.color));m.ring.material.opacity=.75;
+      m.shell.color.copy(row.disabled?new THREE.Color(0x614052):color(row.color));m.ring.material.color.copy(color(row.color));m.ring.material.opacity=.75;
       m.shield.visible=!!row.shield;
       const energy=Number.isFinite(row.energy)?Math.max(0,Math.min(1,row.energy)):0;
       m.energy.scale.set(.1*energy,.009,1);m.energy.visible=energy>0;

@@ -41,6 +41,19 @@ body.down #down{display:flex}
 #fire:has(#special[hidden]){grid-template-rows:2fr 1fr}@media(orientation:portrait){#fire:has(#special[hidden]){grid-template-rows:none;grid-template-columns:1.4fr 1fr}}
 button:disabled{opacity:.45;cursor:not-allowed}
 @media(orientation:landscape) and (max-height:500px){#play{min-height:390px;height:auto;grid-template-columns:1fr 2fr 1.2fr;gap:.5rem}#mid{gap:.3rem}#hint{display:none}#car{font-size:1rem}#mission{padding:.3rem .5rem}#lane{height:24px;min-height:24px}.row button{font-size:.85rem;padding:.35rem .3rem;min-height:44px}#feedback{font-size:.72rem;min-height:1.8em}#fire button{font-size:1rem!important}}
+/* The student invitation opens a focused controller; the full pad stays available. */
+body.student{background:radial-gradient(ellipse at top,#17263c,#0b0e13 65%)}
+.student #play{display:block;max-width:46rem;min-height:100svh;height:auto;margin:auto;padding:max(1rem,env(safe-area-inset-top)) max(1rem,env(safe-area-inset-right)) max(1rem,env(safe-area-inset-bottom)) max(1rem,env(safe-area-inset-left))}
+.student #mid{gap:.8rem}.student #studentHeader{display:flex;align-items:center;justify-content:space-between;gap:1rem;font-size:.72rem;font-weight:750;letter-spacing:.12em;color:var(--dim)}
+#connection{font-size:.75rem;letter-spacing:0;border:1px solid #34475b;border-radius:99px;padding:.4rem .65rem;color:var(--ink);text-align:right}
+.student #car{font-size:clamp(1.6rem,7vw,2.5rem);padding-left:.8rem;border-left-width:7px;line-height:1.25;margin-top:.4rem}
+.student #status{font-size:.95rem;min-height:2.6em;color:#b8c5d5}.student #drive{touch-action:none;min-height:140px;font-size:1.65rem;border:1px solid #96e6c2;background:linear-gradient(140deg,#1d7155,#194338);color:#f3fff8;box-shadow:0 12px 30px #0003;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.3rem;border-radius:1.2rem}
+.student #drive small{font-size:.85rem;font-weight:500;color:#d5f7e8}.student #drive.on{background:#29996f;transform:none}.student #drive:disabled{opacity:.5}
+.student #studentGuide{font-size:.85rem;color:#b8c5d5;margin:0;text-align:center}.student #steering button{min-height:84px;font-size:1.3rem;border-color:#405268;background:#1b2a3e;touch-action:manipulation}
+.student #brake{min-height:64px;font-size:1.2rem;background:#6e2032;border-color:#ec8b9c}.student #feedback{font-size:.85rem;min-height:1.5em}
+.student details{border:1px solid #2d3c50;border-radius:.85rem;background:#101923;padding:.8rem 1rem}.student summary{cursor:pointer;min-height:30px;color:#bdcad9;font-size:.9rem}.student details .row{margin-top:.6rem}.student details #fire{margin-top:.7rem;min-height:100px;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr}.student details #score{margin-top:.8rem}
+.student #hint,.student #lane,.student .bar{display:none}.student #link{font-size:.8rem}.student #cars button{min-height:64px}
+@media(orientation:landscape) and (max-height:600px){.student #mid{display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:.6rem 1rem}.student #studentHeader,.student #car,.student #status,.student #mission,.student #cars{grid-column:1/-1}.student #drive{grid-column:1;grid-row:6/span 2;min-height:156px}.student #steering{grid-column:2}.student #maneuvers{grid-column:2}.student #studentGuide,.student #feedback{grid-column:1/-1}.student #studentOptions,.student #studentGame{grid-column:auto}.student #steering button{min-height:84px}}
 </style>
 </head>
 <body>
@@ -54,18 +67,23 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <section id="play" hidden>
   <div id="throttle" role="slider" tabindex="0" aria-label="Throttle" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-disabled="true"><b>THROTTLE</b><div id="fill"></div><div id="pct">0</div></div>
   <div id="mid">
+    <div id="studentHeader" hidden><span>SLIPSTREAM · DRIVE</span><span id="connection" role="status">Connecting…</span></div>
     <div id="car">Waiting for a car…</div>
     <div id="mission" hidden><header><strong id="missionTitle"></strong><span id="missionTime" role="timer" aria-live="off"></span></header><div id="missionGoal"></div></div>
     <div class="bar" aria-label="Energy"><i id="energy"></i></div>
     <div id="status">Ask the host to set a car to “Phone”.</div>
     <div id="cars"></div>
+    <button id="drive" hidden disabled aria-pressed="false" aria-describedby="studentGuide">Hold to drive<small>Release to stop</small></button>
+    <p id="studentGuide" hidden>Hold to move. Let go to stop. Tap an arrow to steer.</p>
     <div id="lane"><div id="dot"></div></div>
-    <div class="row"><button id="left" aria-label="Steer left">◀</button><button id="tilt">Tilt steering</button><button id="right" aria-label="Steer right">▶</button></div>
-    <div class="row"><button id="flip" hidden>Flip tilt</button><button id="uturn">U-turn</button><button id="brake">BRAKE</button><button id="leave" hidden>Leave car</button></div>
+    <div class="row" id="steering"><button id="left" aria-label="Steer left">◀</button><button id="tilt">Tilt steering</button><button id="right" aria-label="Steer right">▶</button></div>
+    <div class="row" id="maneuvers"><button id="flip" hidden>Flip tilt</button><button id="uturn">U-turn</button><button id="brake">BRAKE</button><button id="leave" hidden>Leave car</button></div>
     <div class="row" id="options"><button id="centerTilt" hidden>Center tilt</button><button id="haptics" aria-pressed="false">Haptics: off</button></div>
     <div id="feedback" role="status" aria-live="polite">Eyes on the track. Brake is always within reach.</div>
     <div id="hint">Keyboard: W S speed · A D lane · F fire · G support · R special · Q E switch · X U-turn</div>
     <div id="score"><span id="hits"></span><span id="link"></span></div>
+    <details id="studentOptions" hidden><summary>Tilt &amp; controller options</summary><div class="row" id="studentOptionsButtons"></div></details>
+    <details id="studentGame" hidden><summary>Game controls &amp; score</summary></details>
   </div>
   <div id="fire">
     <button id="attack">FIRE<small id="attackName"></small></button>

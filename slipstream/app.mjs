@@ -1,6 +1,6 @@
 // Host page: owns the Bluetooth links, runs the game loop, draws the map and
 // relays phone players. Nothing here trusts text from a car or a phone as HTML.
-import {Game} from './game.mjs';
+import {Game, TEAM_COLORS} from './game.mjs';
 import {trackFromPlan, trackValidation} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
 import {chooseCar, bluetoothAvailable} from './ble.mjs';
@@ -9,15 +9,21 @@ import {WEAPON_LABEL} from './battle.mjs';
 import {api, channel} from './net.mjs';
 import {Recorder} from './trace.mjs';
 import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
+import {mountStudentLab} from './student-lab.mjs';
+import {rgb} from './protocol.mjs';
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...children) => { const n = Object.assign(document.createElement(tag), props); n.append(...children); return n; };
 const load = name => fetch('data/' + name + '.json', {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('Could not load ' + name); return r.json(); });
 const SAVED = 'slipstream.track.v1';
+const isStudent = () => document.body.dataset.view !== 'advanced';
+document.body.dataset.view = isStudent() ? 'student' : 'advanced';
 
 const [pieces, vehicles, weapons] = await Promise.all([load('pieces'), load('vehicles'), load('weapons')]);
 const game = new Game({pieces, vehicles, weapons, log});
-game.topSpeed = 400;
+game.topSpeed = isStudent() ? 300 : 400;
+$('top').value = game.topSpeed;
+if (isStudent()) game.halted = true;
 const world = new SimWorld(game.pieces, 'Capsule');
 const mapRenderer = new Renderer($('map'));
 let renderer = mapRenderer, studioRenderer = null, studioLoading = false, requestedView = '2d';
@@ -42,6 +48,16 @@ const MODELS = Object.entries(vehicles.models).filter(([, m]) => !['Future', 'Un
 const connectionLabel = driver => driver.car.simulated ? 'Simulator' : driver.car.transport.initializationProfile === 'sdk'
   ? (driver.car.transport.initializationOptions?.plasticTrack === true ? 'Classic SDK · plastic-track comparison' : 'Classic SDK')
   : driver.car.transport.initializationProfile === 'fast-furious' ? 'Fast & Furious · experimental' : 'Unspecified connection';
+const colorHex = color => '#' + color.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
+const colorPacketKey = color => [...rgb(...color)].join(',');
+function assignDistinctColor(driver) {
+  const used = new Set(game.drivers.filter(d => d !== driver).map(d => colorPacketKey(d.car.color)));
+  if (used.has(colorPacketKey(driver.car.color))) driver.car.color = TEAM_COLORS.find(c => !used.has(colorPacketKey(c)));
+}
+const phoneUrl = fragment => location.origin + '/slipstream/pad.html' + (isStudent() ? '?view=student' : '') + '#' + fragment;
+function canChooseColor(driver) {
+  return driver.car.connected && !driver.car.initializing && !driver.car.faulted && game.halted && !countdown && !game.diagnostic && !game.laneCancellationComparison && !game.forwardBaseline && game.phase !== 'scanning' && game.drivers.every(d => d.car.speed === 0);
+}
 
 function addCard(driver) {
   const model = el('select', {title: 'Car model'}), control = el('select', {title: 'Who drives'});
@@ -57,9 +73,17 @@ function addCard(driver) {
   const locationReference = el('p', {className:'note'});
   const name = el('span', {className: 'name', textContent: driver.id + ' · ' + driver.car.name});
   const connection = el('p', {className:'note', textContent:'Connection: '+connectionLabel(driver)});
+  const pairing = el('p', {className:'note pairing-identity', textContent:driver.car.simulated ? 'Practice car · simulator' : 'Paired Bluetooth name: ' + (driver.car.transport.name || 'Name not provided')});
+  const modelNote = el('p', {className:'note', textContent:driver.car.model ? 'Check that the model matches your car.' : 'Choose the model printed on your car. Its Bluetooth name does not identify the model.'});
+  const color = el('input', {type:'color', className:'car-color', value:colorHex(driver.car.color)});
+  color.setAttribute('aria-label', driver.car.name + ' LED color');
+  const colorStatus = el('p', {className:'note', textContent:'LED color ' + color.value.toUpperCase() + ' · check the light on your car.'});
+  const screen = el('button', {className:'student-screen', textContent:'Drive here'});
+  const phone = el('button', {className:'student-phone', textContent:'Phone / QR'});
+  const phoneStatus = el('p', {className:'note student-only', textContent:''});
   const tag = el('span', {className: 'tag', textContent: driver.car.simulated ? 'sim' : 'live'});
   const remove = el('button', {className: 'small', textContent: '✕', title: 'Disconnect'});
-  const code = el('button', {className: 'small', textContent: 'Code', title: 'Show this car\'s own join code'});
+  const code = el('button', {className: 'small advanced-only', textContent: 'Code', title: 'Show this car\'s own join code'});
   const seatCanvas = el('canvas', {width: 164, height: 164, className: 'seatqr'});
   const seatLink = el('input', {readOnly: true, className: 'seatlink'});
   const seatBox = el('div', {className: 'seat', hidden: true}, seatCanvas, el('p', {className: 'note', textContent: 'Scan to drive this car from a phone, or open the link on a laptop.'}), seatLink);
@@ -122,7 +146,7 @@ function addCard(driver) {
   const brake = el('button', {textContent: 'Brake', className: 'brake'});
   brake.onclick = () => { if (game.diagnostic || countdown?.kind==='diagnostic') halt('Diagnostic cancelled'); driver.level = 0; driver.input.throttle = 0; throttle.value = 0; driver.car.stop(); };
   const browserControls = el('div', {className: 'browser-controls', hidden: true}, el('label', {textContent: 'Throttle'}, throttle), el('div', {className: 'row'}, leftButton, brake, rightButton));
-  const fireRow = el('div', {className: 'row'});
+  const fireRow = el('div', {className: 'row advanced-only'});
   for (const bay of ['attack', 'support', 'special']) {
     const fire = el('button', {textContent: bay === 'attack' ? 'Fire' : bay === 'support' ? 'Support' : 'Special'});
     fire.onpointerdown = event => { fire.setPointerCapture(event.pointerId); if (!game.halted) driver.input[bay] = true; };
@@ -133,27 +157,60 @@ function addCard(driver) {
   }
   browserControls.append(fireRow);
   const left = el('span'), right = el('span'), weaponsBox = el('div', {className: 'weapons'});
+  for (const node of [locationReference, weaponsBox, refreshHealth, forwardBaseline, diagnostic, steeringTest, rightSteeringTest, cancellationComparison]) node.className += ' advanced-only';
   const card = el('div', {className: 'car'},
     el('div', {className: 'top'}, name, tag, code, remove),
-    connection, el('div', {className: 'grid'}, el('label', {className:'field',textContent:'Car model'}, model), el('label', {className:'field',textContent:'Who drives'}, control)), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
-    el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
+    pairing, connection, el('div', {className: 'grid'}, el('label', {className:'field',textContent:'Car model'}, model), el('label', {className:'field advanced-only',textContent:'Who drives'}, control)), modelNote,
+    el('label', {className:'field',textContent:'Your car’s LED color'}, color), colorStatus,
+    el('div', {className:'student-driver-actions student-only'}, screen, phone), phoneStatus,
+    el('label', {className: 'field advanced-only', textContent: 'Battle alliance'}, crew),
+    el('div', {className: 'bar advanced-only'}, energy), el('div', {className: 'bar speed advanced-only'}, speed),
     el('div', {className: 'meta'}, left, right), locationReference, weaponsBox, recover, task, browserControls, refreshHealth, forwardBaseline, diagnostic, steeringTest, rightSteeringTest, cancellationComparison, seatBox);
-  code.onclick = async () => {
-    if (!seatBox.hidden) { seatBox.hidden = true; return; }
+  let makingSeat = false, seatRequest = 0;
+  const cancelSeat = () => { seatRequest++; seatBox.hidden = true; };
+  const showSeat = async (toggle = false) => {
+    if (makingSeat) return;
+    if (toggle && !seatBox.hidden) { seatBox.hidden = true; return; }
+    makingSeat = true;
+    const request = ++seatRequest;
+    const current = () => request === seatRequest && game.drivers.includes(driver) && driver.car.connected;
     try {
+      phoneStatus.textContent = 'Opening this car’s phone code…';
       await openRoom();
+      if (!current()) return;
       const seat = await api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id}});
-      const url = location.origin + '/slipstream/pad.html#r=' + room.room + '&s=' + seat.seatKey;
-      seatLink.value = url; await drawQr(seatCanvas, url); seatBox.hidden = false;
-    } catch (error) { log('Could not make a code: ' + error.message); }
+      if (!current()) return;
+      const url = phoneUrl('r=' + room.room + '&s=' + seat.seatKey);
+      seatLink.value = url; await drawQr(seatCanvas, url); if (!current()) return; seatBox.hidden = false;
+      phoneStatus.textContent = 'Scan this code, then choose Let in below. Start driving keeps the phone’s hold-to-drive control in charge.';
+    } catch (error) {
+      if (!current()) return;
+      const message = 'Phone code unavailable: ' + error.message;
+      phoneStatus.textContent = message; $('roomNote').textContent = message;
+      if (!$('hostCode').value.trim()) { $('codeField').hidden = false; $('hostCode').focus(); $('remotePlayers').scrollIntoView?.({block:'nearest'}); }
+      log(message);
+    } finally { makingSeat = false; }
   };
+  code.onclick = () => showSeat(true);
   seatLink.onfocus = () => seatLink.select();
   card.style.setProperty('--c', `rgb(${driver.car.color.map(v => Math.round(v * 255)).join()})`);
-  model.onchange = () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car changed'); game.setModel(driver, Number(model.value)); driver.car.name = game.modelName(driver.car.model); name.textContent = driver.id + ' · ' + driver.car.name; };
-  control.onchange = () => { control.blur?.(); if (session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
+  model.onchange = () => { if (isStudent() || session.status === 'running' || session.status === 'paused' || countdown) halt('Car changed'); game.setModel(driver, Number(model.value)); driver.car.name = game.modelName(driver.car.model); name.textContent = driver.id + ' · ' + driver.car.name; modelNote.textContent = 'Model selected by you: ' + driver.car.name; color.setAttribute('aria-label', driver.car.name + ' LED color'); throttle.setAttribute('aria-label', driver.car.name + ' throttle'); refresh(); };
+  control.onchange = () => { control.blur?.(); cancelSeat(); if (isStudent() || session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
+  screen.onclick = () => { screen.blur(); control.value = 'browser'; control.onchange(); seatBox.hidden = true; phoneStatus.textContent = 'On-screen controls selected. Choose Start driving, then apply throttle.'; };
+  phone.onclick = async () => { phone.blur(); control.value = 'phone'; control.onchange(); await showSeat(); };
+  color.onchange = () => {
+    const next = color.value.toLowerCase();
+    const valid = /^#[0-9a-f]{6}$/.test(next), channels = valid ? [1,3,5].map(i => parseInt(next.slice(i,i+2),16) / 255) : null;
+    const refusal = !valid ? 'Choose a valid six-digit color.' : !canChooseColor(driver) ? 'Stop the cars and finish connecting before changing the LED color.' : colorPacketKey(channels) === colorPacketKey([0,0,0]) ? 'Choose a brighter color so you can identify the car.' : game.drivers.some(d => d !== driver && colorPacketKey(d.car.color) === colorPacketKey(channels)) ? 'Another car already uses this LED color. Choose a different color.' : '';
+    if (refusal) { color.value = colorHex(driver.car.color); colorStatus.textContent = refusal; return; }
+    driver.car.color = channels;
+    driver.car.setLights(...driver.car.color);
+    card.style.setProperty('--c', next); colorStatus.textContent = 'LED color ' + next.toUpperCase() + ' requested · check the light on your car.';
+    recorder.mark('car-color-request',{carId:driver.id,color:next});
+  };
   remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
-  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, locationReference, weaponsBox, control, name, connection, seatBox, recover, browserControls, throttle, fireRow, task, cancellationComparison, forwardBaseline});
+  $('cars').append(card); cards.set(driver, {card, model, modelNote, pairing, color, colorStatus, screen, phone, phoneStatus, energy, speed, left, right, locationReference, weaponsBox, control, name, connection, seatBox, seatLink, cancelSeat, recover, browserControls, throttle, leftButton, rightButton, fireRow, task, cancellationComparison, forwardBaseline});
   refresh();
 }
 
@@ -168,7 +225,8 @@ $('addSim').onclick = () => {
   if (game.drivers.length >= 4 || session.status === 'running' || session.status === 'paused' || countdown) return;
   const taken = new Set(game.drivers.map(d => d.car.model)), next = MODELS.find(([id]) => !taken.has(Number(id))) ?? MODELS[0];
   const sim = world.addCar({model: Number(next[0])});
-  const driver = game.addCar(sim, {model: Number(next[0]), simulated: true, control: game.drivers.some(d => d.control === 'keys1') ? 'bot' : 'keys1'});
+  if (isStudent()) halt('Adding a practice car');
+  const driver = game.addCar(sim, {model: Number(next[0]), simulated: true, control: isStudent() ? 'browser' : game.drivers.some(d => d.control === 'keys1') ? 'bot' : 'keys1', beforeStart:assignDistinctColor});
   driver.sim = sim; if (driver.control === 'bot') game.setControl(driver, 'bot');
   addCard(driver); log('Added simulated ' + driver.car.name);
 };
@@ -179,6 +237,7 @@ const showKitNote=()=>{
     : 'Classic SDK previously scanned Groundshock; current reliability is unverified. Fast & Furious remains experimental.');
 };
 const KIT_CHOICES=['fast-furious','sdk','sdk-plastic'],KIT_STORAGE='slipstream.kit.v1';
+$('kit').value='sdk';
 try { const savedKit=localStorage.getItem(KIT_STORAGE); if(KIT_CHOICES.includes(savedKit))$('kit').value=savedKit; } catch {}
 $('kit').onchange=()=>{showKitNote();if(KIT_CHOICES.includes($('kit').value))try{localStorage.setItem(KIT_STORAGE,$('kit').value);}catch{}};showKitNote();
 if (!bluetoothAvailable()) { $('bleNote').textContent = 'Bluetooth is not available in this browser. Use desktop Chrome or Edge on HTTPS or localhost. Simulated cars still work.'; $('bleNote').classList.add('bad'); $('connect').disabled = true; }
@@ -195,7 +254,9 @@ $('connect').onclick = async event => {
     link.initializationProfile = ['sdk','sdk-plastic'].includes(kit) ? 'sdk' : 'fast-furious';
     link.initializationOptions = kit==='sdk-plastic' ? {plasticTrack:true} : {};
     if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
-    const driver = game.addCar(link, {model, name: model ? vehicles.models[String(model)].name : 'Unidentified car', control: 'none', beforeStart: d => {
+    if (isStudent()) halt('Connecting a car');
+    const driver = game.addCar(link, {model, name: model ? vehicles.models[String(model)].name : 'Unidentified car', control: isStudent() ? 'browser' : 'none', beforeStart: d => {
+      assignDistinctColor(d);
       if (!recorder.active) recorder.start(game.drivers.filter(x=>!x.car.simulated), 'Hardware connection and initialization');
       recorder.add(d); $('record').textContent='Stop recording'; $('saveTrace').disabled=false; $('traceNote').textContent='Recording from initialization…';
     }});
@@ -204,6 +265,7 @@ $('connect').onclick = async event => {
     addCard(driver);
     log('Initializing ' + driver.car.name + ' (' + link.initializationProfile + (link.initializationOptions.plasticTrack?' · plastic-track comparison':'') + ')…');
     await driver.car.initialization;
+    refresh();
     log(driver.car.initializationStatus + (model ? '' : '. Model not reported; no Groundshock identity assumed.'));
   } catch (error) { if (error.name !== 'NotFoundError') log('Connect failed: ' + error.message); }
 };
@@ -228,15 +290,17 @@ function renderScanStatus() {
   const selected=attempt?.driver??game.drivers.find(d=>d.id===Number($('scanCar').value));
   const connection=selected?'Connection: '+connectionLabel(selected)+'. ':'';
   let text=scanNotice?scanNotice+' ':'';
-  if(attempt) {
+  if(attempt && (!isStudent() || !scanNotice)) {
     text+=(attempt.stage==='countdown'?'Scan countdown · '+attempt.driver.car.name+'. Cars remain stopped until GO. '
       :attempt.stage==='scanning'?'Scanning · '+attempt.driver.car.name+'. '+(attempt.positions?'Building the map. ':'Waiting for printed track codes. ')
       :attempt.stage==='complete'?'Scan mapped '+attempt.pieces+' pieces. STOP requested; confirm the physical stop and map. '
       :'Scan stopped: '+attempt.reason+'. STOP requested; confirm the car is physically stopped. ');
-    text+=connection+attempt.positions+' optical positions · '+attempt.transitions+' transitions received during this attempt. ';
-    if(attempt.stage!=='countdown'&&!attempt.positions)text+='No optical position codes received; movement is unconfirmed. ';
-  } else text+=connection;
-  if(game.pitReason)text+='Use each affected car’s Recover button after confirming it is stopped on track, then Clear pit · keep stopped. A retry needs a separate Scan track countdown.';
+    if (!isStudent()) {
+      text+=connection+attempt.positions+' optical positions · '+attempt.transitions+' transitions received during this attempt. ';
+      if(attempt.stage!=='countdown'&&!attempt.positions)text+='No optical position codes received; movement is unconfirmed. ';
+    } else if(attempt.stage==='stopped'&&!attempt.positions)text+='No printed track codes were received. ';
+  } else if (!isStudent()) text+=connection;
+  if(game.pitReason)text+=isStudent()?'Confirm the car is stopped on track. Recover each affected car, then Clear pit · keep stopped. Choose Scan track to retry.':'Use each affected car’s Recover button after confirming it is stopped on track, then Clear pit · keep stopped. A retry needs a separate Scan track countdown.';
   $('scanStatus').hidden=!scanNotice&&!attempt;
   $('scanStatus').textContent=text;
   $('scanStatus').classList.toggle('bad',!!scanNotice||attempt?.stage==='stopped');
@@ -249,7 +313,7 @@ $('scan').onclick = () => {
     if(game.pitReason)throw new Error(game.pitReason+'. Recover affected cars, then Clear pit · keep stopped before retrying');
     const driver=game.drivers.find(d=>d.id===Number($('scanCar').value));
     if(!driver || !driver.car.connected)throw new Error('Choose the connected car to scan');
-    if(!$('scanClear').checked)throw new Error('Confirm the track is clear and other cars are removed');
+    if(!$('scanClear').checked)throw new Error('Confirm the track is clear, the car is on a printed lane, and you are watching');
     const raw=$('scanLateral').value.trim(),startingLateral=raw===''?null:Number(raw);
     if(startingLateral!==null&&(!Number.isFinite(startingLateral)||Math.abs(startingLateral)>68||!$('scanCalibrationConfirmed').checked))throw new Error('Measure a starting position within 68 mm and confirm it, or leave calibration blank');
     if(!recorder.active){recorder.start(game.drivers,'Scan attempt');$('record').textContent='Stop recording';}
@@ -263,7 +327,7 @@ $('scan').onclick = () => {
 };
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
-$('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); } catch (error) { log(error.message); } };
+$('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); if(isStudent() && !studentDriveReady())throw new Error('Scan the track and connect a driver before starting.'); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); refresh(); } catch (error) { log(error.message); } };
 $('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s'; };
 game.onTrack = track => {
   if(scanAttempt?.stage==='scanning'){sampleScanCounts();scanAttempt.stage='complete';scanAttempt.pieces=track.count;}
@@ -390,6 +454,10 @@ function renderRound() {
   if(game.diagnostic?.steering || (countdown?.kind==='diagnostic'&&countdown.steering))$('roundGoal').textContent='At most 300 mm/s for four seconds. One '+((game.diagnostic?.direction??countdown?.direction)===-1?'right':'left')+' request only after a fresh readable straight code. Watch the physical car; STOP remains available.';
   $('roundClock').textContent = countdown ? String(Math.max(1, Math.ceil((countdown.until - performance.now()) / 1000))) : view.status === 'idle' ? '—' : timeText(view.remainingMs);
   $('roundState').textContent = game.diagnostic ? 'DIAGNOSTIC · AUTO STOP' : countdown ? 'Get ready' : view.status === 'paused' ? 'Paused' : running ? 'Remaining' : game.halted ? 'Cars stopped' : 'Free drive';
+  if (isStudent() && view.status === 'idle' && !countdown && !game.diagnostic && !comparison && !baseline) {
+    $('roundTitle').textContent = 'Free drive';
+    $('roundGoal').textContent = !game.drivers.length ? 'Connect your car and match its model and LED color.' : !game.track ? 'Scan your physical track to build the live map.' : game.halted ? 'Choose Drive here or Phone / QR, then Start driving. Keep watching the physical car.' : 'You control the pace. Release the phone drive button or use Brake; STOP ALL remains available.';
+  }
   if (comparison || countdown?.kind==='lane-cancellation-comparison') {
     const acquiring=comparison?.stage==='acquiring-reference';
     $('roundLabel').textContent=acquiring?'ACQUIRING START/FINISH REFERENCE':comparison?.cancelled?'STEERING LOCKED · CAR STILL DRIVING':'SUPERVISED COMPARISON';
@@ -607,15 +675,17 @@ function relayStatus(status) {
 }
 function openRoom() {
   if (room) return Promise.resolve(room);
+  // Validate before assigning the in-flight promise: a synchronous rejection
+  // inside the initializer would otherwise leave a permanently failed retry.
+  const code = $('hostCode').value.trim().toUpperCase();
+  if (!code) return Promise.reject(new Error('enter the host code first'));
   return opening ??= (async () => {
     try {
-      const code = $('hostCode').value.trim().toUpperCase();
-      if (!code) throw new Error('enter the host code first');
       const made = await api('/rooms', {method: 'POST', key: code});
       try { sessionStorage.setItem('slipstream.hostCode', code); } catch {}
       $('codeField').hidden = true;
       room = {...made, link: channel({room: made.room, key: made.hostKey, role: 'host', onMessage: onRelay, onStatus: relayStatus})};
-      const url = location.origin + '/slipstream/pad.html#r=' + made.room + '&j=' + made.joinKey;
+      const url = phoneUrl('r=' + made.room + '&j=' + made.joinKey);
       $('joinUrl').value = url; $('room').hidden = false; $('invite').hidden = true;
       await drawQr($('qr'), url);
       if (/^(localhost|127\.|\[::1\])/.test(location.host)) $('roomNote').textContent = 'This page is on localhost, which other devices cannot reach. Open it through the Codespaces forwarded address and set the port to Public.';
@@ -629,7 +699,7 @@ $('closeRoom').onclick = async () => {
   if (!room) return;
   room.link.stop(); try { await api('/rooms/' + room.room, {method: 'DELETE', key: room.hostKey}); } catch {}
   for (const d of game.drivers) releasePad(d);
-  for (const ui of cards.values()) ui.seatBox.hidden = true;
+  for (const ui of cards.values()) { ui.cancelSeat(); ui.phoneStatus.textContent = ''; ui.seatLink.value = ''; }
   players.clear(); room = null; $('room').hidden = true; $('invite').hidden = false; $('codeField').hidden = false; renderPlayers();
 };
 let lastState = 0;
@@ -649,6 +719,10 @@ function pushState(snapshot, now) {
 
 // --- loops ---------------------------------------------------------------------------
 const PHASE = {garage: 'Garage', scanning: 'Scanning', ready: 'Track ready', battle: 'Battle'};
+function studentDriveReady() {
+  const active = game.drivers.filter(d => d.car.connected && d.control !== 'none');
+  return !!game.track && game.halted && game.phase !== 'scanning' && !countdown && !game.pitReason && !game.diagnostic && !game.forwardBaseline && !game.laneCancellationComparison && active.length > 0 && active.every(d => !d.car.initializing && !d.car.faulted && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped') && (d.control !== 'phone' || !!d.pad));
+}
 function locationDescription(location) {
   const reference=location.reference;
   if (!reference) return 'Position unknown · '+(location.reason??'waiting for an optical code')+'. Map marker hidden.';
@@ -662,7 +736,9 @@ function refresh(snapshot = game.snapshot()) {
   $('powerZoneStatus').textContent = 'Power Zone detected · brown track section. Attack activation is unverified and disabled. Scored rounds remain blocked on this circuit.';
   const unlocated=snapshot.filter(s=>!s.located).map(s=>s.name);
   $('mapPositionStatus').hidden=!game.drivers.length;
-  $('mapPositionStatus').textContent=unlocated.length?'Position unknown: '+unlocated.join(', ')+'. Unconfirmed map markers are hidden; physical placement alone does not establish an optical reference.':'Map positions are estimates from recent optical codes. Confirm the physical car before testing.';
+  $('mapPositionStatus').textContent=isStudent()
+    ? unlocated.length?'Waiting for a fresh position: '+unlocated.join(', ')+'.':'Positions estimated from recent track readings.'
+    : unlocated.length?'Position unknown: '+unlocated.join(', ')+'. Unconfirmed map markers are hidden; physical placement alone does not establish an optical reference.':'Map positions are estimates from recent optical codes. Confirm the physical car before testing.';
 
   const scanOptions=game.drivers.filter(d=>d.car.connected),scanKey=scanOptions.map(d=>d.id+':'+d.car.name).join('|');
   if($('scanCar').dataset.key!==scanKey){const selected=$('scanCar').value;$('scanCar').replaceChildren(...scanOptions.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));if(scanOptions.some(d=>String(d.id)===selected))$('scanCar').value=selected;$('scanCar').dataset.key=scanKey;}
@@ -700,18 +776,27 @@ function refresh(snapshot = game.snapshot()) {
   $('connect').disabled = !bluetoothAvailable() || game.drivers.length >= 4 || busy;
   $('demo').hidden = game.drivers.length > 0;
   $('layout').disabled = busy; $('top').disabled = busy;
-  $('liveTag').textContent = game.drivers.some(d => !d.car.simulated) ? 'LIVE HARDWARE · SUPERVISE' : 'SIMULATION';
-  $('arenaTitle').textContent = !game.drivers.length ? 'Make room for a little rivalry.' : session.status === 'running' ? 'Eyes up. The track is the game.' : 'Your crew. Your next challenge.';
+  $('liveTag').textContent = isStudent() && !game.drivers.length ? 'Awaiting car' : game.drivers.some(d => !d.car.simulated) ? 'LIVE HARDWARE · SUPERVISE' : 'SIMULATION';
+  if (bluetoothAvailable()) $('bleNote').textContent = isStudent() ? 'Keep this laptop awake and this tab open while driving.' : 'Select drivers, then explicitly start. Keep the track clear and someone next to it.';
+  $('arenaTitle').textContent = isStudent() ? 'Your live track' : !game.drivers.length ? 'Make room for a little rivalry.' : session.status === 'running' ? 'Eyes up. The track is the game.' : 'Your crew. Your next challenge.';
   $('empty').hidden = game.drivers.length > 0;
   const chip = $('phase'); chip.textContent = game.halted ? 'Stopped' : PHASE[game.phase];
   chip.className = 'chip' + (game.phase === 'battle' ? ' live' : game.phase === 'scanning' ? ' scan' : '');
   $('scan').textContent = game.phase === 'scanning' ? 'Cancel scan' : game.track ? 'Rescan track' : 'Scan track';
   $('scan').disabled = busy || !game.drivers.some(d => d.car.connected);
   $('battle').disabled = !game.track || busy; $('battle').textContent = countdown ? 'Get ready…' : session.status === 'paused' ? 'Round paused' : session.status === 'running' ? 'Round live' : 'Start round';
-  $('resume').hidden = !game.halted || !!countdown || !!game.pitReason;
+  $('resume').textContent = isStudent() ? 'Start driving' : 'Free drive';
+  $('resume').hidden = isStudent() ? !game.drivers.some(d => d.car.connected) : !game.halted || !!countdown || !!game.pitReason;
+  $('resume').disabled = isStudent() && !studentDriveReady();
+  $('studentView').setAttribute('aria-pressed',String(isStudent())); $('advancedView').setAttribute('aria-pressed',String(!isStudent()));
   const byId = new Map(snapshot.map(s => [s.id, s]));
   for (const [driver, ui] of cards) {
     const s = byId.get(driver.id); if (!s) continue;
+    ui.color.disabled = !canChooseColor(driver);
+    ui.screen.disabled = ui.phone.disabled = !s.connected || driver.car.initializing || busy || game.phase === 'scanning';
+    ui.screen.setAttribute('aria-pressed',String(driver.control === 'browser')); ui.phone.setAttribute('aria-pressed',String(driver.control === 'phone'));
+    if (driver.pad) ui.phoneStatus.textContent = driver.pad.player.name + ' paired to this car. Choose Start driving on the laptop; then hold to drive on the phone.';
+    else if (driver.control === 'browser') ui.phoneStatus.textContent = game.halted ? 'Choose Start driving, then apply throttle.' : !driver.armed ? 'Return throttle to zero to enable driving.' : 'Raise throttle to drive. Brake returns it to zero.';
     ui.cancellationComparison.disabled=busy || !game.halted || !!game.pitReason;
     ui.forwardBaseline.disabled=busy || !game.halted || !!game.pitReason || !game.track || !s.connected || driver.car.initializing;
     ui.card.classList.toggle('off', !s.connected); ui.card.classList.toggle('down', s.disabled);
@@ -725,6 +810,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.browserControls.hidden = driver.control !== 'browser';
     ui.fireRow.hidden = game.phase !== 'battle';
     ui.throttle.value = Math.round((driver.level ?? 0) * 100); ui.throttle.disabled = game.halted || !!s.safetyReason;
+    ui.leftButton.disabled = ui.rightButton.disabled = game.halted || !!s.safetyReason || !s.connected;
     ui.right.textContent = (s.millivolts ? (s.millivolts / 1000).toFixed(2) + ' V · ' : '') + (s.located ? 'map estimate' : game.track ? 'position unknown' : 'no map') + (s.crew ? ' · ' + s.crew + ' · ' + s.assists + ' assists' : '') + (s.targets?.length ? ' · Target ' + s.targets.join(', ') : '');
     if (ui.control.value !== driver.control) ui.control.value = driver.control;
     const chips = ['attack', 'support', 'special'].filter(b => s[b]).map(b => {
@@ -786,11 +872,31 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-diagnostic-observation',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-student-drive',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 };
+function chooseWorkspace(view) {
+  if ((view === 'student') === isStudent()) return;
+  halt('Workspace changed'); session.reset(); activeMission = null;
+  document.body.dataset.view = view;
+  if (isStudent()) {
+    game.topSpeed = Math.min(300,game.topSpeed); $('top').value = game.topSpeed;
+    $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s';
+    for (const driver of game.drivers) if (driver.control !== 'phone' && driver.control !== 'browser') game.setControl(driver,'browser');
+  }
+  for (const ui of cards.values()) ui.cancelSeat();
+  if (room) {
+    const url = phoneUrl('r=' + room.room + '&j=' + room.joinKey);
+    $('joinUrl').value = url;
+    drawQr($('qr'),url).catch(error => { $('roomNote').textContent = 'Could not update the shared code: ' + error.message; });
+  }
+  refresh();
+}
+$('studentView').onclick = () => chooseWorkspace('student');
+$('advancedView').onclick = () => chooseWorkspace('advanced');
+mountStudentLab($('studentLab'));
 refresh();
 log('Ready. ' + Object.keys(pieces).length + ' track pieces, ' + MODELS.length + ' car models, ' + Object.keys(weapons).length + ' weapons loaded.');
 
