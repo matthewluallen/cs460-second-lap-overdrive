@@ -379,11 +379,15 @@ test('fixture traces replay through the real pipeline', async t => {
     for (let index = 0; index < trace.cars.length; index++) {
       const {mapper, seen, car} = await replayCar(trace, index);
       if (seen.position + seen.transition === 0) continue;       // a parked car
-      if (file === 'groundshock-sdk-cold-curve-scan-no-position.json') {
+      const expectedTransitions = {
+        'groundshock-sdk-cold-curve-scan-no-position.json': 4,
+        'groundshock-sdk-ordered-start-curve-spin.json': 1
+      }[file];
+      if (expectedTransitions !== undefined) {
         // This frozen hardware failure has transitions but no printed codes.
         // Keep exact expectations instead of relaxing other fixtures' checks.
         assert.equal(seen.position, 0, file);
-        assert.equal(seen.transition, 4, file);
+        assert.equal(seen.transition, expectedTransitions, file);
         assert.equal(mapper.track, null, file + ': no invented map');
         assert.equal(car.localizer, null, file + ': no invented location');
         continue;

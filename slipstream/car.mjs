@@ -29,6 +29,7 @@ export class Car {
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
     this.scanDelocalizationAllowance = false; this.scanDelocalizationUsed = false;
     this.firmwareInitialization = null;
+    this.sdkPlasticTrack = {requested:transport.initializationOptions?.plasticTrack===true,sequenceComplete:false,firmwareApplied:null};
     this.millivolts = null; this.version = null; this.status = {};
     this.lightKey = ''; this.lastSpeedSent = -1; this.delocalized = false; this.rx = 0; this.tx = 0;
     this.telemetry = {counts:{},malformed:0,positions:0,transitions:0,unknown:0,maxPositionGapMs:0,lastWriteMs:null,maxWriteMs:0};
@@ -37,12 +38,15 @@ export class Car {
   on(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   async start() {
     if (this.transport.initializationProfile) {
+      const options={...this.transport.initializationOptions};
+      this.sdkPlasticTrack={requested:options.plasticTrack===true,sequenceComplete:false,firmwareApplied:null};
       try {
         this.transport.drainNotifications?.();
-        for (const phase of initializationPhases(this.transport.initializationProfile)) {
+        for (const phase of initializationPhases(this.transport.initializationProfile,options)) {
           if (!this.connected || this.closing || this.faulted) throw new Error('Connection closed during initialization');
           this.initializationStatus = phase.name;
           await this.#initializationPhase(phase);
+          if (phase.sdkPlasticTrack) this.sdkPlasticTrack.sequenceComplete=true;
         }
         // The native app requires its distinct 0x23 confirmation as well as phase pongs.
         // It may arrive during network setup, before the last ping barrier.
@@ -55,6 +59,7 @@ export class Car {
         this.initializing = false; this.stop();
         this.send('battery', encode.battery()); this.setLights(...this.color);
       } catch (error) {
+        this.sdkPlasticTrack.sequenceComplete=false;
         this.initializationStatus = 'Initialization failed: ' + error.message;
         this.initializing = false;
         if (!this.faulted && !this.closing) await this.#failSafe(error);
@@ -70,14 +75,16 @@ export class Car {
     // Install the listener before queueing the request; some transports reply immediately.
     await new Promise((resolve, reject) => {
       let timer;
-      const finish = error => { clearTimeout(timer); off(); error ? reject(error) : resolve(); };
+      const replyGate=phase.sdkPlasticTrack?{ping:encode.ping(),entered:false}:null;
+      if (replyGate) this.initializationReplyGate=replyGate;
+      const finish = error => { clearTimeout(timer); off(); if(this.initializationReplyGate===replyGate)this.initializationReplyGate=null; error ? reject(error) : resolve(); };
       const off = this.on(message => {
-        if (message.type === phase.reply) finish();
+        if (message.type === phase.reply && (!replyGate || replyGate.entered)) finish();
         else if (message.type === 'closed') finish(new Error(message.reason));
       });
       timer = setTimeout(() => finish(new Error(phase.name + ' response timed out')), this.transport.initializationTimeoutMs ?? 3000);
       for (let i=0;i<phase.packets.length;i++) this.send('init-'+i, phase.packets[i]);
-      if (phase.reply === 'ping') this.send('init-ping', encode.ping());
+      if (phase.reply === 'ping') this.send('init-ping', replyGate?.ping??encode.ping());
     });
   }
   // Latest command per key wins, so a slow radio never builds a backlog.
@@ -139,6 +146,9 @@ export class Car {
         // An unsent correction must not consume the throttle for a newer code.
         // Entry into the transport is still not firmware measurement or ACK.
         if (calibration) this.lastCalibration=now;
+        // Only the optional comparison uses this gate. A premature pong cannot
+        // confirm a phase whose own ping has not entered the serialized radio.
+        if (this.initializationReplyGate?.ping===bytes) this.initializationReplyGate.entered=true;
         return this.transport.write(bytes);
       }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
@@ -169,6 +179,7 @@ export class Car {
     this.#finishClose(error, wasMoving);
   }
   #finishClose(error, wasMoving = false) {
+    this.sdkPlasticTrack.sequenceComplete=false;
     this.scanDelocalizationAllowance = false;
     this.forwardBaselineUntil=undefined; this.unlockManeuvers();
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
@@ -312,7 +323,7 @@ export class Car {
     const age=at=>at===undefined?null:Math.max(0,Math.round(now-at));
     return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
       startupNotifications:{buffered:this.transport.earlyDelivered??0,dropped:this.transport.earlyDropped??0,timestampBasis:'buffered packets timestamped on drain'},
-      connected:this.connected,initialization:this.initializationStatus,safetyReason:this.safetyReason,steeringLocked:this.steeringLocked,maneuversLocked:this.maneuversLocked,forwardBaselineUntil:this.forwardBaselineUntil??null,
+      connected:this.connected,initialization:this.initializationStatus,sdkPlasticTrack:{...this.sdkPlasticTrack},safetyReason:this.safetyReason,steeringLocked:this.steeringLocked,maneuversLocked:this.maneuversLocked,forwardBaselineUntil:this.forwardBaselineUntil??null,
       localization:this.localizer?.diagnostics(now)??{state:'unknown',trusted:false,reason:'No map',reference:null},
       requestedSpeed:this.speed,reportedSpeed:this.reportedSpeed,reportedSpeedAgeMs:age(this.lastPosition),
       collisionAgeMs:age(this.telemetry.lastCollision?.at),

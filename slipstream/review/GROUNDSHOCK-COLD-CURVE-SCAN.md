@@ -1,5 +1,27 @@
 # Cold scan failed before optical acquisition — 18 November 2026
 
+## Follow-up on `c39567c`: orderly startup, same missing optical data
+
+The next authorized SDK scan again failed. The operator confirmed **“stopped now, moved forward to next curve track and then got midway through and spun.”** Groundshock was subsequently disconnected while physically stopped. No forward-lap run started.
+
+The unchanged 30-event export is [`groundshock-sdk-ordered-start-curve-spin.json`](../fixtures/groundshock-sdk-ordered-start-curve-spin.json), recorded from `2026-11-18T18:15:02.799Z`, SHA-256 `f75f5ed28066ee0b01f9d5a08597c45879fe41dbd357f72ee610a633ca44386c`. It contains zero dropped events, firmware 11866, initial battery 4067 mV and refreshed battery 4043 mV. Initial unknown-model metadata is retained; the operator identified Groundshock. No credentials are present.
+
+Startup now follows STOP → SDK → ping/pong → version without incidental game-loop STOP writes. The only positive command is the same 300 mm/s packet, at 40570 ms. There are **zero optical positions**. One transition at 41793 ms reports unknown offset 654321 and wheel distances 24/25 cm. Watchdog STOP completes at 43805 ms, 2012 ms after the transition, and a zero-speed response arrives at 43864 ms. No offset, lane, turn, recovery-policy or `0x45` command was sent. Balanced wheel readings up to that transition do not contradict the operator's later mid-curve spin.
+
+This establishes that removing startup interleaving was insufficient to restore optical acquisition. It does not identify the physical cause. Exact replay expectations retain zero positions, one transition and no invented map/localizer.
+
+## Explicit plastic-track comparison
+
+The new **Classic SDK · plastic-track comparison** connection option retains SDK mode but adds exactly one configuration phase after its initial pong: `03 45 00 00`, then ping/pong, then the existing version/completion sequence. It explicitly selects plastic parsing and turns off autonomous jump-code boosts. The normal Classic SDK option is unchanged. Selecting the option or completing initialization does not request motion.
+
+The phase must receive its pong after its own ping enters the transport; a reply received while configuration is still queued cannot complete it. A missing reply fails initialization. Diagnostics distinguish the requested option and completed communication sequence; `firmwareApplied` stays null because pong is not settings readback. STOP priority, all motion guards, the scan ceiling and watchdogs remain unchanged. No `0x35`, guessed offset, lane request or recovery change is bundled with this comparison.
+
+This remains a hypothesis test until the next physical recording shows actual optical acquisition and the operator confirms normal movement. Reconnect once with this explicitly selected option, preserve initialization in the recording, and keep the existing scan-to-forward progression conditional on a successful map and observed normal driving. An acquisition failure or further spin ends this attempt.
+
+Build checkpoint: **745/745 Node tests pass** on Node 22.23.5 and 25.6.1 (734 before this follow-up). New coverage comprises eight configuration-phase checks, two host connection/selection checks and one retained failed-trace check. The complete host suite passes 102 tests; default SDK/F&F packet phases are explicitly checked unchanged. No physical parser-comparison result is implied by these tests.
+
+## Earlier cold-start capture
+
 **Hardware acceptance failed. Groundshock is powered off.** On build `5f3ebbf`, the operator reported that the car spun off immediately after entering a new segment, then confirmed: **“Powered off; entered a curve.”** This was the normal SDK scan, not the new three-lap forward baseline. The scan did not identify a map, so the conditional forward baseline was never started. Do not repeat the unchanged scan or proceed to lanes/races from this result.
 
 ## Recording and physical observations

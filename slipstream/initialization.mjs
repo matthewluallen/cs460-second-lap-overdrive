@@ -2,9 +2,15 @@
 // Addresses, hashes and deliberate conservative differences: review/FF-INITIALIZATION.md.
 import {encode} from './protocol.mjs';
 const bytes = text => Uint8Array.from(text.split(' ').map(b => parseInt(b, 16)));
-export function initializationPhases(profile) {
+export function initializationPhases(profile, options = {}) {
+  if (options.plasticTrack !== undefined && typeof options.plasticTrack !== 'boolean') throw new Error('Plastic-track comparison requires a literal boolean option');
+  const plasticTrack = options.plasticTrack === true;
+  if (plasticTrack && profile !== 'sdk') throw new Error('Plastic-track comparison requires the SDK profile');
   if (profile === 'sdk') return [
     {name:'SDK mode', packets:[encode.speed(0,2500),encode.sdkMode(true,1)], reply:'ping'},
+    // Explicit comparison only: official SDK config(mask=0, material=plastic).
+    // A following pong is a sequence barrier, not proof the setting took effect.
+    ...(plasticTrack ? [{name:'SDK plastic-track configuration',packets:[bytes('03 45 00 00')],reply:'ping',sdkPlasticTrack:true}] : []),
     {name:'Firmware version', packets:[encode.version()], reply:'version'}
   ];
   if (profile !== 'fast-furious') throw new Error('Unknown connection profile');

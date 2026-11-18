@@ -1,4 +1,12 @@
-# Latest hardware result: cold scan spun off entering a curve — 18 November 2026
+# Latest: explicit plastic-track comparison after repeated acquisition failure
+
+On `c39567c`, the fresh authorized scan had orderly initialization but still received **zero optical positions and one unknown-offset transition** before the normal watchdog STOP. The operator confirmed stopped after spinning midway into the next curve; Groundshock was then disconnected. No forward laps ran. The original 30-event recording and exact replay expectations are retained. Read [the latest evidence and comparison](slipstream/review/GROUNDSHOCK-COLD-CURVE-SCAN.md).
+
+**Classic SDK · plastic-track comparison** is an explicit, non-default connection option. It adds the independently verified plastic-parser/no-jump-supercodes `03 45 00 00` packet and a ping barrier after SDK selection. Default SDK stays unchanged; setup remains stopped, and pong completion is not a configuration readback. This is the next single configuration comparison, not a confirmed spin repair. No recovery-mode, offset, steering or watchdog change is included.
+
+Validation: **745/745 Node tests pass on Node 22.23.5 and 25.6.1**. Eleven new checks cover the second failed capture, opt-in packet/reply/fault behavior, and real host connection handlers including a selector change during pairing. The comparison remains physically untested at this build checkpoint.
+
+# Previous hardware result: cold scan spun off entering a curve — 18 November 2026
 
 Groundshock on `5f3ebbf` failed the normal Classic SDK scan at requested 300 mm/s. The operator confirmed **powered off; entered a curve** after observing the departure. The full connection-to-STOP capture contains **no optical position (`0x27`)**, only unknown-offset transitions, and **no lane/offset/turn command**. No map or three-lap forward baseline was completed. Read [the evidence and next diagnostic](slipstream/review/GROUNDSHOCK-COLD-CURVE-SCAN.md). Do not repeat the unchanged circuit attempt.
 

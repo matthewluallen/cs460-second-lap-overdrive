@@ -22,7 +22,8 @@
 <main>
   <aside id="garage">
     <div class="section-heading"><h2>Pit crew</h2><span id="carCount" class="counter">0 / 4 cars</span></div>
-    <label class="field">Kit connection<select id="kit"><option value="fast-furious">Fast &amp; Furious modular kit</option><option value="sdk">Classic SDK connection</option></select></label>
+    <label class="field">Kit connection<select id="kit" aria-describedby="kitNote"><option value="fast-furious">Fast &amp; Furious modular kit</option><option value="sdk">Classic SDK connection</option><option value="sdk-plastic">Classic SDK · plastic-track comparison</option></select></label>
+    <p id="kitNote" class="note" hidden>Explicit comparison: request the plastic-track parser with jump boosts off. Connecting does not start the car. Firmware application is unconfirmed; ordinary Classic SDK is unchanged.</p>
     <div class="row">
       <button id="connect" class="primary">Connect car</button>
       <button id="addSim">Add simulated car</button>

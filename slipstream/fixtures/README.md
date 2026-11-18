@@ -38,6 +38,18 @@ Initial unknown-model metadata is preserved; Groundshock is operator-identified.
 No host/player credentials are present. See
 [the evidence report](../review/GROUNDSHOCK-COLD-CURVE-SCAN.md).
 
+### groundshock-sdk-ordered-start-curve-spin.json
+
+Unmodified 18 November follow-up on `c39567c`, 30 events with zero drops;
+SHA-256 `f75f5ed28066ee0b01f9d5a08597c45879fe41dbd357f72ee610a633ca44386c`.
+Orderly SDK startup, firmware 11866, refreshed battery 4043 mV; one 300 mm/s
+command, zero optical positions, one unknown-offset transition, then the normal
+two-second gap stop. No offset/lane/turn/configuration command. The operator
+confirmed stopped after entering the next curve and spinning midway through it.
+No map or forward laps passed. Unknown initial model metadata remains unchanged;
+Groundshock identification and physical stop are operator observations. No
+credentials are present. See the follow-up in the same evidence report.
+
 ## Inspect a capture before interpreting it
 
 ```sh

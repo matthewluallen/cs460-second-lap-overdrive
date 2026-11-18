@@ -12,7 +12,7 @@ import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 
 // Execute the actual host handlers and loop with DOM stubs and the simulated
 // transport. These verify control logic, not browser rendering or real hardware.
-function host({injectFaults = false, advancingClock = false} = {}) {
+function host({injectFaults = false, advancingClock = false, bluetoothLink = null} = {}) {
   const transports = [];
   const nodes = new Map(), documentEvents = {}, windowEvents = {}, intervals = [];
   let now = 0, reads = 0;
@@ -44,7 +44,7 @@ function host({injectFaults = false, advancingClock = false} = {}) {
     fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage,
     performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
-    Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => false,
+    Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => !!bluetoothLink, chooseCar: async () => bluetoothLink,
     api: async () => ({}), channel: () => ({send: async () => {}, stop() {}}),
     setTimeout() {}, setInterval(fn) { intervals.push(fn); }, requestAnimationFrame() {},
     addEventListener(name, fn) { (windowEvents[name] ??= []).push(fn); }
@@ -484,4 +484,59 @@ test('host shows unknown locations explicitly and exports the full map with opti
  assert.match(h.run('cards.get(d).locationReference.textContent'),/Position unknown.*off track.*marker hidden/);
  assert.equal(h.run('sessionTrace().diagnostics.cars[0].localization.trusted'),false);
  assert.match(h.node('mapPositionStatus').textContent,/Unconfirmed map markers are hidden/);
+});
+
+
+function connectionRadio() {
+  let notify;const radio={id:'host-connection-test',name:'Test car',sent:[],async open(){},onClose(){},close(){},
+    onNotify(fn){notify=fn;return()=>{};},async write(packet){radio.sent.push([...packet]);
+      if(packet[1]===0x16)queueMicrotask(()=>notify(Uint8Array.of(1,0x17)));
+      if(packet[1]===0x18)queueMicrotask(()=>notify(Uint8Array.of(5,0x19,0x5a,0x2e,0,0)));
+      if(packet[1]===0x45)queueMicrotask(()=>notify(Uint8Array.of(3,0x23,0,0)));
+    }};return radio;
+}
+
+test('kit connection selects explicit SDK plastic comparison without changing ordinary SDK or F&F profiles',async()=>{
+  const html=readFileSync(new URL('./index.html',import.meta.url),'utf8');
+  assert.match(html,/<option value="sdk-plastic">Classic SDK · plastic-track comparison<\/option>/);
+  for(const kit of ['sdk','sdk-plastic','fast-furious']) {
+    const radio=connectionRadio(),h=host({bluetoothLink:radio});h.node('kit').value=kit;h.node('kit').onchange();
+    assert.equal(h.node('kitNote').hidden,kit!=='sdk-plastic');
+    h.run("recorder.start([],'Existing connection recording');recorder.mark('retained-evidence');");
+    await h.node('connect').click();await h.run('game.drivers[0].car.pumpPromise');h.run('refresh()');
+    assert.equal(radio.initializationProfile,kit==='fast-furious'?'fast-furious':'sdk');
+    assert.deepEqual(JSON.parse(JSON.stringify(radio.initializationOptions)),kit==='sdk-plastic'?{plasticTrack:true}:{});
+    assert.equal(h.run('game.drivers[0].car.initializing'),false);assert.equal(h.run('game.drivers[0].car.speed'),0);
+    assert.equal(h.run('countdown'),null);assert.equal(h.run('game.forwardBaseline'),null);
+    assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
+    assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
+    assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-sdk-plastic-comparison');
+    if(kit==='sdk-plastic') {
+      const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
+      assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
+      assert.match(h.node('liveDiagnostics').textContent,/Plastic-track comparison: requested plastic parser and disabled jump boosts; initialization sequence complete; firmware application unconfirmed/);
+    } else assert.doesNotMatch(h.node('liveDiagnostics').textContent,/Plastic-track comparison:/);
+    if(kit==='sdk') {
+      assert.equal(radio.sent.some(p=>p[1]===0x45),false,'ordinary SDK has no new config command');
+      const before=radio.sent.length;h.node('kit').value='sdk-plastic';h.node('kit').onchange();
+      assert.equal(radio.sent.length,before,'changing the selector cannot reconfigure a connected car');
+      assert.deepEqual(JSON.parse(JSON.stringify(radio.initializationOptions)),{});
+    }
+    await h.run('game.removeCar(game.drivers[0])');
+  }
+});
+
+
+test('connection captures the explicit kit before asynchronous Bluetooth pairing',async()=>{
+  const radio=connectionRadio();let release;
+  radio.open=()=>new Promise(resolve=>{release=resolve;});
+  const h=host({bluetoothLink:radio});h.node('kit').value='sdk-plastic';h.node('kit').onchange();
+  const connecting=h.node('connect').click();await settle();assert.ok(release);
+  h.node('kit').value='sdk';h.node('kit').onchange();release();await connecting;
+  await h.run('game.drivers[0].car.pumpPromise');
+  assert.equal(radio.initializationProfile,'sdk');assert.deepEqual(JSON.parse(JSON.stringify(radio.initializationOptions)),{plasticTrack:true});
+  assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),true);
+  assert.equal(h.run('game.drivers[0].car.speed'),0);
+  await h.run('game.removeCar(game.drivers[0])');
 });

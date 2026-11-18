@@ -165,25 +165,30 @@ $('addSim').onclick = () => {
   driver.sim = sim; if (driver.control === 'bot') game.setControl(driver, 'bot');
   addCard(driver); log('Added simulated ' + driver.car.name);
 };
+const showKitNote=()=>{ $('kitNote').hidden=$('kit').value!=='sdk-plastic'; };
+$('kit').onchange=showKitNote;showKitNote();
 if (!bluetoothAvailable()) { $('bleNote').textContent = 'Bluetooth is not available in this browser. Use desktop Chrome or Edge on HTTPS or localhost. Simulated cars still work.'; $('bleNote').classList.add('bad'); $('connect').disabled = true; }
 else $('bleNote').textContent = 'Select drivers, then explicitly start. Keep the track clear and someone next to it.';
 $('connect').onclick = async event => {
   try {
     if (game.drivers.length >= 4) throw new Error('The garage holds four cars. Disconnect one first.');
+    const kit=$('kit').value; // the explicit choice belongs to this connection attempt
     const link = await chooseCar(event.shiftKey);
     if (game.drivers.some(d => d.car.connected && d.car.transport.id === link.id)) throw new Error('This car is already in the pit crew. Use its existing controls.');
     log('Connecting to ' + (link.name || 'car') + '…');
     try { await link.open(); } catch (error) { link.close(); throw error; }
     const model = link.model && vehicles.models[String(link.model)] ? link.model : 0;
-    link.initializationProfile = $('kit').value === 'sdk' ? 'sdk' : 'fast-furious';
+    link.initializationProfile = ['sdk','sdk-plastic'].includes(kit) ? 'sdk' : 'fast-furious';
+    link.initializationOptions = kit==='sdk-plastic' ? {plasticTrack:true} : {};
     if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
     const driver = game.addCar(link, {model, name: model ? vehicles.models[String(model)].name : 'Unidentified car', control: 'none', beforeStart: d => {
       if (!recorder.active) recorder.start(game.drivers.filter(x=>!x.car.simulated), 'Hardware connection and initialization');
       recorder.add(d); $('record').textContent='Stop recording'; $('saveTrace').disabled=false; $('traceNote').textContent='Recording from initialization…';
     }});
+    recorder.mark('connection-options',{carId:driver.id,profile:link.initializationProfile,sdkPlasticTrackRequested:link.initializationOptions.plasticTrack===true});
     link.onClose(() => driver.car.connectionLost());
     addCard(driver);
-    log('Initializing ' + driver.car.name + ' (' + link.initializationProfile + ')…');
+    log('Initializing ' + driver.car.name + ' (' + link.initializationProfile + (link.initializationOptions.plasticTrack?' · plastic-track comparison':'') + ')…');
     await driver.car.initialization;
     log(driver.car.initializationStatus + (model ? '' : '. Model not reported; no Groundshock identity assumed.'));
   } catch (error) { if (error.name !== 'NotFoundError') log('Connect failed: ' + error.message); }
@@ -588,6 +593,7 @@ function refresh(snapshot = game.snapshot()) {
     const offset=x.laneChange ? (x.laneChange.offsetKnown?'reported '+x.laneChange.currentOffset.toFixed(1)+' mm':'UNKNOWN — lane calibration needed') : 'not reported';
     return d.car.name+' · firmware '+(x.firmware??'waiting')+' · '+x.profile+'\n'+
       (x.connected?'Connected':'Disconnected')+' · '+(x.safetyReason??x.initialization)+'\n'+
+      (x.sdkPlasticTrack?.requested?'Plastic-track comparison: requested plastic parser and disabled jump boosts; '+(x.sdkPlasticTrack.sequenceComplete?'initialization sequence complete':'initialization sequence incomplete')+'; firmware application unconfirmed.\n':'')+
       locationDescription(x.localization)+'\n'+
       'Requested '+x.requestedSpeed+' mm/s; car reported '+x.reportedSpeed+' mm/s ('+seconds(x.reportedSpeedAgeMs)+')\n'+
       'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
@@ -699,7 +705,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-forward-baseline',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-sdk-plastic-comparison',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);

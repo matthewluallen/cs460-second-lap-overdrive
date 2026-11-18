@@ -33,6 +33,10 @@ The supervised forward baseline uses a separate maneuver lock so disabling turns
 
 Ordinary driver/planner ticks now wait for a car's initialization to finish, preventing scheduler-dependent zero-speed writes inside setup phases. Explicit STOP, the existing watchdog pass and shared-pit behavior remain available during initialization. The cold-curve scan evidence and replay regression retain the failed hardware result; this repair does not establish its physical cause or authorize another run. No firmware recovery setting, speed limit, watchdog threshold or arming rule is relaxed. See [the hardware report](slipstream/review/GROUNDSHOCK-COLD-CURVE-SCAN.md).
 
+## Opt-in plastic-track initialization comparison — 18 November 2026
+
+An explicit SDK comparison option sends the public SDK's plastic-track configuration with autonomous jump-code boosts disabled, followed by its own ping barrier, while stopped. The ordinary SDK option is unchanged. An early reply before this phase's ping enters the transport cannot complete the phase; timeout fails initialization. Diagnostics report communication sequence completion separately from unverified firmware application. This comparison does not start motion, alter recovery settings, bypass the shared pit, or relax arming, STOP priority, speed limits or watchdogs. The repeated curve-spin result remains a failed hardware acceptance, preserved in the linked report.
+
 ## Drive-state and calibration audit — 13 November 2026
 
 The APK/SDK comparison reproduced a last-microtask STOP race and a separate queue race that could replace an undelivered STOP with a fresh speed request. Motion generations now invalidate older work immediately before transport entry, and STOP has an independent priority queue key. Already-entered GATT writes remain uncancellable; the next serial command is STOP. Tests explicitly distinguish entry from completion and cover STOP/recovery/restart, closing, and queued lateral work.

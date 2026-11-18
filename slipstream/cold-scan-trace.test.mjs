@@ -5,6 +5,7 @@ import {decode, hex, ID, offsetIsKnown} from './protocol.mjs';
 import {Game} from './game.mjs';
 import {Pieces, TrackMapper} from './track.mjs';
 import {ReplayCar, validate} from './trace.mjs';
+import {summarizeTrace} from './tools/inspect_trace.mjs';
 
 // Frozen 18 November hardware bytes. Replays validate host behavior only: they
 // do not reproduce traction, identify a physical piece, or prove physical STOP.
@@ -18,6 +19,27 @@ const speed=e=>new DataView(e.packet.buffer,e.packet.byteOffset,e.packet.byteLen
 const scanStart=trace.markers.find(m=>m.kind==='scan-start').timeMs;
 const forbidden=[ID.SET_OFFSET,ID.OFFSET_ADJUST,ID.CHANGE_LANE,ID.TURN];
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('ordered-start hardware scan still has no optical acquisition, despite removal of incidental initialization STOPs',()=>{
+  const ordered=validate(json('./fixtures/groundshock-sdk-ordered-start-curve-spin.json'));
+  assert.equal(ordered.events.length,30);assert.equal(ordered.dropped,0);
+  const writes=ordered.events.filter(e=>e[2]==='tx').map(([at,,,text])=>({at,text,packet:raw(text)}));
+  assert.deepEqual(writes.filter(e=>e.at<1000).map(e=>e.text),[
+    '06 24 00 00 c4 09 00','03 90 01 01','01 16','01 18',
+    '06 24 00 00 c4 09 00','01 1a','11 33 03 00 00 00 00 00 03 00 0e 0e 00 02 00 00 00 00'
+  ]);
+  assert.equal(writes.some(e=>[0x25,0x2c,0x32,0x34,0x35,0x37,0x45].includes(e.packet[1])),false);
+  const report=summarizeTrace(ordered).cars[0],interval=report.acquisition.intervals[0];
+  assert.equal(report.acquisition.intervalCount,1);assert.equal(report.acquisition.rawPositionFrames,0);
+  assert.deepEqual([interval.startMs,interval.stopRequestedMs,interval.initialRequestedSpeedMmS],[40570,43805,300]);
+  assert.deepEqual(interval.transitionSamples,[{atMs:41793,offsetMm:654321,offsetKnown:false,leftCm:24,rightCm:25,afterStartMs:1223}]);
+  assert.equal(interval.lateTrack.transitions,0);assert.equal(interval.positions,0);
+  assert.equal(interval.stopRequestedMs-interval.firstTransition.atMs,2012);
+  assert.equal(ordered.diagnostics.track,null);assert.equal(ordered.diagnostics.cars[0].physicalStopVerified,false);
+  assert.ok(writes.filter(e=>e.at>=43805 && e.packet[1]===ID.SPEED).every(e=>speed(e)===0));
+  // A cleaner startup did not restore acquisition in this physical recording.
+  // Replay is not a causal diagnosis or proof of physical stopping.
+});
 
 test('cold curve-scan capture includes SDK initialization, firmware 11866 and 4106 mV, with no raw position frame',()=>{
   assert.equal(trace.source,'hardware');assert.equal(trace.events.length,42);
