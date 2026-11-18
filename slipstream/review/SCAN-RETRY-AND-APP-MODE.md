@@ -54,3 +54,31 @@ An isolated local browser confirmed explicit SDK selection survives reload, unch
 ## Remaining acceptance
 
 The UI and recorded failure can be reproduced without driving. Physical track acquisition, cold-start SDK reliability, complete left/right maneuvers and multi-car racing remain unaccepted. Do not call this a drive repair, reset every latch automatically, repeat an unchanged failed trial, or promote the plastic comparison. Further app-mode work needs the complete native stop/start/recovery lifecycle and a bounded, explicitly supervised comparison; another charged car can help distinguish device-specific acquisition failure.
+
+## Follow-up: SDK scan entered firmware recovery before spinning
+
+The operator subsequently reconnected Groundshock in ordinary SDK mode on `84f799c`, selected 300 mm/s and started a scan with no starting calibration. They reported **slight forward movement, then spinning**, and later confirmed **powered off and stationary**. The final unmodified 30-event recording is [groundshock-sdk-recovery-spin-2026-11-18.json](../fixtures/groundshock-sdk-recovery-spin-2026-11-18.json), recorded from `2026-11-18T18:50:00.458Z`; SHA-256 `3617ae69dfe2919c2d0567c81f88e8be2e5a26d1a055f202cf18bd6c4ed74686`. There are no dropped events/markers or credentials. Initial model zero and operator-selected identity remain distinct. The operator-confirmed power-off is retained in notes; automated `physicalStopVerified` remains false.
+
+| After the positive speed write | Recorded event |
+| --- | --- |
+| 0 ms | Host speed 300 at 16422 ms; byte-identical to the accepted SDK scan. |
+| 49 ms | Desired-speed reply 300, actual zero. |
+| 1010 ms | Firmware status reports on-track; no optical code establishes location. |
+| 1070 ms | `01 43`: firmware recovery entered. |
+| 1280 ms | `01 44`: firmware recovery succeeded. |
+| 1339 ms | `01 2b`: off-road notification, only 59 ms after recovery success. |
+| 1340 / 1341 ms | Host STOP writes complete in response to off-road. |
+
+No host transmission occurs between the positive speed and off-road. There are **zero positions, zero transitions**, and no lane, offset, turn, configuration or recovery-policy writes. Battery was 3834 mV, versus 4162 mV in the accepted scan; a voltage difference is not proof of battery causality. This recording does not establish a fresh power-on state. The explicit plastic comparison was not selected.
+
+Fresh static native export (`recovery-audit.c`, SHA-256 `867ba2d18393290b4a4be752461249b01a1fb87d6d59ed7715baf71544773d7d`, retained locally) confirms `0x43` constructors/serializer at `006ba6c4`/`006ba6ec`, `0x44` at `006ba98c`/`006ba9b4`, and off-road at `006b2f90`. `VehicleMessenger::ProcessIncomingMessage` (`007b5310`) enables the native recovery filter on `0x43`; on `0x44`, it clears the filter and calls `ExecuteLastDrivingIntention` (`007a975c`). Slipstream did not copy that automatic resend; the trace has no corresponding write.
+
+This explicitly associates the failed attempt with firmware recovery before our STOP, but cannot distinguish recovery causing the spin from recovery responding to a sensing/traction failure. A recovery-success message is not sustained track acquisition. No new firmware setting or safety policy was introduced after this result.
+
+Four new `sdk-recovery-spin.test.mjs` checks preserve the final export, compare the accepted scan, and replay the actual Game path. Synthetic late recovery-success/off-road notifications are explicitly distinguished from recorded events and cannot revive speed or steering after the latch. **760/760 Node tests pass on both Node 22.23.5 and 25.6.1.** Runtime code is unchanged from `84f799c`.
+
+### Independent next comparison
+
+The operator has another charged car. The [official Anki maintenance guide](https://support.anki.bot/article/341-tire-replacement) documents a built-in Drone Mode: with the car off, press the underside power button five times rapidly, then place it on a clear track; it starts driving independently. This provides a comparison without Slipstream or an installed original app. Observe one lap and turn it off using its power button; with Bluetooth disconnected, browser STOP cannot control this check. Stop the check immediately if it spins or leaves the track. This is an operator-performed comparison, not an automated acceptance or a guaranteed firmware-state reset.
+
+If it follows the track, compare that same car in one supervised SDK scan on the same layout. If it also fails independently, inspect the car/track path before further software-driven attempts. The [official product guide](https://s3.amazonaws.com/helpscout.net/docs/assets/5e3f0b1e2c7d3a7e9ae777f5/attachments/5ea650322c7d3a7e9aeba918/Anki-Overdrive-Product-Information-Guide.pdf) recommends the supplied tire cleaner and a cotton swab for sensor dust, with no chemicals. A comparison outcome must be recorded before drawing a hardware/software conclusion. Neither outcome alone proves every part of the other system correct.

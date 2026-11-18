@@ -25,6 +25,18 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### groundshock-sdk-recovery-spin-2026-11-18.json
+
+Unmodified 30-event export from `84f799c`; SHA-256
+`3617ae69dfe2919c2d0567c81f88e8be2e5a26d1a055f202cf18bd6c4ed74686`.
+Ordinary SDK mode, firmware 11866, battery 3834 mV and one 300 mm/s command.
+No optical positions, transitions or lateral commands. Firmware reports recovery
+entry, recovery success and then off-road before the host sends STOP. The operator
+reported slight forward movement followed by spinning and later confirmed power-off.
+No map completed. Initial model identity remains unknown; later manual identity and
+physical observation are retained separately. No credentials are present. See
+[the follow-up report](../review/SCAN-RETRY-AND-APP-MODE.md#follow-up-sdk-scan-entered-firmware-recovery-before-spinning).
+
 ### groundshock-sdk-cold-curve-scan-no-position.json
 
 Unmodified 18 November 2026 final export from build `5f3ebbf`, 42 events with

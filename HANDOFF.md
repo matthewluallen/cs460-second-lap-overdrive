@@ -1,4 +1,12 @@
-# Latest: app-mode scan did not move; retry interface repaired
+# Latest: SDK scan entered firmware recovery, then off-road; Groundshock off
+
+After the UI repair, the operator started an ordinary SDK scan on `84f799c` at 300 mm/s and reported slight forward movement followed by spinning. They then confirmed **powered off and stationary**, with another charged car available. The 30-event recording contains zero positions/transitions, firmware recovery entry at +1070 ms, recovery success at +1280 ms, off-road at +1339 ms, then host STOP at +1340 ms. No host write occurs between positive speed and off-road. Firmware recovery is now explicitly observed; its cause and relation to the physical spin remain unknown. No new driving command or policy has been added. Read [the follow-up evidence and independent comparison](slipstream/review/SCAN-RETRY-AND-APP-MODE.md#follow-up-sdk-scan-entered-firmware-recovery-before-spinning).
+
+The next requested operator check uses the other charged car's manufacturer-documented standalone Drone Mode, with Slipstream disconnected, before another supervised software scan. No outcome is yet claimed. SDK startup/forward bytes match the earlier accepted scan; that does not prove all retained state or hardware conditions match. Do not repeat an unchanged failed Groundshock scan or mistake recovery-success telemetry for a usable map.
+
+Four additional trace/replay checks pass; the full Node suite is **760/760 on Node 22.23.5 and 25.6.1**. This evidence update does not change runtime code.
+
+# Previous: app-mode scan did not move; retry interface repaired
 
 The operator reconnected Groundshock with **Fast & Furious**, selected its model and started a scan on `a79c006`. They reported no movement. The retained 43-event trace shows allowance 300 then speed 300; firmware reported desired speed zero after 98 ms **without an intervening host write**. No optical position or transition arrived. The unchanged five-second watchdog stopped the scan and latched the shared pit. This resembles an app-profile failure already documented before the accepted SDK scan; it is not evidence that the recent steering code caused this failure. The prior app attempt also had a lane request, so no identical-experiment claim is made.
 
