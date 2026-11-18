@@ -58,8 +58,13 @@ export class Game {
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
+    // A recovered optical frame must not inherit a discrete target from before
+    // reference loss, even when forward driving continues in the same epoch.
+    if(driver.laneNudge && (message.type==='hostStopped' || message.type==='delocRecoveryEntered' ||
+        message.type==='delocalized' || (message.type==='status' && message.onTrack===false))) {
+      driver.input.lane=null;driver.laneNudge=null;
+    }
     if (message.type==='hostStopped') {
-      if(driver.laneNudge){driver.input.lane=null;driver.laneNudge=null;}
       if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll();
       return;
     }

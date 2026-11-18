@@ -74,6 +74,27 @@ test('missing, stale, future, previous-epoch or stopped optical references refus
   }
 });
 
+test('reference loss clears pending manual nudges before a same-epoch optical reacquisition',async()=>{
+  for(const [kind,loss] of [['recovery',[1,0x43]],['off-track status',[5,ID.STATUS,0,0,0,1]],['off-road',[1,0x2b]]]) {
+    const {game,driver,radio,drive,time}=await rig();await drive();
+    game.nudge(driver,1);game.tick(.04);await driver.car.pumpPromise;
+    assert.equal(driver.input.lane,45);assert.equal(lanePackets(radio).length,1);
+    const epoch=driver.car.driveEpoch;
+    time(300);radio.emit(loss);await driver.car.pumpPromise;
+    assert.equal(driver.input.lane,null,kind+' clears old intent');assert.equal(driver.laneNudge,null);
+    if(kind==='off-road') {
+      assert.equal(driver.car.speed,0);assert.ok(game.pitReason,'off-road still opens the shared pit');
+      continue;
+    }
+    assert.equal(driver.car.driveEpoch,epoch,kind+' does not change existing forward policy');
+    time(400);radio.emit(measured13);await driver.car.pumpPromise;game.tick(.04);await driver.car.pumpPromise;
+    assert.equal(lanePackets(radio).length,1,'fresh telemetry must not revive the old request');
+    assert.equal(game.nudge(driver,-1),true);assert.equal(driver.input.lane,-9,'right is relative to newly measured 13.5 mm');
+    game.tick(.04);await driver.car.pumpPromise;
+    assert.equal(float(lanePackets(radio).at(-1),6),9);
+  }
+});
+
 test('simulator nudges preserve existing target-grid behavior without requiring physical optical evidence',async()=>{
   const {game,driver}=await rig({simulated:true});driver.car.targetLateral=13.5;
   game.nudge(driver,1);assert.equal(driver.input.lane,45);
