@@ -52,6 +52,16 @@ credentials are present. See the follow-up in the same evidence report.
 
 ## Inspect a capture before interpreting it
 
+`groundshock-sdk-plastic-comparison-spin.json` is the unmodified 38-event export
+from `a79c006` on 18 November 2026. SHA-256:
+`c415a3f6ef8be14abddb38aed046c6a3f79fc67f294827620f069f2292550855`.
+It records the explicit plastic-setting/pong sequence, then a 300 mm/s scan with
+no optical positions or transitions before the five-second watchdog STOP. The
+operator reported immediate spinning and subsequently confirmed powered off and
+stationary. No map or forward laps completed. Groundshock is operator-identified;
+initial unknown-model metadata remains. No credentials are present. The setting
+is not a proven fix or confirmed firmware readback; see the latest report above.
+
 ```sh
 node slipstream/tools/inspect_trace.mjs path/to/recording.json
 ```

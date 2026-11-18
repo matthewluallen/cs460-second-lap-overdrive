@@ -1,4 +1,8 @@
-# Latest: explicit plastic-track comparison after repeated acquisition failure
+# Latest: plastic-track comparison also failed; Groundshock powered off
+
+On `a79c006`, configuration/ping/version communication completed while stopped. The subsequent 300 mm/s scan received **zero positions and zero transitions** before the normal five-second acquisition STOP. The operator reported an immediate spin, then confirmed **powered off and stationary**. No map or forward laps completed. The 38-event original trace and exact regression are retained in [the latest report](slipstream/review/GROUNDSHOCK-COLD-CURVE-SCAN.md). The explicit plastic setting did not restore acquisition in this attempt; firmware application remains unknown. Do not promote it to the normal SDK default or repeat the unchanged Groundshock trial. Another charged car or an original-app comparison is the next useful discriminator. The operator is now being given the normal manual-control steps; no additional motion has been requested.
+
+# Previous: explicit plastic-track comparison after repeated acquisition failure
 
 On `c39567c`, the fresh authorized scan had orderly initialization but still received **zero optical positions and one unknown-offset transition** before the normal watchdog STOP. The operator confirmed stopped after spinning midway into the next curve; Groundshock was then disconnected. No forward laps ran. The original 30-event recording and exact replay expectations are retained. Read [the latest evidence and comparison](slipstream/review/GROUNDSHOCK-COLD-CURVE-SCAN.md).
 

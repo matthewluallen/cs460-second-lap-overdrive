@@ -1,5 +1,15 @@
 # Cold scan failed before optical acquisition — 18 November 2026
 
+## Latest physical comparison: plastic setting did not restore acquisition
+
+The explicitly authorized `a79c006` comparison sent `03 45 00 00` at 119 ms, its ping at 120 ms, received pong at 262 ms, and then completed version/startup while stopped. The car remained in SDK mode. Refreshed battery was approximately 3.98 V. The subsequent 300 mm/s scan received **zero optical positions and zero transitions**; the first-telemetry watchdog sent STOP at 77210 ms, 5040 ms after the positive command. No offset, lane, turn, `0x35` or `0x37` command was added. The operator reported **“it spun immediately”**, then explicitly confirmed **powered off and stationary**. No map or forward laps completed.
+
+Original 38-event recording: [`groundshock-sdk-plastic-comparison-spin.json`](../fixtures/groundshock-sdk-plastic-comparison-spin.json), recorded from `2026-11-18T18:23:57.902Z`, SHA-256 `c415a3f6ef8be14abddb38aed046c6a3f79fc67f294827620f069f2292550855`, zero drops. Initial unknown-model metadata is retained; Groundshock is operator-identified. No credentials are present. Communication sequence completion was observed while connected; the final diagnostics correctly clear that live status after disconnection. The raw sequence remains the historical evidence.
+
+The first STOP response reported desired zero with an actual field of 117 mm/s. This does not prove eventual stopping; the operator's power-off confirmation establishes the final physical state. Later host STOP requests are retained. The configuration comparison therefore **did not repair this observed failure**. Its pong is not firmware settings readback, so this is not proof of the internal parser state or its causal relevance. Default SDK remains unchanged. Do not repeat the same Groundshock comparison; a different charged car or a verified original-app comparison is now more discriminating than another identical run.
+
+The operator subsequently requested instructions for connecting and driving independently. No further motion was requested; use the normal Classic SDK / On-screen controls / Free drive route only after a successful scan and normal observed following. The experimental parser option is not promoted to the default.
+
 ## Follow-up on `c39567c`: orderly startup, same missing optical data
 
 The next authorized SDK scan again failed. The operator confirmed **“stopped now, moved forward to next curve track and then got midway through and spun.”** Groundshock was subsequently disconnected while physically stopped. No forward-lap run started.

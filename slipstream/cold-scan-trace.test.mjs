@@ -20,6 +20,27 @@ const scanStart=trace.markers.find(m=>m.kind==='scan-start').timeMs;
 const forbidden=[ID.SET_OFFSET,ID.OFFSET_ADJUST,ID.CHANGE_LANE,ID.TURN];
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 
+test('plastic comparison capture completes config communication but receives no track messages before acquisition STOP',()=>{
+  const configured=validate(json('./fixtures/groundshock-sdk-plastic-comparison-spin.json'));
+  assert.equal(configured.events.length,38);assert.equal(configured.dropped,0);
+  const writes=configured.events.filter(e=>e[2]==='tx').map(([at,,,text])=>({at,text,packet:raw(text)}));
+  assert.deepEqual(writes.filter(e=>e.at<300).map(e=>e.text),[
+    '06 24 00 00 c4 09 00','03 90 01 01','01 16','03 45 00 00','01 16','01 18'
+  ]);
+  assert.deepEqual(configured.events.filter(e=>e[2]==='rx' && e[3]==='01 17').map(e=>e[0]),[119,262]);
+  assert.equal(writes.some(e=>[0x25,0x2c,0x32,0x34,0x35,0x37].includes(e.packet[1])),false);
+  const report=summarizeTrace(configured).cars[0],interval=report.acquisition.intervals[0];
+  assert.equal(report.acquisition.intervalCount,1);assert.equal(report.acquisition.rawPositionFrames,0);assert.equal(report.acquisition.rawTransitionFrames,0);
+  assert.deepEqual([interval.startMs,interval.stopRequestedMs,interval.initialRequestedSpeedMmS],[72170,77210,300]);
+  assert.equal(interval.stopRequestedMs-interval.startMs,5040);
+  assert.equal(configured.diagnostics.track,null);assert.equal(configured.diagnostics.cars[0].sdkPlasticTrack.requested,true);
+  assert.equal(configured.diagnostics.cars[0].sdkPlasticTrack.firmwareApplied,null);
+  assert.equal(configured.diagnostics.cars[0].physicalStopVerified,false);
+  assert.ok(writes.filter(e=>e.at>=77210 && e.packet[1]===ID.SPEED).every(e=>speed(e)===0));
+  // Communication completed. This is neither setting readback nor a successful
+  // physical scan; the operator reported immediate spin, then power-off.
+});
+
 test('ordered-start hardware scan still has no optical acquisition, despite removal of incidental initialization STOPs',()=>{
   const ordered=validate(json('./fixtures/groundshock-sdk-ordered-start-curve-spin.json'));
   assert.equal(ordered.events.length,30);assert.equal(ordered.dropped,0);
