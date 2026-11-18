@@ -2,6 +2,8 @@
 
 Baseline: `c148060`, branch `slipstream-and-security-hardening`, PR #4. This is a static APK/SDK comparison plus executable tests of our code. No APK or firmware was executed, no car was connected, and no physical behavior was validated in this pass. The latest observed spinning remains unexplained.
 
+**18 November follow-up:** [Fresh native analysis](FORWARD-BASELINE-NATIVE-NOTES.md) resolves the previously unnamed full-stop guard below as the physical/virtual car type (physical = 0). It also checks the finite adjustment arithmetic. SDK-mode applicability and firmware behavior remain open. [The new forward baseline](FORWARD-BASELINE.md) retains scan-style calibration while isolating maneuvers; it is not a new hardware acceptance result.
+
 ## Evidence and independent techniques
 
 Primary artifact: Fast & Furious `com.anki.foxtrot`, build 403. APK SHA256 `78c63be8ee611adf1894c4d32c1b70418d921fefa667ab3d0d8e645164b1b60b`; native library SHA256 `0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f`. Existing provenance/signature limits are in [FAST-FURIOUS-REVIEW.md](FAST-FURIOUS-REVIEW.md).

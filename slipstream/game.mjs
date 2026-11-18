@@ -11,7 +11,7 @@ export class Game {
   constructor({pieces, weapons, vehicles, clock = () => performance.now(), log = () => {}, safety = {}, schedule = (fn,ms) => setTimeout(fn,ms), unschedule = timer => clearTimeout(timer)}) {
     this.pieces = new Pieces(pieces); this.weapons = weapons; this.vehicles = vehicles;
     this.clock = clock; this.log = log; this.schedule = schedule; this.unschedule = unschedule; this.diagnostic = null;
-    this.laneCancellationComparison=null;
+    this.laneCancellationComparison=null; this.forwardBaseline=null;
     this.safety = {firstTrackMs:5000, trackGapMs:2000, stopGraceMs:1000, scanMs:45000, scanLaps:3, ...safety};
     for (const value of Object.values(this.safety)) if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid safety limit");
     this.drivers = []; this.track = null; this.battle = null; this.mapper = null; this.scanner = null;
@@ -19,7 +19,7 @@ export class Game {
   }
   modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
   addCar(transport, {name, model = 8, simulated = false, control = 'none', beforeStart} = {}) {
-    if (this.laneCancellationComparison) this.stopAll();
+    if (this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     if (this.drivers.length >= MAX_CARS) throw new Error('A session supports at most four cars');
     if (typeof transport.id === 'string' && this.drivers.some(d => d.car.connected && d.car.transport.id === transport.id)) throw new Error('This car is already in the garage');
     const color = TEAM_COLORS.find(color => !this.drivers.some(d => d.car.color === color));
@@ -34,30 +34,39 @@ export class Game {
     return driver;
   }
   async removeCar(driver) {
-    if (this.diagnostic || this.laneCancellationComparison) this.stopAll();
+    if (this.diagnostic || this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     this.drivers = this.drivers.filter(d => d !== driver);
     this.battle?.remove(driver.car);
     if (this.scanner === driver) this.cancelScan();
     await driver.car.close();
   }
   setModel(driver, model) {
-    if (this.diagnostic || this.laneCancellationComparison) this.stopAll();
+    if (this.diagnostic || this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     driver.car.model = model;
     if (this.battle) { this.battle.remove(driver.car); this.battle.add(driver.car).crew = driver.crew ?? ''; }
   }
   setCrew(driver, crew) {
+    if (this.forwardBaseline) this.stopAll();
     if (!['', 'sun', 'moon'].includes(crew)) throw new Error('Unknown crew');
     if (this.battle?.active) throw new Error('Finish the round before changing crews');
     driver.crew = crew;
     const f = this.battle?.get(driver.car); if (f) f.crew = crew;
   }
   setControl(driver, control) {
-    if (this.diagnostic || this.laneCancellationComparison) this.stopAll();
+    if (this.diagnostic || this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     driver.gamepadBinding = null; driver.cpuArmed = false; driver.armed = false; driver.control = control; driver.gamepadArmed = false; driver.input = emptyInput(); driver.level = 0; driver.car.stop();
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
-    if (message.type==='hostStopped') { if(this.laneCancellationComparison?.driver===driver)this.stopAll(); return; }
+    if (message.type==='hostStopped') { if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll(); return; }
+    if (this.forwardBaseline?.driver===driver) {
+      const now=this.clock();
+      if (now>=this.forwardBaseline.until) { this.requestPit(driver,'Forward baseline time budget exceeded'); return; }
+      if ((message.type==='status' && (!message.onTrack || message.onCharger || message.lowBattery)) || message.type==='delocRecoveryEntered') {
+        this.requestPit(driver,message.type==='status'?'Car reports off track, charging or low battery during forward baseline':'Car entered recovery during forward baseline'); return;
+      }
+      if (['position','transition'].includes(message.type)) this.#forwardBaselineProgress(driver,message,now);
+    }
     if (this.laneCancellationComparison?.driver===driver && this.laneCancellationComparison.stage==='acquiring-reference' && ((message.type==='status' && message.onTrack===false) || message.type==='delocRecoveryEntered')) {
       this.#referenceFailure(driver,'Reference lost: '+(message.type==='status'?'car reports off track':'car entered delocalization recovery')+'; expected a new start/finish acquisition');return;
     }
@@ -79,7 +88,7 @@ export class Game {
       // Reuse the shared recovery flow when the cancellation occurs in motion.
       if (driver.car.speed > 0) { this.requestPit(driver, 'Lane change cancelled by car'); return; }
     }
-    if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); else if(this.laneCancellationComparison?.driver===driver)this.stopAll(); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
+    if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); else if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll(); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
     const trial=this.diagnostic;
     if (trial?.steering && trial.driver===driver && message.type==='position' && !trial.laneRequested) {
       const now=this.clock(), car=driver.car, definition=this.pieces.get(message.pieceId);
@@ -119,6 +128,15 @@ export class Game {
     }
   }
   #stopDrivers(offTrack = null) {
+    if (this.forwardBaseline) {
+      const baseline=this.forwardBaseline;
+      this.forwardBaseline=null;
+      this.unschedule(baseline.timer);
+      if (baseline.referenceTimer!==null) this.unschedule(baseline.referenceTimer);
+      Object.assign(baseline.driver.car.telemetry.forwardBaseline,{active:false,ended:this.clock(),laps:baseline.laps,
+        stage:baseline.stage==='complete'?'complete':this.pitReason?'failed':'stopped',
+        reason:baseline.reason??this.pitReason??'Host stopped',physicalStopVerified:false});
+    }
     if (this.laneCancellationComparison) {
       const c=this.laneCancellationComparison.driver.car;
       if (this.laneCancellationComparison.referenceTimer!=null) this.unschedule(this.laneCancellationComparison.referenceTimer);
@@ -181,7 +199,7 @@ export class Game {
     this.log('Track mapped: ' + track.count + ' pieces, ' + (track.length / 1000).toFixed(2) + ' m');
   }
   useTrack(track) {
-    if (this.laneCancellationComparison) this.stopAll();
+    if (this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     this.track = track; this.phase = 'ready';
     this.battle = new Battle({weapons: this.weapons, vehicles: this.vehicles, track, clock: this.clock});
     for (const d of this.drivers) { d.car.useTrack(track); this.battle.add(d.car).crew = d.crew ?? ''; if (d.control === 'bot') d.bot = new Bot(d.car, this.battle); }
@@ -195,7 +213,7 @@ export class Game {
   armComputers() { for (const d of this.drivers) if (d.control === 'bot') { d.input = emptyInput(); d.cpuArmed = true; d.armed = true; } }
   // --- battle ----------------------------------------------------------------
   startBattle() {
-    if (this.laneCancellationComparison) this.stopAll();
+    if (this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     if (!this.track) throw new Error('Map the track first');
     if (this.track.unverifiedCount) throw new Error('Special track pieces are unverified; scored rounds are blocked');
     if (this.track.inferredCount) throw new Error('Rescan: some track sections were inferred, not identified');
@@ -214,6 +232,7 @@ export class Game {
     this.log('All cars stopped');
   }
   resume() {
+    if (this.forwardBaseline) throw new Error('Stop the forward baseline before resuming normal driving');
     if (this.laneCancellationComparison) throw new Error('Stop the supervised comparison before resuming normal driving');
     if (this.diagnostic) throw new Error('Finish or stop the diagnostic first');
     if (this.pitReason) throw new Error('Pit stop: recover every off-track car, then confirm the track is clear');
@@ -229,11 +248,66 @@ export class Game {
     if (recovered && this.halted) driver.car.safetyStop('Host stopped');
     return recovered;
   }
+  // A separate unscored baseline: normal optical calibration is retained, but
+  // all lane/turn intent is locked out. Simulator success is not firmware proof.
+  startForwardBaseline(driver) {
+    if (this.forwardBaseline || this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase==='scanning' || this.battle?.active) throw new Error('Stop and clear the pit before the forward baseline');
+    if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing || driver.control!=='bot' || !driver.bot) throw new Error('Select a ready Computer driver for the forward baseline');
+    if (this.drivers.filter(d=>d.car.connected).length!==1) throw new Error('Use exactly one connected car for the forward baseline');
+    if (this.drivers.some(d=>d.car.speed>0)) throw new Error('Stop all cars first');
+    if (!this.track?.closed || this.track.inferredCount || !driver.car.localizer) throw new Error('Map a complete identified track before the forward baseline');
+    const c=driver.car,d=c.diagnostics(),speed=Math.min(300,this.topSpeed);
+    if (!Number.isFinite(speed) || speed<=0) throw new Error('Choose a positive speed ceiling before the forward baseline');
+    if (c.safetyReason && c.safetyReason!=='Host stopped') throw new Error('Recover the car first');
+    if (d.batteryAgeMs===null || d.batteryAgeMs>30000) throw new Error('Refresh the battery reading before the forward baseline');
+    if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
+    this.stopAll();this.resume();
+    const started=this.clock(),maximumMs=120000;
+    c.localizer.reset();driver.bot.resetTrackManeuvers();c.lockManeuvers('Forward baseline: calibration allowed; lane changes and turns disabled');
+    const baseline={driver,track:this.track,localizer:c.localizer,started,until:started+maximumMs,maximumMs,targetLaps:3,laps:0,speed,
+      stage:'acquiring-reference',referenceUntil:started+this.safety.firstTrackMs,referenceTimer:null,timer:null};
+    this.forwardBaseline=baseline;c.forwardBaselineUntil=baseline.referenceUntil;
+    c.telemetry.forwardBaseline={active:true,started,until:baseline.until,maximumMs,targetLaps:3,laps:0,speed,stage:baseline.stage,
+      referenceUntil:baseline.referenceUntil,calibration:'ordinary-optical',physicalStopVerified:false};
+    baseline.referenceTimer=this.schedule(()=>{
+      if(this.forwardBaseline===baseline && baseline.stage==='acquiring-reference')this.requestPit(driver,'Forward baseline reference timeout: expected a fresh uniquely identified ordinary optical code');
+    },this.safety.firstTrackMs);
+    baseline.timer=this.schedule(()=>{
+      if(this.forwardBaseline===baseline)this.requestPit(driver,'Forward baseline time budget exceeded');
+    },maximumMs);
+    driver.input=emptyInput();driver.objectiveInput=null;driver.level=0;driver.cpuArmed=false;driver.armed=false;
+    c.setSpeed(speed);
+    this.log('Forward baseline: three full observed laps at no more than '+speed+' mm/s; ordinary optical calibration enabled, lane changes, turns and attacks disabled. STOP remains available.');
+    return baseline;
+  }
+  #forwardBaselineProgress(driver,message,now) {
+    const baseline=this.forwardBaseline,c=driver.car,localizer=c.localizer;
+    if (baseline.stage==='acquiring-reference') {
+      if(now>=baseline.referenceUntil) { this.requestPit(driver,'Forward baseline reference timeout: expected a fresh uniquely identified ordinary optical code'); return; }
+      if(message.type!=='position')return;
+      const piece=this.pieces.get(message.pieceId),reference=localizer?.reference;
+      if(now>baseline.started && c.speed>0 && Number.isFinite(message.speed) && message.speed>0 &&
+          piece && !piece.unverified && localizer?.located && reference?.source==='printed-code' && reference.at===now &&
+          reference.pieceId===message.pieceId && this.track.pieces[localizer.index]?.id===message.pieceId) {
+        baseline.stage='driving';baseline.reference={...reference};c.forwardBaselineUntil=baseline.until;
+        this.unschedule(baseline.referenceTimer);baseline.referenceTimer=null;
+        Object.assign(c.telemetry.forwardBaseline,{stage:'driving',reference:{...reference},confirmedAt:now});
+        this.log('Forward baseline: fresh map reference confirmed; counting complete observed laps.');
+      }
+    }
+    if(baseline.stage!=='driving')return;
+    if(!localizer.diagnostics(now).trusted || localizer.direction!==baseline.reference.direction) { this.requestPit(driver,'Forward baseline map reference lost or direction changed'); return; }
+    baseline.laps=localizer.laps;c.telemetry.forwardBaseline.laps=baseline.laps;
+    if(baseline.laps>=baseline.targetLaps) {
+      baseline.stage='complete';baseline.reason='Three full observed laps complete; STOP requested';
+      this.stopAll();this.log('Forward baseline complete: three full observed laps; confirm the car physically stopped and stayed on track.');
+    }
+  }
   // Explicit operator-authorized comparison only. A lane cancellation locks all
   // further host steering while forward driving continues; every other stop and
   // watchdog remains active. This is not the default driving or race policy.
   startLaneCancellationComparison(driver) {
-    if (this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase==='scanning' || this.battle?.active) throw new Error('Stop and clear the pit before the comparison');
+    if (this.forwardBaseline || this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase==='scanning' || this.battle?.active) throw new Error('Stop and clear the pit before the comparison');
     if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing || driver.control!=='bot' || !driver.bot) throw new Error('Select a ready Computer driver for the comparison');
     if (this.drivers.filter(d=>d.car.connected).length!==1) throw new Error('Use exactly one connected car for the comparison');
     if (this.drivers.some(d=>d.car.speed>0)) throw new Error('Stop all cars first');
@@ -296,7 +370,7 @@ export class Game {
   // One supervised pulse, bounded independently of the animation/control loop.
   // This is a host deadline, never a guarantee across suspension or BLE loss.
   startDiagnostic(driver, {steering=false} = {}) {
-    if (this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
+    if (this.forwardBaseline || this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
     if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing) throw new Error('Car is not ready');
     if (this.drivers.some(d => d.car.speed > 0)) throw new Error('Stop all cars first');
     if (steering && (!this.track?.closed || this.track.inferredCount)) throw new Error('Map a complete identified track before the steering test');
@@ -317,6 +391,13 @@ export class Game {
   }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
+    if (this.forwardBaseline) {
+      const baseline=this.forwardBaseline,d=baseline.driver,c=d.car;
+      if (!c.connected || c.closing || c.faulted || c.safetyReason || d.control!=='bot' || this.battle?.active || this.track!==baseline.track || c.localizer!==baseline.localizer || !c.maneuversLocked) this.stopAll();
+      else if(now>=baseline.until) this.requestPit(d,'Forward baseline time budget exceeded');
+      else if(baseline.stage==='acquiring-reference' && now>=baseline.referenceUntil) this.requestPit(d,'Forward baseline reference timeout: expected a fresh uniquely identified ordinary optical code');
+      else if(baseline.stage==='driving' && !c.localizer.diagnostics(now).trusted) this.requestPit(d,'Forward baseline optical reference expired or lost');
+    }
     if (this.laneCancellationComparison) {
       const d=this.laneCancellationComparison.driver,c=d.car;
       if (!c.connected || c.closing || c.faulted || d.control!=='bot' || this.battle?.active) this.stopAll();
@@ -342,6 +423,13 @@ export class Game {
       }
     }
     if (this.halted) { for (const d of this.drivers) if (d.car.connected && d.car.speed !== 0) d.car.stop(); return; }
+    if (this.forwardBaseline) {
+      const baseline=this.forwardBaseline,d=baseline.driver,speed=Math.min(baseline.speed,this.topSpeed,300);
+      if (!Number.isFinite(speed) || speed<=0) { baseline.reason='Speed ceiling stopped the forward baseline';this.stopAll();return; }
+      d.input=emptyInput();d.objectiveInput=null;d.level=0;
+      d.car.setSpeed(speed);
+      return; // isolate human, phone, CPU planners and weapons throughout the run
+    }
     for (const d of this.drivers) {
       const car = d.car;
       if (!car.connected || (this.phase === 'scanning' && d === this.scanner)) continue;

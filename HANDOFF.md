@@ -1,3 +1,13 @@
+# Forward-only acceptance preparation — 18 November 2026
+
+The new **Supervised · 3 forward laps** check preserves normal printed-code calibration while blocking lane changes, U-turns, SDK lane preambles, game attacks and competing control inputs. It requires one stopped Computer car, a mapped circuit, a fresh battery reading and the existing countdown. It reacquires an unambiguous optical map reference within five seconds, stops on lost/expired/reversed evidence, and requests STOP after three full observed laps or a 120-second host limit. Deadline and maneuver checks also apply immediately before transport entry. Existing watchdogs, default cancellation STOP and shared-pit behavior remain. Results explicitly require physical confirmation.
+
+Read [FORWARD-BASELINE.md](slipstream/review/FORWARD-BASELINE.md) for the exact next hardware procedure. Preserve the recording from fresh connection through scan, baseline and STOP. **No car was connected or driven in this build pass.** The latest failed physical result below is unchanged; three-lap driving has not been hardware accepted.
+
+The exact-hash F&F APK/library were recovered after the earlier temporary artifacts disappeared. [Fresh native analysis](slipstream/review/FORWARD-BASELINE-NATIVE-NOTES.md) identifies the former unnamed full-stop guard as physical-car type zero, and confirms that native finite calibration uses a direction-adjusted delta. These findings narrow the remaining state-machine gaps; no guessed `0x34` or `0x35` writes were added.
+
+Validation: **721/721 Node tests pass on both Node 22.23.5 and 25.6.1**, **38 Python tests pass** on Python 3.14.7, CWE/dependency checks pass and npm audit reports zero vulnerabilities. The actual local browser workflow scanned the simulated Capsule, reported three full forward laps and requested STOP. Six additional simulator runs cover both readable lane sides on Starter oval, Capsule and the observed Power Zone map with the unchanged default watchdogs. This is software evidence only.
+
 # Detailed APK/SDK drive audit and repairs — software only
 
 Read [DRIVE-APK-PARITY-AUDIT.md](slipstream/review/DRIVE-APK-PARITY-AUDIT.md) for the current comparison of connection, speed, calibration, geometry, lane eligibility, IDs, STOP and recovery. It combines Ghidra/JADX exports with independent LLVM Thumb disassembly and a new Capstone/ELF verifier. The offset conversion was also checked in the standard Overdrive APK 1502 binary. No native app/firmware was executed and no car was connected in this pass.

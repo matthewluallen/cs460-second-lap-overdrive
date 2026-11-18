@@ -25,6 +25,10 @@ The latest physical comparison left the track before steering; its cause remains
 
 The 13 November reference-confirmation trial subsequently spun on the track before a telemetry stop. The retained trace and operator observation are documented in the hardware report; this is not accepted stable driving. Follow-up bookkeeping repairs prevent a partial initial map crossing from appearing as a full lap and clear stale Bot maneuver history at a fresh explicit comparison. They do not change firmware packets, arming, speed limits, cancellation behavior, or stop/watchdog policy. No security vulnerability is inferred from this physical symptom.
 
+## Forward-only diagnostic isolation — 18 November 2026
+
+The supervised forward baseline uses a separate maneuver lock so disabling turns and lane changes does not accidentally suppress ordinary optical calibration. It invalidates queued SDK lane preambles and maneuver packets at the last transport boundary, even after unlocking. Acquisition and overall deadlines prevent a delayed positive-speed write from starting after the relevant host window. STOP clears the baseline, invalidates pending motion and preserves its priority; there is no automatic retry or rearm. The shared pit, normal lane-cancellation STOP and telemetry watchdogs remain active. See [FORWARD-BASELINE.md](slipstream/review/FORWARD-BASELINE.md) for limitations and operator acceptance requirements.
+
 ## Drive-state and calibration audit — 13 November 2026
 
 The APK/SDK comparison reproduced a last-microtask STOP race and a separate queue race that could replace an undelivered STOP with a fresh speed request. Motion generations now invalidate older work immediately before transport entry, and STOP has an independent priority queue key. Already-entered GATT writes remain uncancellable; the next serial command is STOP. Tests explicitly distinguish entry from completion and cover STOP/recovery/restart, closing, and queued lateral work.

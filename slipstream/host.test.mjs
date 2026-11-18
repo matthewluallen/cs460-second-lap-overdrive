@@ -60,6 +60,55 @@ function host({injectFaults = false, advancingClock = false} = {}) {
 }
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
+test('forward-check button preserves the recording, waits for countdown and exposes a dedicated stop', async () => {
+  const h=host();h.node('addSim').click();await h.run('game.drivers[0].car.pumpPromise');
+  h.run("const d=game.drivers[0];game.useTrack(world.track);game.setControl(d,'bot');game.stopAll();recorder.start(game.drivers,'Connection recording');recorder.mark('connection-evidence');refresh();cards.get(d).forwardBaseline.click();");
+  assert.equal(h.run('countdown.kind'),'forward-baseline');
+  assert.equal(h.run('d.car.speed'),0);
+  assert.equal(h.run("recorder.markers.some(m=>m.kind==='connection-evidence')"),true);
+  assert.equal(h.run('recorder.note'),'Connection recording');
+  h.tick(2999);await settle();assert.equal(h.run('d.car.speed'),0);
+  h.tick(3001);await settle();
+  try {
+    assert.ok(h.run('game.forwardBaseline'));
+    assert.equal(h.run('d.car.maneuversLocked'),true);
+    assert.equal(h.run('d.car.steeringLocked'),false,'ordinary calibration remains available');
+    assert.match(h.node('roundTitle').textContent,/Three forward laps/);
+    assert.equal(h.node('endRound').hidden,false);
+    assert.equal(h.node('endRound').textContent,'Stop forward check');
+    assert.equal(h.node('mode').disabled,true);
+    assert.equal(h.run("sessionTrace().markers.some(m=>m.kind==='forward-baseline-start')"),true);
+    assert.equal(h.run('sessionTrace().diagnostics.cars[0].forwardBaseline.physicalStopVerified'),false);
+  } finally {h.node('endRound').click();}
+  h.tick(3201);await settle(); // diagnostics render on the host's 150 ms cadence
+  assert.equal(h.run('game.forwardBaseline'),null);assert.equal(h.run('d.car.speed'),0);
+  assert.match(h.node('liveDiagnostics').textContent,/FORWARD CHECK.*confirm physical stop/);
+});
+
+test('STOP or a driver change during forward-check countdown cannot start the car later', async () => {
+  for (const cancel of ['stop','driver']) {
+    const h=host();h.node('addSim').click();await h.run('game.drivers[0].car.pumpPromise');
+    h.run("const d=game.drivers[0];game.useTrack(world.track);game.setControl(d,'bot');game.stopAll();cards.get(d).forwardBaseline.click();");
+    if(cancel==='stop')h.node('stop').click();
+    else h.run("cards.get(d).control.value='browser';cards.get(d).control.onchange();");
+    h.tick(4000);await settle();
+    assert.equal(h.run('countdown'),null,cancel);
+    assert.equal(h.run('game.forwardBaseline'),null,cancel);
+    assert.equal(h.run('d.car.speed'),0,cancel);
+  }
+});
+
+test('hiding the hardware host ends the forward check and retains its unverified result', async () => {
+  const h=host();h.node('addSim').click();await h.run('game.drivers[0].car.pumpPromise');
+  h.run("const d=game.drivers[0];game.useTrack(world.track);game.setControl(d,'bot');game.stopAll();cards.get(d).forwardBaseline.click();");
+  h.tick(3001);await settle();
+  h.run('d.car.simulated=false');h.visibility(true);h.tick(3041);await settle();
+  assert.equal(h.run('game.forwardBaseline'),null);
+  assert.equal(h.run('d.car.speed'),0);
+  assert.equal(h.run('d.car.telemetry.forwardBaseline.active'),false);
+  assert.equal(h.run('sessionTrace().diagnostics.cars[0].forwardBaseline.physicalStopVerified'),false);
+});
+
 test('host control selection cannot be overridden by an approved phone heartbeat', async () => {
   const h = host(); h.node('addSim').click();
   h.run(`const d = game.drivers[0]; game.setControl(d, 'phone');
