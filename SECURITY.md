@@ -9,6 +9,19 @@ of scope.
 preserved as `course-vulnerable-baseline`. Check that tag or commit out to
 reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
+## Unidentified-car identity hardening — 18 November 2026
+
+Review of the Student controller reproduced a latent identity defect: `Game.addCar`
+defaulted its `model` to `8` (Groundshock, the excluded car), so a caller that
+omitted model information produced a Groundshock-named car. The student connect
+flow already passed an explicit `model: 0` ("Unidentified car", with a logged "no
+Groundshock identity assumed"), so no UI showed a false identity; the trap was at
+the library boundary and contradicted the invariant that missing model information
+must not silently become Groundshock. The default is now `model = 0` (unidentified,
+"Unknown"); explicitly selected models, including Groundshock, are still honored.
+Regression tests (`slipstream/car-model-identity.test.mjs`) cover both. No firmware
+command, speed limit, watchdog, arming, color, scanning or steering behavior changed.
+
 ## Student controller and phone handoff — 18 November 2026
 
 The default Student workspace exposes connection, model/LED identification, scanning, map position and explicit human driving. New sessions use the existing Classic SDK profile at300 mm/s; saved explicit kit choices remain respected. Changing workspace or controller requests STOP and clears intent. Student driving requires a mapped track and a connected, initialized controller; phone selection alone cannot move a car. Existing host approval, per-seat capability tokens, fresh-neutral arming, dead-man, telemetry watchdogs, pit and command queue rules remain in force. No motor protocol or recovery policy is changed by this interface.

@@ -1,4 +1,14 @@
-# Latest: simple Student workspace and phone QR control
+# Latest: review hardening — unidentified cars no longer default to Groundshock
+
+Independent review of the Student workspace and phone QR work reproduced one latent identity defect and left all accepted hardware evidence and safety behavior unchanged. `Game.addCar` defaulted its `model` parameter to `8` (Groundshock, which is also the excluded car), so any caller that omitted model information silently produced a Groundshock-named car. The student connect path was already safe — it passes `model: 0` for an unadvertised car, names it “Unidentified car”, and logs “no Groundshock identity assumed” — so no student-facing screen showed a wrong identity; the defect lived at the library boundary and contradicted the stated invariant “missing model information must not silently become Groundshock.”
+
+The focused repair changes the `addCar` default to `model = 0` (unidentified, “Unknown”), matching the production connect flow. Explicitly selected models, including Groundshock, are still honored. New `car-model-identity.test.mjs` regressions reproduce the defect (a model-less car is not Groundshock and reads as Unknown) and confirm explicit selection still works; the one watchdog test that relied on the old default now names its car explicitly. No firmware packet, speed ceiling, watchdog, arming, color, scanning or steering behavior changed.
+
+Everything else reviewed against the acceptance priorities held: card/map/3D-ring/LED/phone colors stay consistent, independent servers assign the same first color (green), duplicate and effectively-black custom colors are rejected after wire quantization, host codes stay case-sensitive, QR links exclude host credentials, approval remains required, the phone resets driving intent on release/stop/handoff/hidden/stale/disconnect and closes the old binding on an invitation change, map markers hide without a fresh optical reference, and a stale lane intent cannot steer a stopped physical car (lane commands require speed > 0 and the game loop returns early while halted).
+
+Validation: **842/842 Node tests on 22.23.5 (840 prior + 2 new identity regressions), 38 Python tests, CWE regression checks (exit 0), dependency lab (regression check passed) and npm audit (zero vulnerabilities)**. `git diff --check` is clean. Physical driving through the phone interface is still **not** accepted and is not claimed here; Guardian's previous acceptance remains below.
+
+# Previous: simple Student workspace and phone QR control
 
 The default `/slipstream/` page now leads with connect/model/unique LED color, track scan, live map and explicit human driving. **Advanced** retains the full racing and diagnostic workspace. Fresh Student sessions use Classic SDK at300 mm/s; a previously saved kit selection is honored and is visible under Connection settings. Known Bluetooth names are shown separately from the chosen car model. The same identification color appears on the car's requested LED, card, map/3D ring and phone. Color changes are stopped-only and distinct after protocol quantization.
 

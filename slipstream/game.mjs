@@ -18,7 +18,10 @@ export class Game {
     this.phase = 'garage'; this.halted = false; this.pitReason = null; this.topSpeed = 700; this.scanSpeed = 450; this.nextId = 1;
   }
   modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
-  addCar(transport, {name, model = 8, simulated = false, control = 'none', beforeStart} = {}) {
+  addCar(transport, {name, model = 0, simulated = false, control = 'none', beforeStart} = {}) {
+    // Missing model information stays unidentified (model 0, "Unknown"). It must
+    // not silently inherit a specific physical car such as Groundshock (model 8),
+    // which is also the excluded car; callers pass an explicit model when known.
     if (this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     if (this.drivers.length >= MAX_CARS) throw new Error('A session supports at most four cars');
     if (typeof transport.id === 'string' && this.drivers.some(d => d.car.connected && d.car.transport.id === transport.id)) throw new Error('This car is already in the garage');
