@@ -25,6 +25,20 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-three-forward-laps-2026-11-18.json
+
+Unmodified cumulative 184-event export from runtime `84f799c`; SHA-256
+`733bba74f5a7dbc5a9869736c93e23af14841158fc703b55741328f518286ad0`.
+It retains the accepted scan above the new forward-run traffic, on trace car
+index 2 / driver 4. The separately authorized forward check requests 300 mm/s,
+adds 52 optical positions and 29 transitions, counts three full observed laps
+and sends STOP after 36.310 seconds. One code-derived offset calibration occurs;
+no lane/turn/recovery-policy command or recovery/off-road message occurs.
+The operator subsequently confirmed stopped and all laps on track without spinning;
+that later observation is documented in [the acceptance report](../review/FORWARD-BASELINE.md#guardian-physical-acceptance).
+The immutable export predates that confirmation and retains automated
+`physicalStopVerified: false`. No credentials or proprietary binaries are present.
+
 ### guardian-sdk-scan-2026-11-18.json
 
 Unmodified 88-event export from unchanged runtime `84f799c`; SHA-256

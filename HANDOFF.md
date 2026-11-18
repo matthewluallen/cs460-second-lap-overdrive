@@ -1,4 +1,12 @@
-# Latest: Guardian SDK scan passed physical acceptance — 18 November 2026
+# Latest: Guardian completed three forward laps — 18 November 2026
+
+After the accepted scan below, Guardian completed the separately authorized **Supervised · 3 forward laps** check in Classic SDK mode at a requested **300 mm/s**. The operator confirms **stopped; all laps stayed on track without spinning**. The unchanged runtime `84f799c` reacquired an unambiguous map reference, counted three full laps, then sent automatic STOP after 36.310 seconds of commanded forward driving. The run added 52 positions and 29 transitions, one ordinary optical calibration, and no lane/turn requests, recovery or off-road messages. Guardian is now Parked and stopped.
+
+Read [the retained forward-run evidence](slipstream/review/FORWARD-BASELINE.md#guardian-physical-acceptance). Scanning, stop-to-start forward driving and sustained forward following are accepted for this Guardian/circuit/session. Completed left/right lane changes, variable-speed Computer racing, attacks and multi-car operation remain unverified. Groundshock stays excluded after its independent Drone Mode failure. No runtime or safety setting changed for this result.
+
+Validation: **766/766 Node tests pass on Node 22.23.5**, including three new cumulative-trace and actual Game forward-run checks. The replay excludes the initial partial lap, counts three complete optical traversals under default watchdogs, stops and does not restart from held input. This update changes evidence/tests/documentation only.
+
+# Previous: Guardian SDK scan passed physical acceptance — 18 November 2026
 
 Guardian completed a supervised ordinary **Classic SDK** scan on unchanged runtime `84f799c`, at the **300 mm/s** ceiling with blank starting calibration. The operator confirms **stopped, stayed on track, and the displayed 7-section map matches**. The capture records 15 optical positions and 8 transitions, a closed 2.879 m circuit with no inferred/special sections, no recovery/off-road messages, and STOP immediately after closure. One normal optical offset calibration followed the first code; no lane or turn request was sent. This is an accepted scan for Guardian on this circuit, not acceptance of repeated forward laps, steering, races or every car.
 
