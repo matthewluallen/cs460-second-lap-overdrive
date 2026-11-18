@@ -18,6 +18,19 @@ function radio(write) {
 }
 const speeds = r => r.sent.filter(b => b[1] === ID.SPEED).map(b => b[2] + 256 * b[3]);
 
+test('clearPitStopped requires every latch recovered and never resumes inputs or positive writes',async()=>{
+  const g=game(),a=radio(),b=radio(),d=g.addCar(a),other=g.addCar(b);await settle();
+  g.requestPit(d,'Telemetry timeout');other.car.safetyStop('Off track');await settle();
+  assert.throws(()=>g.clearPitStopped(),/Recover/);assert.equal(d.car.safetyReason,'Telemetry timeout');
+  g.recoverCar(d);assert.throws(()=>g.clearPitStopped(),/Recover/);g.recoverCar(other);
+  a.sent=[];b.sent=[];d.input.throttle=1;d.cpuArmed=true;other.input.throttle=1;
+  assert.equal(g.clearPitStopped(),true);await settle();g.tick(.04);await settle();
+  assert.equal(g.pitReason,null);assert.equal(g.halted,true);assert.equal(d.cpuArmed,false);
+  assert.equal(d.input.throttle,0);assert.equal(other.input.throttle,0);
+  assert.equal(d.car.safetyReason,'Host stopped');assert.equal(other.car.safetyReason,'Host stopped');
+  assert.ok([...speeds(a),...speeds(b)].every(v=>v===0));assert.equal(g.clearPitStopped(),false);
+});
+
 test('settled transient write failure attempts STOP before closing the live transport', async () => {
   let fail = false;
   const r = radio(() => { if (fail) { fail = false; throw new Error('temporary write error'); } });

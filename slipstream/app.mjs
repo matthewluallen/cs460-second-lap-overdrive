@@ -24,6 +24,7 @@ let renderer = mapRenderer, studioRenderer = null, studioLoading = false, reques
 const recorder = new Recorder();
 const session = new RoundSession();
 let countdown = null, sessionResultShown = false;
+let scanAttempt = null, scanNotice = '';
 let activeMission = null, activeExperience = 'arcade', recordEligible = true;
 window.slipstream = {game, world, recorder, get transport() { return room?.link.transport ?? null; }};                        // for the browser console and tests
 
@@ -38,6 +39,9 @@ function log(text) {
 const cards = new Map();           // driver -> DOM refs
 const CONTROLS = [['none', 'Parked'], ['browser', 'On-screen controls'], ['keys1', 'Keyboard W A S D'], ['keys2', 'Keyboard arrows'], ['gamepad', 'Gamepad'], ['phone', 'Phone or link'], ['bot', 'Computer']];
 const MODELS = Object.entries(vehicles.models).filter(([, m]) => !['Future', 'Unrecognized'].includes(m.name)).sort((a, b) => a[1].name.localeCompare(b[1].name));
+const connectionLabel = driver => driver.car.simulated ? 'Simulator' : driver.car.transport.initializationProfile === 'sdk'
+  ? (driver.car.transport.initializationOptions?.plasticTrack === true ? 'Classic SDK · plastic-track comparison' : 'Classic SDK')
+  : driver.car.transport.initializationProfile === 'fast-furious' ? 'Fast & Furious · experimental' : 'Unspecified connection';
 
 function addCard(driver) {
   const model = el('select', {title: 'Car model'}), control = el('select', {title: 'Who drives'});
@@ -52,6 +56,7 @@ function addCard(driver) {
   const task = el('p', {className: 'driver-task', hidden: true});
   const locationReference = el('p', {className:'note'});
   const name = el('span', {className: 'name', textContent: driver.id + ' · ' + driver.car.name});
+  const connection = el('p', {className:'note', textContent:'Connection: '+connectionLabel(driver)});
   const tag = el('span', {className: 'tag', textContent: driver.car.simulated ? 'sim' : 'live'});
   const remove = el('button', {className: 'small', textContent: '✕', title: 'Disconnect'});
   const code = el('button', {className: 'small', textContent: 'Code', title: 'Show this car\'s own join code'});
@@ -59,7 +64,7 @@ function addCard(driver) {
   const seatLink = el('input', {readOnly: true, className: 'seatlink'});
   const seatBox = el('div', {className: 'seat', hidden: true}, seatCanvas, el('p', {className: 'note', textContent: 'Scan to drive this car from a phone, or open the link on a laptop.'}), seatLink);
   const energy = el('i'), speed = el('i');
-  const recover = el('button', {className: 'recovery', textContent: 'Car back on track · Recover', hidden: true});
+  const recover = el('button', {className: 'recovery', textContent: 'Stopped on track · Recover', hidden: true});
   recover.onclick = () => { if (document.hidden) return; game.recoverCar(driver); driver.level = 0; if (driver.pad) driver.pad.throttle = 0; refresh(); };
   const refreshHealth = el('button', {textContent:'Refresh battery (stopped)'});
   refreshHealth.onclick = () => { if (game.drivers.some(d=>d.car.speed>0) || countdown || game.diagnostic) return; driver.car.refreshBattery(); log('Battery refresh requested; wait for a new sample'); };
@@ -128,7 +133,7 @@ function addCard(driver) {
   const left = el('span'), right = el('span'), weaponsBox = el('div', {className: 'weapons'});
   const card = el('div', {className: 'car'},
     el('div', {className: 'top'}, name, tag, code, remove),
-    el('div', {className: 'grid'}, model, control), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
+    connection, el('div', {className: 'grid'}, el('label', {className:'field',textContent:'Car model'}, model), el('label', {className:'field',textContent:'Who drives'}, control)), el('label', {className: 'field', textContent: 'Battle alliance'}, crew),
     el('div', {className: 'bar'}, energy), el('div', {className: 'bar speed'}, speed),
     el('div', {className: 'meta'}, left, right), locationReference, weaponsBox, recover, task, browserControls, refreshHealth, forwardBaseline, diagnostic, steeringTest, cancellationComparison, seatBox);
   code.onclick = async () => {
@@ -146,7 +151,7 @@ function addCard(driver) {
   control.onchange = () => { control.blur?.(); if (session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
   remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
-  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, locationReference, weaponsBox, control, name, seatBox, recover, browserControls, throttle, fireRow, task, cancellationComparison, forwardBaseline});
+  $('cars').append(card); cards.set(driver, {card, energy, speed, left, right, locationReference, weaponsBox, control, name, connection, seatBox, recover, browserControls, throttle, fireRow, task, cancellationComparison, forwardBaseline});
   refresh();
 }
 
@@ -165,8 +170,15 @@ $('addSim').onclick = () => {
   driver.sim = sim; if (driver.control === 'bot') game.setControl(driver, 'bot');
   addCard(driver); log('Added simulated ' + driver.car.name);
 };
-const showKitNote=()=>{ $('kitNote').hidden=$('kit').value!=='sdk-plastic'; };
-$('kit').onchange=showKitNote;showKitNote();
+const showKitNote=()=>{
+  $('kitNote').hidden=false;
+  $('kitNote').textContent='This choice applies to the next Connect car, separately from Car model. '+($('kit').value==='sdk-plastic'
+    ? 'Explicit comparison: request the plastic-track parser with jump boosts off. Connecting does not start the car; firmware application is unconfirmed.'
+    : 'Classic SDK previously scanned Groundshock; current reliability is unverified. Fast & Furious remains experimental.');
+};
+const KIT_CHOICES=['fast-furious','sdk','sdk-plastic'],KIT_STORAGE='slipstream.kit.v1';
+try { const savedKit=localStorage.getItem(KIT_STORAGE); if(KIT_CHOICES.includes(savedKit))$('kit').value=savedKit; } catch {}
+$('kit').onchange=()=>{showKitNote();if(KIT_CHOICES.includes($('kit').value))try{localStorage.setItem(KIT_STORAGE,$('kit').value);}catch{}};showKitNote();
 if (!bluetoothAvailable()) { $('bleNote').textContent = 'Bluetooth is not available in this browser. Use desktop Chrome or Edge on HTTPS or localhost. Simulated cars still work.'; $('bleNote').classList.add('bad'); $('connect').disabled = true; }
 else $('bleNote').textContent = 'Select drivers, then explicitly start. Keep the track clear and someone next to it.';
 $('connect').onclick = async event => {
@@ -195,15 +207,66 @@ $('connect').onclick = async event => {
 };
 
 // --- top bar ---------------------------------------------------------------------
+function sampleScanCounts() {
+  if (!scanAttempt?.started) return;
+  const t=scanAttempt.driver.car.telemetry;
+  scanAttempt.positions=Math.max(0,t.positions-scanAttempt.positionsBefore);
+  scanAttempt.transitions=Math.max(0,t.transitions-scanAttempt.transitionsBefore);
+}
+function renderScanStatus() {
+  const attempt=scanAttempt;
+  if(attempt?.stage==='scanning') {
+    sampleScanCounts();
+    if(game.phase!=='scanning' || game.scanner!==attempt.driver) {
+      attempt.stage='stopped';attempt.reason??=game.pitReason||'Scan ended';
+    }
+  } else if(attempt?.stage==='countdown' && countdown?.kind!=='scan') {
+    attempt.stage='stopped';attempt.reason??='Countdown cancelled';
+  }
+  const selected=attempt?.driver??game.drivers.find(d=>d.id===Number($('scanCar').value));
+  const connection=selected?'Connection: '+connectionLabel(selected)+'. ':'';
+  let text=scanNotice?scanNotice+' ':'';
+  if(attempt) {
+    text+=(attempt.stage==='countdown'?'Scan countdown · '+attempt.driver.car.name+'. Cars remain stopped until GO. '
+      :attempt.stage==='scanning'?'Scanning · '+attempt.driver.car.name+'. '+(attempt.positions?'Building the map. ':'Waiting for printed track codes. ')
+      :attempt.stage==='complete'?'Scan mapped '+attempt.pieces+' pieces. STOP requested; confirm the physical stop and map. '
+      :'Scan stopped: '+attempt.reason+'. STOP requested; confirm the car is physically stopped. ');
+    text+=connection+attempt.positions+' optical positions · '+attempt.transitions+' transitions received during this attempt. ';
+    if(attempt.stage!=='countdown'&&!attempt.positions)text+='No optical position codes received; movement is unconfirmed. ';
+  } else text+=connection;
+  if(game.pitReason)text+='Use each affected car’s Recover button after confirming it is stopped on track, then Clear pit · keep stopped. A retry needs a separate Scan track countdown.';
+  $('scanStatus').hidden=!scanNotice&&!attempt;
+  $('scanStatus').textContent=text;
+  $('scanStatus').classList.toggle('bad',!!scanNotice||attempt?.stage==='stopped');
+}
 $('scan').onclick = () => {
   if (game.phase === 'scanning') return halt('Scan cancelled');
-  try { requireVisible(); if(countdown || game.pitReason) throw new Error('Complete or cancel the current start/recovery first'); const driver=game.drivers.find(d=>d.id===Number($('scanCar').value)); if(!driver || !driver.car.connected) throw new Error('Choose the car to scan'); if(!$('scanClear').checked) throw new Error('Confirm the track is clear and other cars are removed'); const raw=$('scanLateral').value.trim(); const startingLateral=raw===''?null:Number(raw); if(startingLateral!==null && (!Number.isFinite(startingLateral)||Math.abs(startingLateral)>68||!$('scanCalibrationConfirmed').checked))throw new Error('Measure a starting position within 68 mm and confirm it, or leave calibration blank'); if(!recorder.active){recorder.start(game.drivers,'Scan attempt');$('record').textContent='Stop recording';} endRound('Track scan'); game.stopAll(); countdown={kind:'scan',scanner:driver.id,startingLateral,until:performance.now()+3000}; recorder.mark('scan-request',{carId:driver.id,startingLateral,profile:driver.car.transport.initializationProfile??null,safety:{...game.safety},ceiling:game.topSpeed}); $('scanLateral').value='';$('scanCalibrationConfirmed').checked=false; $('scanClear').checked=false; $('roundHelp').textContent='Scanning with '+driver.car.name+' after the countdown. Other cars remain stopped.';renderRound(); } catch (error) { log(error.message); }
+  try {
+    requireVisible();
+    if(countdown)throw new Error('Complete or cancel the current countdown first');
+    if(game.pitReason)throw new Error(game.pitReason+'. Recover affected cars, then Clear pit · keep stopped before retrying');
+    const driver=game.drivers.find(d=>d.id===Number($('scanCar').value));
+    if(!driver || !driver.car.connected)throw new Error('Choose the connected car to scan');
+    if(!$('scanClear').checked)throw new Error('Confirm the track is clear and other cars are removed');
+    const raw=$('scanLateral').value.trim(),startingLateral=raw===''?null:Number(raw);
+    if(startingLateral!==null&&(!Number.isFinite(startingLateral)||Math.abs(startingLateral)>68||!$('scanCalibrationConfirmed').checked))throw new Error('Measure a starting position within 68 mm and confirm it, or leave calibration blank');
+    if(!recorder.active){recorder.start(game.drivers,'Scan attempt');$('record').textContent='Stop recording';}
+    endRound('Track scan');game.stopAll();
+    countdown={kind:'scan',scanner:driver.id,startingLateral,until:performance.now()+3000};
+    scanNotice='';scanAttempt={driver,stage:'countdown',started:false,positions:0,transitions:0};
+    recorder.mark('scan-request',{carId:driver.id,startingLateral,profile:driver.car.transport.initializationProfile??null,safety:{...game.safety},ceiling:game.topSpeed});
+    $('scanLateral').value='';$('scanCalibrationConfirmed').checked=false;$('scanClear').checked=false;
+    $('roundHelp').textContent='Scanning with '+driver.car.name+' after the countdown. Other cars remain stopped.';renderRound();
+  } catch(error) {scanNotice='Scan not started: '+error.message+'.';renderScanStatus();log(error.message);}
 };
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
 $('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); } catch (error) { log(error.message); } };
 $('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s'; };
-game.onTrack = track => { if (!game.drivers.every(d => d.car.simulated)) try { localStorage.setItem(SAVED, JSON.stringify(track.toJSON())); } catch {} };
+game.onTrack = track => {
+  if(scanAttempt?.stage==='scanning'){sampleScanCounts();scanAttempt.stage='complete';scanAttempt.pieces=track.count;}
+  if (!game.drivers.every(d => d.car.simulated)) try { localStorage.setItem(SAVED, JSON.stringify(track.toJSON())); } catch {}
+};
 let saved = null; try { saved = JSON.parse(localStorage.getItem(SAVED)); } catch {}
 if (Array.isArray(saved) && saved.length >= 4) { $('loadMap').hidden = false; $('loadMap').onclick = () => { try { halt('Map changed'); game.loadTrack(saved); log('Loaded the saved map'); } catch (error) { log(error.message); } }; }
 
@@ -228,7 +291,16 @@ $('pitResume').onclick = () => {
   try { requireVisible(); if(countdown) return; if(!game.pitReady) throw new Error('Recover or remove affected cars first'); held.clear(); countdown={kind:'pit',until:performance.now()+3000};log('Track clear acknowledged. Waiting for countdown.');refresh(); }
   catch (error) { $('pitMessage').textContent = error.message; }
 };
-function halt(reason = 'Host stopped') { endRound(reason); game.stopAll(); held.clear(); renderRound(); }
+$('pitClearStopped').onclick = () => {
+  try {
+    requireVisible();if(countdown)throw new Error('Cancel the countdown before clearing the pit');
+    if(!game.clearPitStopped())return;
+    endRound('Pit cleared without resuming');session.reset();activeMission=null;held.clear();$('results').hidden=true;
+    scanNotice='Pit cleared; all cars remain stopped. Confirm the track is clear, then choose Scan track for a new countdown.';
+    recorder.mark('pit-cleared-stopped');refresh();
+  } catch(error) {scanNotice=error.message+'.';renderScanStatus();$('pitMessage').textContent=error.message;}
+};
+function halt(reason = 'Host stopped') { if(['countdown','scanning'].includes(scanAttempt?.stage))scanAttempt.reason=reason;endRound(reason); game.stopAll(); held.clear(); renderRound(); }
 function modeInfo() {
   const mode = $('mode').value, mission = STORY_MISSIONS.find(m => m.id === $('mission').value);
   $('modeDescription').textContent = experience === 'story' ? mission.briefing : ROUND_MODES[mode].description;
@@ -278,7 +350,11 @@ function tickRound(now) {
         if(ready.kind==='forward-baseline') { game.startForwardBaseline(game.drivers.find(d=>d.id===ready.driverId)); recorder.mark('forward-baseline-start',{carId:ready.driverId,...game.forwardBaseline.driver.car.telemetry.forwardBaseline}); renderRound(); return; }
         if(ready.kind==='lane-cancellation-comparison') { game.startLaneCancellationComparison(game.drivers.find(d=>d.id===ready.driverId)); return; }
         if(ready.kind==='diagnostic') { game.startDiagnostic(game.drivers.find(d=>d.id===ready.driverId),{steering:!!ready.steering}); return; }
-        if(ready.kind==='scan') { const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');recorder.mark('scan-start',{carId:scanner.id,startingLateral:ready.startingLateral});game.startScan(scanner,{startingLateral:ready.startingLateral??null});return; }
+        if(ready.kind==='scan') {
+          const scanner=game.drivers.find(d=>d.id===ready.scanner&&d.car.connected);if(!scanner)throw new Error('Selected scanner is unavailable');
+          Object.assign(scanAttempt,{stage:'scanning',started:true,positionsBefore:scanner.car.telemetry.positions,transitionsBefore:scanner.car.telemetry.transitions});
+          recorder.mark('scan-start',{carId:scanner.id,startingLateral:ready.startingLateral});game.startScan(scanner,{startingLateral:ready.startingLateral??null});renderScanStatus();return;
+        }
         if(ready.kind==='pit') {game.resumeFromPit();game.armComputers();session.resume(now);return;}
         if (ready.ids.some(id => !game.drivers.some(d => d.id === id && d.car.connected && d.control !== 'none' && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped')))) throw new Error('The grid changed. Check your drivers and start again.');
         game.resume(); game.armComputers(); if (ready.kind === 'free') { log('Free drive armed after countdown'); return; } if (ready.mode === 'battle') game.startBattle();
@@ -286,7 +362,7 @@ function tickRound(now) {
         activeMission = ready.mission; activeExperience = experience;
         session.start(ready.mode, scoringSnapshot(now).filter(s => ready.ids.includes(s.id)), now, opts);
         log('GO · ' + (ready.mission?.title ?? ROUND_MODES[ready.mode].title));
-      } catch (error) { game.stopAll(); $('roundHelp').textContent = error.message; log(error.message); }
+      } catch (error) { if(ready.kind==='scan'&&scanAttempt){scanAttempt.reason=error.message;scanNotice='Scan could not start: '+error.message+'.';}game.stopAll();renderScanStatus();$('roundHelp').textContent = error.message; log(error.message); }
     }
   }
   if (session.status === 'running') {
@@ -299,10 +375,12 @@ function tickRound(now) {
   }
 }
 function renderRound() {
+  renderScanStatus();
   const view = session.view(), running = view.status === 'running' || view.status === 'paused', comparison=game.laneCancellationComparison, baseline=game.forwardBaseline;
   $('pitPanel').hidden = !game.pitReason;
   $('pitResume').disabled = !game.pitReady;
-  $('pitMessage').textContent = game.pitReason ? game.pitReason + '. Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button, clear hands and obstacles, then continue.' : '';
+  $('pitClearStopped').disabled = !game.pitReady || !!countdown;
+  $('pitMessage').textContent = game.pitReason ? game.pitReason + '. Stop requested for every car. Confirm they are physically still before touching the track. Use each affected car’s Recover button. To prepare another scan, choose Clear pit · keep stopped, then start a separate scan. Continuing or rearming below can start Computer drivers after the countdown.' : '';
   $('pitResume').textContent = view.status === 'paused' ? 'Track clear · Continue round' : 'Track clear · Rearm controls';
   $('roundLabel').textContent = game.pitReason ? 'SHARED PIT · CLOCK PAUSED' : countdown ? 'TRACK CLEAR · GET READY' : running ? activeExperience.toUpperCase() + ' · ROUND LIVE' : view.status === 'finished' ? 'ROUND COMPLETE' : 'READY WHEN YOU ARE';
   $('roundTitle').textContent = (game.diagnostic || countdown?.kind==='diagnostic') ? (game.diagnostic?.steering || countdown?.steering ? 'One left-lane test · 4 s maximum' : 'Supervised straight test · 0.5 s') : view.status === 'idle' ? 'Choose your kind of fun' : activeMission?.title ?? view.title;
@@ -705,7 +783,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-sdk-plastic-comparison',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-scan-recovery',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);

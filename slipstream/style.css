@@ -1,6 +1,6 @@
 :root{--bg:#0b0e13;--panel:#131821;--line:#232b38;--ink:#e9edf2;--dim:#8d99aa;--accent:#59c8ff;--go:#5dff9b;--hot:#ff4d6d;--warn:#ffb84d;font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
 *{box-sizing:border-box}[hidden]{display:none!important}html,body{height:100%;margin:0}body{display:flex;flex-direction:column;overflow:hidden}
-header{display:flex;align-items:center;gap:1rem;padding:.6rem 1rem;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#151b26,#0f131a)}
+header{flex:none;display:flex;align-items:center;gap:1rem;padding:.6rem 1rem;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#151b26,#0f131a)}
 .brand{display:flex;align-items:center;gap:.6rem}.mark{width:14px;height:26px;border-radius:3px;background:linear-gradient(180deg,var(--accent),var(--go));transform:skewX(-14deg)}
 h1{font-size:1.15rem;letter-spacing:.14em;margin:0;font-weight:800}h1 small{font-weight:400;color:var(--dim);letter-spacing:.06em}
 h2{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:1.1rem 0 .5rem}
@@ -21,6 +21,7 @@ aside{padding:1rem;overflow:auto;background:var(--panel)}#garage{border-right:1p
 #map{width:100%;height:100%;display:block}
 .keys{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:.15rem;padding:.5rem .9rem;font-size:.75rem;color:var(--dim);background:linear-gradient(0deg,rgba(8,10,14,.9),transparent)}.keys b{color:var(--ink)}
 .row{display:flex;gap:.5rem;flex-wrap:wrap}.note{color:var(--dim);font-size:.8rem;margin:.5rem 0}.note.bad{color:var(--warn)}
+.scan-status{flex:none;max-height:30svh;overflow:auto;padding:.65rem 1rem;border-bottom:1px solid var(--line);background:#182534;color:var(--ink);font-size:.82rem;line-height:1.45}.scan-status.bad{background:#332a1a;color:#ffe0aa}.car .grid .field{margin:0}
 .field{display:block;font-size:.8rem;color:var(--dim);margin:.6rem 0}.field select,.field input{margin-top:.25rem}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .car{border:1px solid var(--line);border-left:4px solid var(--c,#fff);border-radius:.6rem;padding:.65rem .7rem;margin:.6rem 0;background:#0f141c}

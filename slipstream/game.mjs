@@ -157,6 +157,14 @@ export class Game {
     driver.car.safetyReason = reason; this.#stopDrivers(); this.log(this.pitReason);
   }
   get pitReady() { return !!this.pitReason && !this.drivers.some(d => d.car.safetyReason && d.car.safetyReason !== 'Host stopped'); }
+  clearPitStopped() {
+    if (!this.pitReason) return false;
+    if (!this.pitReady) throw new Error('Recover or remove every affected car before clearing the pit');
+    this.stopAll(); // preserve STOP and neutral-input latches; never resume planners
+    this.pitReason = null;
+    this.log('Pit cleared; all cars remain stopped');
+    return true;
+  }
   resumeFromPit() {
     if (!this.pitReason) return false;
     if (!this.pitReady) throw new Error('Return every off-track car to the circuit and recover it before clearing the pit stop');

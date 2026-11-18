@@ -37,6 +37,10 @@ Ordinary driver/planner ticks now wait for a car's initialization to finish, pre
 
 An explicit SDK comparison option sends the public SDK's plastic-track configuration with autonomous jump-code boosts disabled, followed by its own ping barrier, while stopped. The ordinary SDK option is unchanged. An early reply before this phase's ping enters the transport cannot complete the phase; timeout fails initialization. Diagnostics report communication sequence completion separately from unverified firmware application. This comparison does not start motion, alter recovery settings, bypass the shared pit, or relax arming, STOP priority, speed limits or watchdogs. The repeated curve-spin result remains a failed hardware acceptance, preserved in the linked report.
 
+## Scan failure visibility and stopped pit clearing — 18 November 2026
+
+Scan failures now remain visible outside the session log. An additional explicit **Clear pit · keep stopped** action requires the existing per-car recovery checks, sends STOP, leaves every controller disarmed and does not resume a round. A later scan or driving start remains a separate action under the existing gates. This avoids requiring the motion-capable pit-resume path merely to prepare a scan retry. Tests cover unrecovered cars, Computer and human controls, paused rounds and the separate retry countdown. Existing race-pit resume, firmware commands, watchdogs and physical-stop limitations remain unchanged. See [the retained app-mode failure and review](slipstream/review/SCAN-RETRY-AND-APP-MODE.md); physical driving is not validated by this UI change.
+
 ## Drive-state and calibration audit — 13 November 2026
 
 The APK/SDK comparison reproduced a last-microtask STOP race and a separate queue race that could replace an undelivered STOP with a fresh speed request. Motion generations now invalidate older work immediately before transport entry, and STOP has an independent priority queue key. Already-entered GATT writes remain uncancellable; the next serial command is STOP. Tests explicitly distinguish entry from completion and cover STOP/recovery/restart, closing, and queued lateral work.

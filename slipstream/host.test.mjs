@@ -12,7 +12,7 @@ import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 
 // Execute the actual host handlers and loop with DOM stubs and the simulated
 // transport. These verify control logic, not browser rendering or real hardware.
-function host({injectFaults = false, advancingClock = false, bluetoothLink = null} = {}) {
+function host({injectFaults = false, advancingClock = false, bluetoothLink = null, stored = {}} = {}) {
   const transports = [];
   const nodes = new Map(), documentEvents = {}, windowEvents = {}, intervals = [];
   let now = 0, reads = 0;
@@ -36,7 +36,7 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
     }
     return nodes.get(id);
   };
-  const storage = {getItem() { return null; }, setItem() {}, removeItem() {}};
+  const storage = {getItem(key) { return stored[key] ?? null; }, setItem(key,value) { stored[key]=value; }, removeItem(key) { delete stored[key]; }};
   const document = {hidden: false, getElementById: node, createElement: element, querySelectorAll() { return []; },
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
@@ -501,7 +501,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
   assert.match(html,/<option value="sdk-plastic">Classic SDK · plastic-track comparison<\/option>/);
   for(const kit of ['sdk','sdk-plastic','fast-furious']) {
     const radio=connectionRadio(),h=host({bluetoothLink:radio});h.node('kit').value=kit;h.node('kit').onchange();
-    assert.equal(h.node('kitNote').hidden,kit!=='sdk-plastic');
+    assert.equal(h.node('kitNote').hidden,false);
     h.run("recorder.start([],'Existing connection recording');recorder.mark('retained-evidence');");
     await h.node('connect').click();await h.run('game.drivers[0].car.pumpPromise');h.run('refresh()');
     assert.equal(radio.initializationProfile,kit==='fast-furious'?'fast-furious':'sdk');
@@ -511,7 +511,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-sdk-plastic-comparison');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-scan-recovery');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
@@ -539,4 +539,89 @@ test('connection captures the explicit kit before asynchronous Bluetooth pairing
   assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),true);
   assert.equal(h.run('game.drivers[0].car.speed'),0);
   await h.run('game.removeCar(game.drivers[0])');
+});
+
+test('scan validation and connected profile are visible without opening the session log',async()=>{
+  const radio=connectionRadio(),h=host({bluetoothLink:radio});h.node('kit').value='fast-furious';
+  await h.node('connect').click();h.node('scanCar').value='1';h.node('scan').click();
+  assert.equal(h.node('scanStatus').hidden,false);
+  assert.match(h.node('scanStatus').textContent,/Scan not started.*Confirm the track is clear/);
+  assert.match(h.node('scanStatus').textContent,/Fast & Furious.*experimental/);
+  const labels=h.run("cards.get(game.drivers[0]).card.children.flatMap(n=>n.children??[]).filter(n=>n.tagName==='LABEL').map(n=>n.textContent)");
+  assert.ok(labels.includes('Car model'));assert.ok(labels.includes('Who drives'));
+  assert.match(h.run('cards.get(game.drivers[0]).connection.textContent'),/Fast & Furious.*experimental/);
+  h.node('kit').value='sdk';h.node('kit').onchange();
+  assert.match(h.run('cards.get(game.drivers[0]).connection.textContent'),/Fast & Furious/,'selector cannot relabel an existing connection');
+  assert.match(h.node('kitNote').textContent,/next Connect car.*Car model/);
+  assert.equal(h.run('countdown'),null);assert.equal(radio.sent.some(p=>p[1]===0x24&&(p[2]||p[3])),false);
+  await h.run('game.removeCar(game.drivers[0])');
+});
+
+test('scan timeout stays visible and retry requires recovery, stopped pit clear and a new countdown',async()=>{
+  const radio=connectionRadio(),h=host({bluetoothLink:radio});h.node('kit').value='fast-furious';
+  await h.node('connect').click();h.node('scanCar').value='1';h.node('scanClear').checked=true;h.node('scan').click();
+  assert.match(h.node('scanStatus').textContent,/Scan countdown/);h.tick(3001);await settle();
+  assert.match(h.node('scanStatus').textContent,/Scanning.*No optical position codes/);
+  h.tick(8201);await settle();assert.match(h.run('game.pitReason'),/Telemetry timeout/);
+  assert.match(h.node('scanStatus').textContent,/Scan stopped.*Telemetry timeout/);
+  assert.match(h.node('scanStatus').textContent,/0 optical positions.*0 transitions/);
+  h.node('scan').click();assert.match(h.node('scanStatus').textContent,/Recover.*Clear pit/);
+  const positiveCount=()=>radio.sent.filter(p=>p[1]===0x24&&(p[2]||p[3])).length;
+  const before=positiveCount();h.node('pitClearStopped').click();assert.ok(h.run('game.pitReason'),'unrecovered latch cannot be cleared');
+  h.run('cards.get(game.drivers[0]).recover.click()');assert.equal(h.run('game.pitReady'),true);
+  h.node('pitClearStopped').click();h.tick(8500);await settle();
+  assert.equal(h.run('game.pitReason'),null);assert.equal(h.run('game.halted'),true);assert.equal(h.run('countdown'),null);
+  assert.equal(h.run('game.drivers[0].cpuArmed'),false);assert.equal(positiveCount(),before);
+  assert.match(h.node('scanStatus').textContent,/remain stopped.*Scan track/);
+  h.node('scanClear').checked=true;h.node('scan').click();h.tick(11499);await settle();assert.equal(positiveCount(),before);
+  h.tick(11501);await settle();assert.equal(positiveCount(),before+1);h.node('stop').click();
+  await h.run('game.removeCar(game.drivers[0])');
+});
+
+test('stopped pit clearing never rearms mapped computer cars or resumes a paused round',async()=>{
+  const h=host();h.node('demo').click();h.node('battle').click();h.tick(3001);await settle();
+  h.run("game.requestPit(game.drivers[0],'Telemetry timeout')");h.tick(3041);await settle();assert.equal(h.run('session.status'),'paused');
+  h.run('cards.get(game.drivers[0]).recover.click()');h.node('pitClearStopped').click();
+  h.tick(7000);await settle();assert.equal(h.run('game.pitReason'),null);assert.equal(h.run('game.halted'),true);
+  assert.equal(h.run('session.status'),'idle');assert.equal(h.run('game.drivers.every(d=>d.car.speed===0&&!d.cpuArmed&&!d.armed)'),true);
+});
+
+test('scan status distinguishes cancelled countdown, start failure and an explicit scan cancellation',async()=>{
+  const h=host();h.node('addSim').click();await settle();h.node('scanCar').value='1';
+  h.node('scanClear').checked=true;h.node('scan').click();h.node('stop').click();
+  assert.match(h.node('scanStatus').textContent,/Scan stopped.*Host stopped/);assert.equal(h.run('countdown'),null);
+  h.node('scanClear').checked=true;h.node('scan').click();h.run('game.drivers[0].car.connected=false');h.tick(3001);
+  assert.match(h.node('scanStatus').textContent,/Selected scanner is unavailable/);
+  h.run('game.drivers[0].car.connected=true');h.node('scanClear').checked=true;h.node('scan').click();h.tick(6002);await settle();
+  assert.equal(h.run('game.phase'),'scanning');h.node('scan').click();
+  assert.match(h.node('scanStatus').textContent,/Scan stopped.*Scan cancelled/);assert.equal(h.run('game.halted'),true);
+});
+
+test('explicit kit choice survives reload, rejects unknown stored values and does not reconfigure a connected car',async()=>{
+  const stored={},radio=connectionRadio(),h=host({stored,bluetoothLink:radio});
+  h.node('kit').value='sdk';h.node('kit').onchange();await h.node('connect').click();
+  const before=radio.sent.length;
+  h.node('kit').value='sdk-plastic';h.node('kit').onchange();
+  assert.equal(radio.initializationProfile,'sdk');assert.deepEqual(JSON.parse(JSON.stringify(radio.initializationOptions)),{});
+  assert.equal(radio.sent.length,before);
+  const reloaded=host({stored});assert.equal(reloaded.node('kit').value,'sdk-plastic');
+  stored['slipstream.kit.v1']='unrecognized-profile';assert.notEqual(host({stored}).node('kit').value,'unrecognized-profile');
+  const throwing=new Proxy({}, {get(){throw new Error('Storage unavailable');},set(){throw new Error('Storage unavailable');}});
+  const noStorage=host({stored:throwing});noStorage.node('kit').value='sdk';assert.doesNotThrow(()=>noStorage.node('kit').onchange());
+  await h.run('game.removeCar(game.drivers[0])');
+});
+
+test('scan status reports a complete simulated map and retains only that attempt’s received-code counts',async()=>{
+  const h=host();h.node('addSim').click();await settle();
+  h.run('game.drivers[0].car.telemetry.positions=12;game.drivers[0].car.telemetry.transitions=7');
+  h.node('scanCar').value='1';h.node('scanClear').checked=true;h.node('scan').click();h.tick(3001);await settle();
+  assert.match(h.node('scanStatus').textContent,/0 optical positions.*0 transitions/,'previous telemetry is not acquisition evidence');
+  for(let now=3041;now<40000&&h.run("game.phase==='scanning'");now+=40){h.tick(now);await settle();}
+  h.run('refresh()');
+  assert.ok(h.run('game.track?.closed'));assert.equal(h.run('game.halted'),true);
+  assert.match(h.node('scanStatus').textContent,/Scan mapped \d+ pieces.*STOP requested; confirm the physical stop and map/);
+  assert.equal(h.run('scanAttempt.positions'),h.run('game.drivers[0].car.telemetry.positions-12'));
+  assert.equal(h.run('scanAttempt.transitions'),h.run('game.drivers[0].car.telemetry.transitions-7'));
+  const result=h.node('scanStatus').textContent;
+  h.run('game.drivers[0].car.telemetry.positions++;refresh()');assert.equal(h.node('scanStatus').textContent,result,'late telemetry does not revise a completed scan');
 });

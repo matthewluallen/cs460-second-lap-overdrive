@@ -19,17 +19,18 @@
     <button id="stop" class="danger" title="Esc">STOP ALL</button>
   </div>
 </header>
+<div id="scanStatus" class="scan-status" role="status" aria-live="polite" hidden></div>
 <main>
   <aside id="garage">
     <div class="section-heading"><h2>Pit crew</h2><span id="carCount" class="counter">0 / 4 cars</span></div>
-    <label class="field">Kit connection<select id="kit" aria-describedby="kitNote"><option value="fast-furious">Fast &amp; Furious modular kit</option><option value="sdk">Classic SDK connection</option><option value="sdk-plastic">Classic SDK · plastic-track comparison</option></select></label>
-    <p id="kitNote" class="note" hidden>Explicit comparison: request the plastic-track parser with jump boosts off. Connecting does not start the car. Firmware application is unconfirmed; ordinary Classic SDK is unchanged.</p>
+    <label class="field">Kit connection<select id="kit" aria-describedby="kitNote"><option value="fast-furious">Fast &amp; Furious · experimental</option><option value="sdk">Classic SDK connection</option><option value="sdk-plastic">Classic SDK · plastic-track comparison</option></select></label>
+    <p id="kitNote" class="note">This choice applies to the next Connect car, separately from Car model. Classic SDK previously scanned Groundshock; current reliability is unverified.</p>
     <div class="row">
       <button id="connect" class="primary">Connect car</button>
       <button id="addSim">Add simulated car</button>
     </div>
     <button id="demo" class="demo">Try a two-car simulation →</button>
-    <label class="field">Car to scan<select id="scanCar"></select></label>
+    <label class="field">Connected car to scan<select id="scanCar"></select></label>
     <details><summary>Scan-start calibration (experimental)</summary>
       <p class="note">Only on a straight piece: measure the car's centre from the track centre, looking in its driving direction. Left is positive; right is negative. Leave blank for no calibration. Left/right hardware sign is still unverified.</p>
       <label class="field">Starting position (mm)<input id="scanLateral" type="number" min="-68" max="68" step="0.5" placeholder="Unchanged"></label>
@@ -63,7 +64,7 @@
     <p id="roundHelp" class="note">Human, computer, or a mix. Up to four cars.</p>
     <button id="endRound" hidden>Finish round &amp; stop</button>
     </section>
-    <section id="pitPanel" class="pit-panel" hidden aria-live="polite"><strong>Shared pit stop</strong><p id="pitMessage"></p><button id="pitResume" class="primary">Track clear · Continue round</button></section>
+    <section id="pitPanel" class="pit-panel" hidden aria-live="polite"><strong>Shared pit stop</strong><p id="pitMessage"></p><button id="pitClearStopped">Clear pit · keep stopped</button><button id="pitResume" class="primary">Track clear · Continue round</button></section>
     <div class="view-toolbar"><div class="view-switch" role="group" aria-label="Circuit view"><button id="view3d" aria-pressed="false">3D studio</button><button id="view2d" aria-pressed="true">2D map</button></div><div class="camera-tools"><button id="cameraOut" aria-label="Zoom out">−</button><button id="cameraReset">Reset view</button><button id="cameraIn" aria-label="Zoom in">+</button></div></div>
     <p id="powerZoneStatus" class="note" hidden></p>
     <p id="mapPositionStatus" class="note" role="status" hidden></p>
