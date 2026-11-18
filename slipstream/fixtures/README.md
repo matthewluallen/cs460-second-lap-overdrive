@@ -35,9 +35,11 @@ low-battery, charging, recovery or off-road report appears. Its first code,
 39/33 reverse, arrives 1163 ms after positive speed with only 119.84 mm of the
 ordinary straight remaining; the 250 mm gate withholds steering. Later codes
 are curves. One ordinary optical offset calibration is written; no lane/turn
-request is sent, and STOP follows at the four-second deadline. Physical stop
-and stayed-on-track confirmation are pending. The initial model metadata and
-pre-motion operator note are retained; no credentials are present. See
+request is sent, and STOP follows at the four-second deadline. The operator
+subsequently confirms physically stopped and stayed on track without spinning;
+no steering maneuver was attempted. The initial model metadata, pre-motion
+operator note and pre-confirmation `physicalStopVerified: false` are retained;
+no credentials are present. See
 [the charged-trial analysis](../review/RELATIVE-LANE-CONTROLS.md#charged-guardian-trial-late-straight-reading).
 
 ### guardian-sdk-lane-no-attempt-low-battery-2026-11-18.json
