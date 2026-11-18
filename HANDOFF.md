@@ -1,4 +1,8 @@
-# Latest: SDK scan entered firmware recovery, then off-road; Groundshock off
+# Latest: independent comparison distinguishes Guardian from Groundshock
+
+The operator reports **Groundshock also spins in standalone Drone Mode**, while **Guardian navigates the track** in that mode. This reproduces Groundshock's symptom without active Slipstream control and establishes a useful replacement-car baseline. It does not identify a motor, tire, sensor or battery fault, exclude retained firmware configuration, or validate Slipstream's initialization and control. Groundshock is excluded from further repeated trials. Guardian is the next candidate for one supervised SDK scan at a maximum 300 mm/s, with recording from connection and blank starting calibration. Its connection/physical readiness and software scan result remain pending.
+
+# Previous: SDK scan entered firmware recovery, then off-road; Groundshock off
 
 After the UI repair, the operator started an ordinary SDK scan on `84f799c` at 300 mm/s and reported slight forward movement followed by spinning. They then confirmed **powered off and stationary**, with another charged car available. The 30-event recording contains zero positions/transitions, firmware recovery entry at +1070 ms, recovery success at +1280 ms, off-road at +1339 ms, then host STOP at +1340 ms. No host write occurs between positive speed and off-road. Firmware recovery is now explicitly observed; its cause and relation to the physical spin remain unknown. No new driving command or policy has been added. Read [the follow-up evidence and independent comparison](slipstream/review/SCAN-RETRY-AND-APP-MODE.md#follow-up-sdk-scan-entered-firmware-recovery-before-spinning).
 
