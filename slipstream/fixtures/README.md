@@ -25,6 +25,32 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-left-shift-accepted-2026-11-18.json
+
+Unmodified 32-event `96fc393` export; SHA-256
+`2da8ac2f1b6cdc9596584cbf26b57d73763db0311711d43719af5beb6771212d`.
+Guardian, SDK, firmware 11866; fresh battery 3791 mV. A qualifying 39/code 22
+reverse reading triggers reference +4.5 mm followed by wire target −18 mm / ID 1,
+requesting a travel-relative 22.5 mm left shift. Noncancelled lane update and
+received/executed 1/1 follow; automatic STOP is written 750 ms after the lane
+write. The operator confirms physically stopped, clearly shifted left and stayed
+on track. The saved note contains that observation; the automated stop-proof
+flag remains false. Physical displacement was not measured.
+
+### guardian-sdk-left-right-shifts-accepted-2026-11-18.json
+
+Unmodified cumulative 48-event `96fc393` export; SHA-256
+`81d726d86f5ca2863730eb0fb3117896f135b299e23d0cbb60485e00aa74c00e`.
+Retains the accepted left trial, then a separate right diagnostic after
+repositioning and a 3752 mV battery sample. Position 39/code 31 reverse supplies
++22.5 mm; reference −22.5 and target negative-zero / ID 2 request a 22.5 mm right
+shift. Noncancelled lane update and received/executed 2/2 follow, then STOP
+751 ms after the lane write. The operator confirms physically stopped, clearly
+shifted right and stayed on track. Both confirmations are in operator notes.
+These are isolated small shifts, not repeated Computer racing or exact native
+fine-lane steps. No credentials are present. See [the steering acceptance and
+lane model](../review/RELATIVE-LANE-CONTROLS.md#guardian-left-and-right-shifts-physically-confirmed).
+
 ### guardian-sdk-unsolicited-lane-cancel-2026-11-18.json
 
 Unmodified cumulative 52-event export from `835f77b`; SHA-256
