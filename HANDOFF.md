@@ -1,4 +1,14 @@
-# Latest: independent comparison distinguishes Guardian from Groundshock
+# Latest: Guardian SDK scan passed physical acceptance — 18 November 2026
+
+Guardian completed a supervised ordinary **Classic SDK** scan on unchanged runtime `84f799c`, at the **300 mm/s** ceiling with blank starting calibration. The operator confirms **stopped, stayed on track, and the displayed 7-section map matches**. The capture records 15 optical positions and 8 transitions, a closed 2.879 m circuit with no inferred/special sections, no recovery/off-road messages, and STOP immediately after closure. One normal optical offset calibration followed the first code; no lane or turn request was sent. This is an accepted scan for Guardian on this circuit, not acceptance of repeated forward laps, steering, races or every car.
+
+The physical power-off check identified Guardian as connection 3, “Z. Drive”; the other connection was removed. Guardian then reconnected alone as driver 4. Do not use the advertised name or firmware 11866 alone to identify a model. The unmodified recording retains initial unknown-model metadata and earlier stationary connections. See [Guardian's scan evidence and scope](slipstream/review/SCAN-RETRY-AND-APP-MODE.md#guardian-sdk-scan-passed-physical-acceptance).
+
+Groundshock remains excluded after its independent Drone Mode failure. The next milestone is the existing supervised three-forward-lap check with Guardian, without lane changes or attacks; no additional hardware result is implied here.
+
+Validation: **763/763 Node tests pass on Node 22.23.5**, including three new Guardian provenance/command/replay checks. The actual Game replay closes the observed map under the unchanged watchdog defaults and remains stopped after completion. This commit adds evidence, tests and documentation only; runtime stays `84f799c`.
+
+# Previous: independent comparison distinguishes Guardian from Groundshock
 
 The operator reports **Groundshock also spins in standalone Drone Mode**, while **Guardian navigates the track** in that mode. This reproduces Groundshock's symptom without active Slipstream control and establishes a useful replacement-car baseline. It does not identify a motor, tire, sensor or battery fault, exclude retained firmware configuration, or validate Slipstream's initialization and control. Groundshock is excluded from further repeated trials. Guardian is the next candidate for one supervised SDK scan at a maximum 300 mm/s, with recording from connection and blank starting calibration. Its connection/physical readiness and software scan result remain pending.
 

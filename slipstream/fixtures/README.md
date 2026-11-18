@@ -25,6 +25,22 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-scan-2026-11-18.json
+
+Unmodified 88-event export from unchanged runtime `84f799c`; SHA-256
+`f65bcc19eadeda9c68bfedf3f099220d1019725abf7080f09506dfe151ddd592`.
+The first two trace cars are stationary identification attempts; the actual scan
+is trace car index 2 / driver 4, physically identified as Guardian by a power-off
+check and reconnected alone. SDK firmware 11866, battery 3762 mV, ceiling 300 mm/s.
+Fifteen positions and eight transitions close a seven-section, 2.879 m map with
+no inferred/special sections. One normal optical offset calibration follows the
+first code; no lane/turn request, recovery or off-road notification occurs.
+STOP follows closure. The snapshot's notes still say acceptance is pending;
+the operator subsequently confirmed stopped, stayed on track, and map matches.
+That later observation is recorded in [the report](../review/SCAN-RETRY-AND-APP-MODE.md#guardian-sdk-scan-passed-physical-acceptance),
+not retroactively inserted into the original capture. Initial unknown-model
+metadata is preserved; final diagnostics name Guardian. No credentials are present.
+
 ### groundshock-sdk-recovery-spin-2026-11-18.json
 
 Unmodified 30-event export from `84f799c`; SHA-256

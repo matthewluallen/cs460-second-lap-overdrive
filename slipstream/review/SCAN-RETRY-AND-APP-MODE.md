@@ -88,3 +88,29 @@ If it follows the track, compare that same car in one supervised SDK scan on the
 The operator subsequently reported: Groundshock spins in standalone Drone Mode, while Guardian navigated the track. These are physical observations, not a Bluetooth recording or a quantified lap/steering test. They show the Groundshock symptom does not require active Slipstream commands, and distinguish the two cars on the available track. They do not identify the defective component, prove a hardware-only cause, or exclude retained firmware state from earlier sessions.
 
 Guardian (model 12) and Groundshock (model 8) use the same ordinary SDK initialization, optical parser and scan speed logic. Both are non-trucks; their model entries affect naming, dimensions and game equipment. Neither scan path hardcodes firmware 11866. The next comparison keeps the connection profile SDK and ceiling 300, changes the physical car to Guardian, and leaves optional starting calibration blank. Groundshock stays out of repeated attempts. Guardian's standalone result is not yet acceptance of scanning or driving through Slipstream.
+
+## Guardian SDK scan passed physical acceptance
+
+On unchanged runtime `84f799c` (`2026-11-18-scan-recovery`), Guardian completed the approved SDK scan at a 300 mm/s ceiling. The operator subsequently confirmed: **“Stopped; stayed on track; 7-piece map matches.”** This accepts that scan and its map on this circuit. It does not accept repeated laps, lane changes, attacks, multi-car operation, F&F mode or universal protocol parity.
+
+Identification was established without moving either initially connected car. Driver 2 (“PZ. Drive”) and driver 3 (“Z. Drive”) both returned fresh battery replies. Switching the physical Guardian off disconnected only driver 3. Both old cards were then removed; Guardian was switched on normally, selected as “Z. Drive,” reconnected alone as driver 4, and manually labeled Guardian. The model was not inferred from the advertised name or firmware. Initial model-zero metadata remains unchanged in the capture.
+
+The original [88-event recording](../fixtures/guardian-sdk-scan-2026-11-18.json) has SHA-256 `f65bcc19eadeda9c68bfedf3f099220d1019725abf7080f09506dfe151ddd592`, no dropped events/markers and no credentials. It starts with the earlier stationary identification connections. Guardian's scan session is **trace car index 2 / driver 4**, global event indices 42–87. Exported notes predate physical confirmation and still say pending; the confirmation above is a later operator observation, not an alteration to the original recording.
+
+| Event index (zero-based) | Observation |
+| --- | --- |
+| 42–54 | Normal SDK initialization, firmware 11866, battery 3762 mV; off charger, no low-battery flag. |
+| 57 | Sole positive-speed write at 1432500 ms: `06 24 2c 01 e8 03 00` (300 mm/s). |
+| 60 | First optical code after 832 ms: finish section 33 / code 6. |
+| 61 | Normal code-derived `SET_OFFSET` calibration to −13.5 mm; no manual starting calibration. |
+| 60–83 | 15 positions and 8 transitions; maximum optical gap 871 ms, within unchanged default watchdogs. |
+| 83–85 | Closing transition at 1442664 ms, STOP writes at 1442667 ms: 3 ms later, 10.167 s after positive speed. This interval is not physical braking time. |
+| 86 | Desired speed zero, actual-speed sample 286 mm/s, 55 ms after STOP. It becomes stale; it does not contradict or independently verify the later operator-confirmed stop. |
+
+The mapped sequence is `33F, 17F, 20F, 39R, 17F, 23F, 34F`, total 2879.2 mm, geometrically closed with no inferred, special, jump or intersection sections. Start and finish are separately coded portions of one physical start/finish piece; seven mapped sections can correspond to six physical pieces. Repeated ID 17 is observed, not invented topology. No `CHANGE_LANE`, turn, `0x34`, `0x35`, `0x37` or plastic-configuration command occurs. No recovery/off-road message, write fault or watchdog trip occurs. Collision notifications before motion and after STOP do not establish physical impact; the operator confirmed staying on track.
+
+This is a useful cross-car discriminator: the same runtime and ordinary SDK path that failed to acquire Groundshock's codes acquired Guardian's codes and closed the map. Groundshock's standalone failure also persists without active Slipstream commands. Together they support excluding Groundshock from further unchanged tests, but do not identify a component fault or exclude retained firmware state. The lower voltage on this successful Guardian attempt does not support voltage alone as a sufficient explanation for Groundshock's failures.
+
+Next acceptance is the existing three-forward-lap check with Guardian, at no more than 300 mm/s, with normal optical calibration and no lane changes/turns/attacks. It requires a separate supervised start; this scan alone does not authorize an unattended run. No runtime protocol or safety policy changes accompany this evidence update.
+
+`guardian-scan.test.mjs` adds three checks for the immutable capture, raw command ordering, and the real Game/ReplayCar scan path. The replay uses trace car index 2, initializes from the recorded SDK replies, maps the exact observed topology with default watchdog values, requests STOP and cannot restart from continued input/ticks after completion. It keeps automated physical-stop verification false. **763/763 Node tests pass on Node 22.23.5**; `git diff --check` is clean. No runtime code changed. Previous Python/CWE/dependency/audit results remain historical, not newly rerun claims for this evidence-only update.
