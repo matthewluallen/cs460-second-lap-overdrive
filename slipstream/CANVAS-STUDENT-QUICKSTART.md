@@ -11,6 +11,33 @@ hand ready to grab the car, and keep **STOP ALL** in reach.
 Connect your car → identify it (model + LED color) → scan your track → drive it,
 from the laptop or from your phone.
 
+## Set up your own Codespace (do this first)
+
+Each of you runs your **own** server in a GitHub Codespace. You can share the
+physical track; everyone drives through their own server.
+
+1. On GitHub, open **`matthewluallen/cs460-second-lap-overdrive`** and start a
+   **Codespace** on the branch **`slipstream-and-security-hardening`** (the latest
+   build) or on **`main`**. The `.devcontainer` installs the locked dependencies
+   for you — no install scripts.
+2. The Codespace runs the server on start. If you need to start it by hand, run
+   `PORT=3000 npm run slipstream:up` in the terminal. Get your private room **host
+   code** with:
+   ```sh
+   cat "${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code"
+   ```
+   Keep that code to yourself — it's what lets phones join your room.
+3. In the **Ports** panel, open the forwarded **port 3000** URL and add
+   `/slipstream/` — e.g. `https://YOUR-CODESPACE-3000.app.github.dev/slipstream/`.
+   Open that **HTTPS** URL in Chrome/Edge on the laptop next to the track. Leave
+   the forwarded port's **protocol set to HTTP**.
+4. To let phones join, set **port 3000 to Public** in the Ports panel. (Private is
+   the default; GitHub's sign-in still applies until you make it public.)
+
+Prefer to run it on your own machine instead? `npm ci --ignore-scripts`, then
+`npm run slipstream`, and open `http://127.0.0.1:8000/slipstream/` (laptop only —
+phones can't reach localhost). See [DEPLOYMENT.md](DEPLOYMENT.md) for details.
+
 ## Before you start
 
 - Use **desktop Chrome or Edge** on the laptop next to the track (that laptop
