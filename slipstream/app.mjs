@@ -677,7 +677,7 @@ function openRoom() {
   if (room) return Promise.resolve(room);
   // Validate before assigning the in-flight promise: a synchronous rejection
   // inside the initializer would otherwise leave a permanently failed retry.
-  const code = $('hostCode').value.trim().toUpperCase();
+  const code = $('hostCode').value.trim();
   if (!code) return Promise.reject(new Error('enter the host code first'));
   return opening ??= (async () => {
     try {

@@ -744,6 +744,18 @@ test('student Phone QR shows missing class code and can retry after the code is 
   assert.equal(requests,2);assert.equal(h.run('ui.seatBox.hidden'),false);assert.equal(h.run('game.drivers[0].car.speed'),0);
 });
 
+test('phone room preserves a mixed-case host code in the request and session storage',async()=>{
+  const requests=[],stored={};
+  const h=host({view:'student',stored,apiCall:async(path,options)=>{requests.push({path,options});return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'};}});
+  h.node('addSim').click();await settle();h.run('drawQr=async()=>{}');
+  h.node('hostCode').value='  aB9_xY-zQ2LmN7pR  ';
+  await h.run('cards.get(game.drivers[0]).phone.click()');
+  assert.equal(requests.find(r=>r.path==='/rooms').options.key,'aB9_xY-zQ2LmN7pR');
+  assert.equal(stored['slipstream.hostCode'],'aB9_xY-zQ2LmN7pR');
+  assert.equal(host({view:'student',stored}).node('hostCode').value,'aB9_xY-zQ2LmN7pR');
+  assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.drivers[0].car.speed'),0);
+});
+
 test('changing workspace stops active driving and entering student mode parks existing computer controls',async()=>{
   const h=host();h.node('demo').click();h.node('battle').click();h.tick(3001);h.tick(3041);await settle();
   assert.equal(h.run('session.status'),'running');assert.ok(h.run('game.drivers.some(d=>d.car.speed>0)'));
