@@ -109,7 +109,7 @@ export class Game {
       if (now>trial.started && now<trial.until && trial.until-now>=750 && message.speed>0 && spot && (1-spot.progress)*definition.length>=250 && Math.abs(target)<=LANE_LIMIT && car.lateralEstimate?.source==='printed-code' && car.lateralEstimate.at===now) {
         // Commit the single attempt before any queued write can produce a reply.
         trial.laneRequested=true; trial.until=Math.min(trial.until,now+750); car.diagnosticUntil=trial.until;
-        trial.laneTimer=this.schedule(()=>{if(this.diagnostic===trial){this.stopAll();this.log('Steering test completed: STOP requested; confirm physical stop');}},trial.until-now);
+        trial.laneTimer=this.schedule(()=>this.#diagnosticDeadline(trial),trial.until-now);
         if (!car.steerDiagnosticOnce(target)) { this.stopAll(); this.log('Steering test stopped: lane request unavailable'); return; }
         this.log('Steering test: one '+(trial.direction===1?'left':'right')+' request from fresh printed lane '+spot.lateral+' to '+target+' mm');
       }
@@ -403,15 +403,19 @@ export class Game {
     const duration=steering?4000:500;
     const pulse = {driver, steering:!!steering, direction, started:this.clock(), until:this.clock()+duration, timer:null, laneTimer:null, laneRequested:false};
     this.diagnostic = pulse; c.diagnosticMotion = true; c.diagnosticSteering=!!steering; c.diagnosticLaneSent=false; c.diagnosticUntil = pulse.until;
-    pulse.timer = this.schedule(() => {
-      if (this.diagnostic !== pulse) return;
-      this.stopAll();
-      this.log(pulse.steering && !pulse.laneRequested
-        ? 'Diagnostic deadline: no lane request sent; no eligible ordinary-straight reading. STOP requested; confirm physical stop'
-        : 'Diagnostic deadline: STOP requested; confirm physical stop');
-    },duration);
+    pulse.timer = this.schedule(() => this.#diagnosticDeadline(pulse),duration);
     c.setSpeed(Math.min(steering?300:150,this.topSpeed));
     this.log(steering?'Experimental steering test: at most 300 mm/s, 4 s total; one '+(direction===1?'left':'right')+' request only after a fresh ordinary straight code; raw collision packets follow ordinary driving policy':'Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');
+  }
+  #diagnosticDeadline(pulse) {
+    if(this.diagnostic!==pulse)return;
+    // The tick and either timer may win. Preserve one outcome before STOP
+    // clears this pulse and cancels all of its outstanding callbacks.
+    const outcome=!pulse.steering?'straight pulse ended'
+      :pulse.laneRequested?'one '+(pulse.direction===1?'left':'right')+' lane request attempted; maneuver completion unverified'
+      :'no lane request sent; no eligible ordinary-straight reading';
+    this.stopAll();
+    this.log('Diagnostic deadline: '+outcome+'. STOP requested; confirm physical stop');
   }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
@@ -428,8 +432,9 @@ export class Game {
       else if (this.laneCancellationComparison.stage==='acquiring-reference' && now>=this.laneCancellationComparison.referenceUntil) this.#referenceFailure(d,'Reference timeout: expected start/finish and a consistent follow-up');
     }
     if (this.diagnostic) {
-      const {driver,until} = this.diagnostic;
-      if (now >= until || !driver.car.connected || driver.car.safetyReason || driver.car.speed === 0) this.stopAll();
+      const pulse=this.diagnostic,{driver,until}=pulse;
+      if (now >= until) this.#diagnosticDeadline(pulse);
+      else if (!driver.car.connected || driver.car.safetyReason || driver.car.speed === 0) this.stopAll();
       else if (this.diagnostic.steering) {
         const car=driver.car, hasTrack=car.lastTrackAt!==undefined && car.lastTrackAt>=car.motionSince;
         if(now-(hasTrack?car.lastTrackAt:car.motionSince)>(hasTrack?this.safety.trackGapMs:this.safety.firstTrackMs)) this.requestPit(driver,'Telemetry timeout');

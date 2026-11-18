@@ -786,7 +786,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-diagnostic-health',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-diagnostic-outcomes',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);

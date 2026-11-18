@@ -25,6 +25,21 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-lane-no-attempt-late-straight-2026-11-18.json
+
+Unmodified 29-event export from `835f77b`; SHA-256
+`aea4422fb668da9b915687faefc439620d5d70d5e8e6a94832986b2674f602dd`.
+The operator identified the charged **Z. Drive without P** as Guardian and
+confirmed presence beside the track. Initial battery is 4117 mV; no moving
+low-battery, charging, recovery or off-road report appears. Its first code,
+39/33 reverse, arrives 1163 ms after positive speed with only 119.84 mm of the
+ordinary straight remaining; the 250 mm gate withholds steering. Later codes
+are curves. One ordinary optical offset calibration is written; no lane/turn
+request is sent, and STOP follows at the four-second deadline. Physical stop
+and stayed-on-track confirmation are pending. The initial model metadata and
+pre-motion operator note are retained; no credentials are present. See
+[the charged-trial analysis](../review/RELATIVE-LANE-CONTROLS.md#charged-guardian-trial-late-straight-reading).
+
 ### guardian-sdk-lane-no-attempt-low-battery-2026-11-18.json
 
 Unmodified 46-event export from `a028e4e`; SHA-256

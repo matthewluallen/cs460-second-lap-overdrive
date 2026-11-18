@@ -49,6 +49,10 @@ The browser/keyboard discrete lane controls must derive their first relative tar
 
 Guardian's first short steering trial reported low battery after motion began. The diagnostic previously checked health only on entry and continued until its fixed deadline. Both straight and steering diagnostics now invoke the existing shared-pit STOP as soon as their active car reports low battery or charging. This adds no voltage threshold or firmware command, and does not reinterpret an unlocalized on-track flag as low battery. Late optical codes cannot resume that stopped diagnostic or trigger its pending lane request. The immutable hardware trace retains the old deadline behavior; repaired replay behavior is explicitly separate. The trial sent no steering command because only finish/curve codes arrived; physical steering remains unverified.
 
+## Consistent diagnostic deadline reporting — 18 November 2026
+
+The control tick could stop an expired diagnostic before its independent timer, cancelling the timer-only outcome message. Both paths now share an identity-checked deadline handler and report the result once: no lane request, a lane request attempted with physical completion unverified, or the end of a straight pulse. Stale callbacks cannot stop a later diagnostic or duplicate a result. This changes observability only; the STOP operation, deadlines, fresh-reference and remaining-distance requirements, firmware commands and health/watchdog rules are unchanged. The charged Guardian capture demonstrates a correctly withheld maneuver with only 119.84 mm of straight remaining, not a firmware steering rejection.
+
 ## Drive-state and calibration audit — 13 November 2026
 
 The APK/SDK comparison reproduced a last-microtask STOP race and a separate queue race that could replace an undelivered STOP with a fresh speed request. Motion generations now invalidate older work immediately before transport entry, and STOP has an independent priority queue key. Already-entered GATT writes remain uncancellable; the next serial command is STOP. Tests explicitly distinguish entry from completion and cover STOP/recovery/restart, closing, and queued lateral work.

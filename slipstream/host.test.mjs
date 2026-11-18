@@ -511,7 +511,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-diagnostic-health');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-diagnostic-outcomes');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
