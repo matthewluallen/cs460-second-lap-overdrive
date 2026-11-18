@@ -1,5 +1,10 @@
 # Investigating the platform's real dependencies
 
+> **Status: repaired.** Express is now a current exactly pinned 5.x release from the npm registry and Lodash has been removed. `npm audit` reports no advisories and `npm run dependency-lab` reports `regressionCheckPassed: true`.
+> The steps further down describe the original flawed baseline and are kept as
+> a record of what was investigated; on this branch they now end in a refusal.
+> See [SECURITY.md](../SECURITY.md) for the change list and the baseline commit.
+
 The optional Node platform uses two real, deliberately old dependencies during
 normal operation: Express serves the bench and shared support-record API;
 Lodash sorts and groups synthetic support records. These are installed runtime

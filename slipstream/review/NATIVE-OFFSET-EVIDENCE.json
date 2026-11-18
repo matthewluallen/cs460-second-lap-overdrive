@@ -1,0 +1,33 @@
+{
+  "scope": "Static scalar conversion evidence; no native execution or firmware validation",
+  "libraries": [
+    {
+      "artifact": "Fast & Furious build403",
+      "librarySha256": "0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f",
+      "symbol": "_ZN11BaseStation6CarMsg32ConvertOffsetFromRoadCenter_mm2mEf",
+      "elfVirtualAddress": "0x69b828",
+      "functionBytes": 52,
+      "technique": "ELF symbol lookup + Capstone Thumb instructions + PC-relative float literals",
+      "capstoneVersion": "5.0.7",
+      "executedNativeCode": false,
+      "unknownComparison": "rawOffsetMm > thresholdMm",
+      "thresholdMm": 500000.0,
+      "unknownValue": 654321.0,
+      "knownOffsetMultiplier": 0.0010000000474974513
+    },
+    {
+      "artifact": "Overdrive APK1502",
+      "librarySha256": "88bbb08b2226826d599cffde4b60c693ab460ae86f7e25eed5c862b615887778",
+      "symbol": "_ZN11BaseStation6CarMsg32ConvertOffsetFromRoadCenter_mm2mEf",
+      "elfVirtualAddress": "0x69b840",
+      "functionBytes": 52,
+      "technique": "ELF symbol lookup + Capstone Thumb instructions + PC-relative float literals",
+      "capstoneVersion": "5.0.7",
+      "executedNativeCode": false,
+      "unknownComparison": "rawOffsetMm > thresholdMm",
+      "thresholdMm": 500000.0,
+      "unknownValue": 654321.0,
+      "knownOffsetMultiplier": 0.0010000000474974513
+    }
+  ]
+}

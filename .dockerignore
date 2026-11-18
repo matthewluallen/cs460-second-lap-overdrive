@@ -1,0 +1,10 @@
+.git
+node_modules
+sources
+review-artifacts
+.env
+.env.*
+*.apk
+*.obb
+*.zip
+*.xapk

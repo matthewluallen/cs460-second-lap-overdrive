@@ -14,9 +14,9 @@ npm ci --ignore-scripts
 npm start
 ```
 
-This installs the deliberately old Express and Lodash runtime dependencies
-described in the [dependency investigation](DEPENDENCY-LAB.md). Express serves
-the bench and shared MOCK support API; Lodash sorts and groups its records.
+This installs a current, exactly pinned Express release (see the
+[dependency check](DEPENDENCY-LAB.md)). Express serves the bench and shared
+MOCK support API.
 The server binds `127.0.0.1:8000` and serves static files only from `bench/`.
 
 For the car activity without Node dependencies, use this static fallback instead
@@ -59,8 +59,8 @@ the server process; restart the server to reset them. Records do not transfer
 between modes, and reloading a server-mode tab does not reset shared records.
 The worksheet does not control a car; enter only synthetic notes in either mode.
 After the hardware activity, the optional [worksheet CWE investigation](CWE-LAB.md)
-reproduces two intentional authorization defects in either store. The separate
-[dependency investigation](DEPENDENCY-LAB.md) examines real installed packages
+shows the two repaired authorization rules in either store. The separate
+[dependency check](DEPENDENCY-LAB.md) examines real installed packages
 with `npm run dependency-lab`; save hardware evidence and disconnect first.
 
 **One assigned stationary car.** Record kit/model, host, browser and revision.

@@ -1,0 +1,973 @@
+{
+  "scope": "Fresh focused decompilation from existing analyzed Ghidra project; no fresh whole-library auto-analysis; no APK/firmware execution",
+  "exports": [
+    {
+      "file": "native-telemetry.c",
+      "sha256": "0a3dfd3ed51659c46d76caf0a9bea22077c54bf0583a35bb55d2cd9fce86339a",
+      "coverage": [
+        "// COVERAGE selected=190 completed=190 failed=0 cancelled=false"
+      ],
+      "decompiler_warning_comments": 66,
+      "functions": [
+        {
+          "address": "0053d7d0",
+          "name": "Anki::DriveEngine::GameService::BsMessageHandler::BsMessageHandler"
+        },
+        {
+          "address": "00541cf4",
+          "name": "Anki::DriveEngine::GameService::BsMessageHandler::Subscribe"
+        },
+        {
+          "address": "00544394",
+          "name": "Anki::DriveEngine::GameService::BsMessageHandler::HandleMessage"
+        },
+        {
+          "address": "0054c884",
+          "name": "BaseStation::UIMessageHandler::HandleMessage"
+        },
+        {
+          "address": "0054ce60",
+          "name": "BaseStation::CarMsgPositionUpdate::CarMsgPositionUpdate"
+        },
+        {
+          "address": "0054cecc",
+          "name": "BaseStation::CarMsgSetTestMode::CarMsgSetTestMode"
+        },
+        {
+          "address": "0054cf08",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate2::CarMsgRoadPieceTransitionUpdate2"
+        },
+        {
+          "address": "0054cfb0",
+          "name": "BaseStation::CarMsgSetCarMode::CarMsgSetCarMode"
+        },
+        {
+          "address": "0054cfe0",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate::CarMsgRoadPieceTransitionUpdate"
+        },
+        {
+          "address": "0054d25c",
+          "name": "BaseStation::CarMsg::PackedBytesToString"
+        },
+        {
+          "address": "0054d268",
+          "name": "BaseStation::CarMsg::ToString"
+        },
+        {
+          "address": "0054da24",
+          "name": "BaseStation::UIMessageHandler::UIMessageHandler"
+        },
+        {
+          "address": "0054db20",
+          "name": "BaseStation::UIMessageHandler::Subscribe"
+        },
+        {
+          "address": "00550658",
+          "name": "BaseStation::VehicleMessenger::SendSkipAutoDriveInDeloc"
+        },
+        {
+          "address": "00550a84",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultRGBLights"
+        },
+        {
+          "address": "00550d54",
+          "name": "BaseStation::VehicleMessenger::SendEnableSpecificV2BMessages"
+        },
+        {
+          "address": "00551258",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultTailLights"
+        },
+        {
+          "address": "00551264",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultGunLights"
+        },
+        {
+          "address": "005513c0",
+          "name": "BaseStation::SdkVehicleController::StartVehicles"
+        },
+        {
+          "address": "00553d9c",
+          "name": "BaseStation::CarMsg::ConvertOffsetFromRoadCenter_mm2m"
+        },
+        {
+          "address": "00553da8",
+          "name": "BaseStation::CarMsgPositionUpdate::GetNumBits"
+        },
+        {
+          "address": "00553dc0",
+          "name": "BaseStation::CarMsgPositionUpdate::IsReverseParsing"
+        },
+        {
+          "address": "00553f64",
+          "name": "BaseStation::CarMsgPositionUpdate::IsInvertedParsing"
+        },
+        {
+          "address": "00553fc4",
+          "name": "BaseStation::VehicleMessenger::SendSetOffsetFromRoadCenterCommand"
+        },
+        {
+          "address": "00554000",
+          "name": "BaseStation::VehicleMessenger::SendSetOffsetFromRoadCenterAdjustmentCommand"
+        },
+        {
+          "address": "005540e4",
+          "name": "BaseStation::VehicleMessenger::SendRelocalizationDASMessages"
+        },
+        {
+          "address": "005542c4",
+          "name": "BaseStation::VehicleMessenger::SendDelocalizationDASMessages"
+        },
+        {
+          "address": "005542dc",
+          "name": "BaseStation::VehicleMessenger::SendSetDelocalizedMode"
+        },
+        {
+          "address": "005542f4",
+          "name": "BaseStation::VehicleMessenger::SendSetRoadPieceIdxCommand"
+        },
+        {
+          "address": "005584c4",
+          "name": "BaseStation::SdkVehicleController::SdkVehicleController"
+        },
+        {
+          "address": "005584e8",
+          "name": "BaseStation::SdkVehicleController::~SdkVehicleController"
+        },
+        {
+          "address": "00558710",
+          "name": "BaseStation::SdkVehicleController::SetSpeed"
+        },
+        {
+          "address": "0055871c",
+          "name": "BaseStation::SdkVehicleController::StopPlaybackSequence"
+        },
+        {
+          "address": "00558728",
+          "name": "BaseStation::SdkVehicleController::UnloadPlaybackSequence"
+        },
+        {
+          "address": "0055877c",
+          "name": "BaseStation::SdkVehicleController::GetPlaybackSequenceList"
+        },
+        {
+          "address": "00558950",
+          "name": "BaseStation::SdkVehicleController::StartDriving"
+        },
+        {
+          "address": "0055895c",
+          "name": "BaseStation::SdkVehicleController::ValidateSpeedCommand"
+        },
+        {
+          "address": "00558968",
+          "name": "BaseStation::SdkVehicleController::ValidateAccelCommand"
+        },
+        {
+          "address": "00558974",
+          "name": "BaseStation::SdkVehicleController::ValidateLaneCommand"
+        },
+        {
+          "address": "00558980",
+          "name": "BaseStation::VehicleMessenger::SendTurn180Command"
+        },
+        {
+          "address": "00558998",
+          "name": "BaseStation::SdkVehicleController::ValidateLightSetting"
+        },
+        {
+          "address": "005589a4",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultRGBLights"
+        },
+        {
+          "address": "005589b0",
+          "name": "BaseStation::VehicleMessenger::SendSetLights"
+        },
+        {
+          "address": "005594fc",
+          "name": "BaseStation::VehicleMessenger::VehicleMessenger"
+        },
+        {
+          "address": "00559598",
+          "name": "BaseStation::VehicleMessenger::~VehicleMessenger"
+        },
+        {
+          "address": "0055985c",
+          "name": "BaseStation::VehicleMessenger::SendSetSpeedCommand"
+        },
+        {
+          "address": "00559880",
+          "name": "BaseStation::VehicleMessenger::SendCancelLaneChangeCommand"
+        },
+        {
+          "address": "005598bc",
+          "name": "BaseStation::VehicleMessenger::SendLaneChangeCommand"
+        },
+        {
+          "address": "0055991c",
+          "name": "BaseStation::VehicleMessenger::SendTurn90CommandAtNextIntersection"
+        },
+        {
+          "address": "00559928",
+          "name": "BaseStation::VehicleMessenger::SendCancelAllOpenLoopTurnsCommand"
+        },
+        {
+          "address": "00559934",
+          "name": "BaseStation::VehicleMessenger::SendStopOnTransition"
+        },
+        {
+          "address": "00559988",
+          "name": "BaseStation::VehicleMessenger::SendStatsRequest"
+        },
+        {
+          "address": "00559e08",
+          "name": "BaseStation::VehicleInitSequence::ExecutePhase"
+        },
+        {
+          "address": "00559e14",
+          "name": "BaseStation::VehicleMessenger::SendVersionRequest"
+        },
+        {
+          "address": "00559e20",
+          "name": "BaseStation::VehicleMessenger::SendSetCarMode"
+        },
+        {
+          "address": "00559e2c",
+          "name": "BaseStation::VehicleMessenger::SendSetVehicleSpecificParameters"
+        },
+        {
+          "address": "00559e38",
+          "name": "BaseStation::VehicleMessenger::SendDefaultRoadNetworkV2"
+        },
+        {
+          "address": "00559e44",
+          "name": "BaseStation::VehicleMessenger::SendSetMaxDelocSpeed"
+        },
+        {
+          "address": "00559e5c",
+          "name": "BaseStation::VehicleMessenger::SendSetEnabledDASCategories"
+        },
+        {
+          "address": "00559e68",
+          "name": "BaseStation::VehicleMessenger::SendPingRequest"
+        },
+        {
+          "address": "00559e74",
+          "name": "BaseStation::VehicleInitSequence::DoNextPhase"
+        },
+        {
+          "address": "0055a030",
+          "name": "BaseStation::VehicleMessenger::SendInitializeRoadNetworkV2"
+        },
+        {
+          "address": "0055a09c",
+          "name": "BaseStation::VehicleInitSequence::VehicleInitSequence"
+        },
+        {
+          "address": "0055a0b4",
+          "name": "BaseStation::VehicleInitSequence::Start"
+        },
+        {
+          "address": "0055a0c0",
+          "name": "BaseStation::VehicleInitSequence::Update"
+        },
+        {
+          "address": "0055a0cc",
+          "name": "BaseStation::VehicleInitSequence::IsComplete"
+        },
+        {
+          "address": "0055a138",
+          "name": "BaseStation::VehicleMessenger::ProcessIncomingMessage"
+        },
+        {
+          "address": "0055a3c0",
+          "name": "BaseStation::VehicleMessenger::SendStatsReset"
+        },
+        {
+          "address": "0055a5b8",
+          "name": "BaseStation::CarMsg::Send"
+        },
+        {
+          "address": "0055a5c4",
+          "name": "BaseStation::VehicleMessenger::LogMessagingError"
+        },
+        {
+          "address": "0055a6b4",
+          "name": "BaseStation::VehicleMessenger::SendPlaybackSequenceToSlot"
+        },
+        {
+          "address": "0055a750",
+          "name": "BaseStation::CarMsgSetTestMode::CarMsgSetTestMode"
+        },
+        {
+          "address": "0055a75c",
+          "name": "BaseStation::CarMsgSetCarMode::CarMsgSetCarMode"
+        },
+        {
+          "address": "0055a81c",
+          "name": "BaseStation::VehicleMessenger::~VehicleMessenger"
+        },
+        {
+          "address": "0055a828",
+          "name": "BaseStation::VehicleMessenger::~VehicleMessenger"
+        },
+        {
+          "address": "0055e260",
+          "name": "BaseStation::VehicleMessenger::SendStartPlaybackSequence"
+        },
+        {
+          "address": "0055e380",
+          "name": "BaseStation::VehicleMessenger::SendPlaybackSequenceToSlot"
+        },
+        {
+          "address": "00601cc0",
+          "name": "Anki::DriveEngine::GameService::BsMessageHandler::BsMessageHandler"
+        },
+        {
+          "address": "00601d34",
+          "name": "Anki::DriveEngine::GameService::BsMessageHandler::HandleMessage"
+        },
+        {
+          "address": "00601f14",
+          "name": "Anki::DriveEngine::GameService::BsMessageHandler::Subscribe"
+        },
+        {
+          "address": "006aae44",
+          "name": "BaseStation::CarMsg::Send"
+        },
+        {
+          "address": "006aae8c",
+          "name": "BaseStation::CarMsg::PackedBytesToString"
+        },
+        {
+          "address": "006ab374",
+          "name": "BaseStation::CarMsg::ToString"
+        },
+        {
+          "address": "006ab7f4",
+          "name": "BaseStation::CarMsg::ConvertOffsetFromRoadCenter_m2mm"
+        },
+        {
+          "address": "006ab828",
+          "name": "BaseStation::CarMsg::ConvertOffsetFromRoadCenter_mm2m"
+        },
+        {
+          "address": "006ae924",
+          "name": "BaseStation::CarMsgSetTestMode::CarMsgSetTestMode"
+        },
+        {
+          "address": "006ae954",
+          "name": "BaseStation::CarMsgSetTestMode::CarMsgSetTestMode"
+        },
+        {
+          "address": "006ae9ac",
+          "name": "BaseStation::CarMsgSetTestMode::GetBytes"
+        },
+        {
+          "address": "006ae9dc",
+          "name": "BaseStation::CarMsgSetTestMode::ToString"
+        },
+        {
+          "address": "006b3970",
+          "name": "BaseStation::CarMsgPositionUpdate::CarMsgPositionUpdate"
+        },
+        {
+          "address": "006b3a04",
+          "name": "BaseStation::CarMsgPositionUpdate::CarMsgPositionUpdate"
+        },
+        {
+          "address": "006b3ab0",
+          "name": "BaseStation::CarMsgPositionUpdate::GetBytes"
+        },
+        {
+          "address": "006b3b24",
+          "name": "BaseStation::CarMsgPositionUpdate::GetNumBits"
+        },
+        {
+          "address": "006b3b2e",
+          "name": "BaseStation::CarMsgPositionUpdate::IsInvertedParsing"
+        },
+        {
+          "address": "006b3b3c",
+          "name": "BaseStation::CarMsgPositionUpdate::IsReverseParsing"
+        },
+        {
+          "address": "006b3bb4",
+          "name": "BaseStation::CarMsgPositionUpdate::ToString"
+        },
+        {
+          "address": "006b4290",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate::CarMsgRoadPieceTransitionUpdate"
+        },
+        {
+          "address": "006b4334",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate::CarMsgRoadPieceTransitionUpdate"
+        },
+        {
+          "address": "006b43e4",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate::GetBytes"
+        },
+        {
+          "address": "006b4504",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate::ToString"
+        },
+        {
+          "address": "006b48e0",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate2::CarMsgRoadPieceTransitionUpdate2"
+        },
+        {
+          "address": "006b495c",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate2::CarMsgRoadPieceTransitionUpdate2"
+        },
+        {
+          "address": "006b4998",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate2::GetBytes"
+        },
+        {
+          "address": "006b4a20",
+          "name": "BaseStation::CarMsgRoadPieceTransitionUpdate2::ToString"
+        },
+        {
+          "address": "006b8350",
+          "name": "BaseStation::CarMsgSetCarMode::CarMsgSetCarMode"
+        },
+        {
+          "address": "006b8380",
+          "name": "BaseStation::CarMsgSetCarMode::CarMsgSetCarMode"
+        },
+        {
+          "address": "006b83d8",
+          "name": "BaseStation::CarMsgSetCarMode::GetBytes"
+        },
+        {
+          "address": "006b8408",
+          "name": "BaseStation::CarMsgSetCarMode::ToString"
+        },
+        {
+          "address": "00799c6c",
+          "name": "BaseStation::SdkVehicleController::SdkVehicleController"
+        },
+        {
+          "address": "00799c70",
+          "name": "BaseStation::SdkVehicleController::~SdkVehicleController"
+        },
+        {
+          "address": "00799c72",
+          "name": "BaseStation::SdkVehicleController::StartVehicles"
+        },
+        {
+          "address": "00799ca4",
+          "name": "BaseStation::SdkVehicleController::StartDriving"
+        },
+        {
+          "address": "00799cec",
+          "name": "BaseStation::SdkVehicleController::SetSpeed"
+        },
+        {
+          "address": "00799d8c",
+          "name": "BaseStation::SdkVehicleController::ValidateSpeedCommand"
+        },
+        {
+          "address": "00799f74",
+          "name": "BaseStation::SdkVehicleController::ValidateAccelCommand"
+        },
+        {
+          "address": "0079a15c",
+          "name": "BaseStation::SdkVehicleController::SetLane"
+        },
+        {
+          "address": "0079a1f8",
+          "name": "BaseStation::SdkVehicleController::ValidateLaneCommand"
+        },
+        {
+          "address": "0079a42c",
+          "name": "BaseStation::SdkVehicleController::Turn180"
+        },
+        {
+          "address": "0079a444",
+          "name": "BaseStation::SdkVehicleController::SetDrivingDirIntent"
+        },
+        {
+          "address": "0079a458",
+          "name": "BaseStation::SdkVehicleController::SetTopLights"
+        },
+        {
+          "address": "0079a4e4",
+          "name": "BaseStation::SdkVehicleController::ValidateLightSetting"
+        },
+        {
+          "address": "0079a700",
+          "name": "BaseStation::SdkVehicleController::SetTopLightsRGB"
+        },
+        {
+          "address": "0079a794",
+          "name": "BaseStation::SdkVehicleController::SetGunLights"
+        },
+        {
+          "address": "0079a800",
+          "name": "BaseStation::SdkVehicleController::SetTailLights"
+        },
+        {
+          "address": "0079a84c",
+          "name": "BaseStation::SdkVehicleController::SetLights"
+        },
+        {
+          "address": "0079a868",
+          "name": "BaseStation::SdkVehicleController::RunPlaybackSequenceOnce"
+        },
+        {
+          "address": "0079a896",
+          "name": "BaseStation::SdkVehicleController::LoadPlaybackSequence"
+        },
+        {
+          "address": "0079a90a",
+          "name": "BaseStation::SdkVehicleController::LoadLoopingPlaybackSequence"
+        },
+        {
+          "address": "0079a98c",
+          "name": "BaseStation::SdkVehicleController::RunPlaybackSequence"
+        },
+        {
+          "address": "0079a9a6",
+          "name": "BaseStation::SdkVehicleController::StopPlaybackSequence"
+        },
+        {
+          "address": "0079a9be",
+          "name": "BaseStation::SdkVehicleController::UnloadPlaybackSequence"
+        },
+        {
+          "address": "0079a9d6",
+          "name": "BaseStation::SdkVehicleController::GetPlaybackSequenceList"
+        },
+        {
+          "address": "0079ff20",
+          "name": "BaseStation::UIMessageHandler::UIMessageHandler"
+        },
+        {
+          "address": "0079ff90",
+          "name": "BaseStation::UIMessageHandler::HandleMessage"
+        },
+        {
+          "address": "0079ff94",
+          "name": "BaseStation::UIMessageHandler::Subscribe"
+        },
+        {
+          "address": "007afdfc",
+          "name": "BaseStation::VehicleInitSequence::VehicleInitSequence"
+        },
+        {
+          "address": "007afe18",
+          "name": "BaseStation::VehicleInitSequence::Start"
+        },
+        {
+          "address": "007aff3c",
+          "name": "BaseStation::VehicleInitSequence::ExecutePhase"
+        },
+        {
+          "address": "007b0080",
+          "name": "BaseStation::VehicleInitSequence::Update"
+        },
+        {
+          "address": "007b00a4",
+          "name": "BaseStation::VehicleInitSequence::DoNextPhase"
+        },
+        {
+          "address": "007b01a4",
+          "name": "BaseStation::VehicleInitSequence::ReceivedInitConfirmation"
+        },
+        {
+          "address": "007b01b8",
+          "name": "BaseStation::VehicleInitSequence::IsComplete"
+        },
+        {
+          "address": "007b01d2",
+          "name": "BaseStation::VehicleInitSequence::SendPing"
+        },
+        {
+          "address": "007b5040",
+          "name": "BaseStation::VehicleMessenger::VehicleMessenger"
+        },
+        {
+          "address": "007b5088",
+          "name": "BaseStation::VehicleMessenger::~VehicleMessenger"
+        },
+        {
+          "address": "007b50a8",
+          "name": "BaseStation::VehicleMessenger::~VehicleMessenger"
+        },
+        {
+          "address": "007b50cc",
+          "name": "BaseStation::VehicleMessenger::EnableDelocAutoRecoveryFilter"
+        },
+        {
+          "address": "007b5310",
+          "name": "BaseStation::VehicleMessenger::ProcessIncomingMessage"
+        },
+        {
+          "address": "007b666c",
+          "name": "BaseStation::VehicleMessenger::SendDelocalizationDASMessages"
+        },
+        {
+          "address": "007b6dfc",
+          "name": "BaseStation::VehicleMessenger::SendBatteryVoltageRequest"
+        },
+        {
+          "address": "007b6eb0",
+          "name": "BaseStation::VehicleMessenger::LogMessagingError"
+        },
+        {
+          "address": "007b70a8",
+          "name": "BaseStation::VehicleMessenger::SendCancelLaneChangeCommand"
+        },
+        {
+          "address": "007b7160",
+          "name": "BaseStation::VehicleMessenger::SendInitializeRoadNetworkV2"
+        },
+        {
+          "address": "007b79ac",
+          "name": "BaseStation::VehicleMessenger::SendDefaultRoadNetworkV2"
+        },
+        {
+          "address": "007b7ae8",
+          "name": "BaseStation::VehicleMessenger::SendLaneChangeCommand"
+        },
+        {
+          "address": "007b7bdc",
+          "name": "BaseStation::VehicleMessenger::SendPingRequest"
+        },
+        {
+          "address": "007b7c90",
+          "name": "BaseStation::VehicleMessenger::SendPlaybackSequenceToSlot"
+        },
+        {
+          "address": "007b7cb0",
+          "name": "BaseStation::VehicleMessenger::SendPlaybackSequenceToSlot"
+        },
+        {
+          "address": "007b7dc4",
+          "name": "BaseStation::VehicleMessenger::SendStartPlaybackSequence"
+        },
+        {
+          "address": "007b7e88",
+          "name": "BaseStation::VehicleMessenger::SendReadFlashRequestMessage"
+        },
+        {
+          "address": "007b7f48",
+          "name": "BaseStation::VehicleMessenger::SendWriteFlashData"
+        },
+        {
+          "address": "007b80e0",
+          "name": "BaseStation::VehicleMessenger::SendResetRadio"
+        },
+        {
+          "address": "007b8190",
+          "name": "BaseStation::VehicleMessenger::SendSetCarLogging"
+        },
+        {
+          "address": "007b8248",
+          "name": "BaseStation::VehicleMessenger::SendSetDelocalizedMode"
+        },
+        {
+          "address": "007b8304",
+          "name": "BaseStation::VehicleMessenger::SendSetVehicleSpecificParameters"
+        },
+        {
+          "address": "007b83cc",
+          "name": "BaseStation::VehicleMessenger::SendEnableSpecificV2BMessages"
+        },
+        {
+          "address": "007b8498",
+          "name": "BaseStation::VehicleMessenger::SendSetOffsetFromRoadCenterCommand"
+        },
+        {
+          "address": "007b8558",
+          "name": "BaseStation::VehicleMessenger::SendSetRoadPieceIdxCommand"
+        },
+        {
+          "address": "007b8614",
+          "name": "BaseStation::VehicleMessenger::SendSetTestMode"
+        },
+        {
+          "address": "007b86c8",
+          "name": "BaseStation::VehicleMessenger::SendTransitionBarExpected"
+        },
+        {
+          "address": "007b86cc",
+          "name": "BaseStation::VehicleMessenger::SendSetCarMode"
+        },
+        {
+          "address": "007b8784",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultRGBLights"
+        },
+        {
+          "address": "007b88dc",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultRGBLights"
+        },
+        {
+          "address": "007b8a40",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultGunLights"
+        },
+        {
+          "address": "007b8b48",
+          "name": "BaseStation::VehicleMessenger::SendSetDefaultTailLights"
+        },
+        {
+          "address": "007b8c7c",
+          "name": "BaseStation::VehicleMessenger::SendSetLights"
+        },
+        {
+          "address": "007b8d30",
+          "name": "BaseStation::VehicleMessenger::SendSetMaxDelocSpeed"
+        },
+        {
+          "address": "007b8df0",
+          "name": "BaseStation::VehicleMessenger::SendSetOffsetFromRoadCenterAdjustmentCommand"
+        },
+        {
+          "address": "007b8ebc",
+          "name": "BaseStation::VehicleMessenger::SendSetSpeedCommand"
+        },
+        {
+          "address": "007b8fe8",
+          "name": "BaseStation::VehicleMessenger::SendSkipAutoDriveInDeloc"
+        },
+        {
+          "address": "007b90a0",
+          "name": "BaseStation::VehicleMessenger::SendRelocalizationDASMessages"
+        },
+        {
+          "address": "007b9328",
+          "name": "BaseStation::VehicleMessenger::SendSDLogging"
+        },
+        {
+          "address": "007b940c",
+          "name": "BaseStation::VehicleMessenger::SendStatsRequest"
+        },
+        {
+          "address": "007b9540",
+          "name": "BaseStation::VehicleMessenger::SendStatsReset"
+        },
+        {
+          "address": "007b95f0",
+          "name": "BaseStation::VehicleMessenger::SendSetEnabledDASCategories"
+        },
+        {
+          "address": "007b96b0",
+          "name": "BaseStation::VehicleMessenger::SendTurn180Command"
+        },
+        {
+          "address": "007b9768",
+          "name": "BaseStation::VehicleMessenger::SendTurn90CommandAtNextIntersection"
+        },
+        {
+          "address": "007b9820",
+          "name": "BaseStation::VehicleMessenger::SendCancelAllOpenLoopTurnsCommand"
+        },
+        {
+          "address": "007b98dc",
+          "name": "BaseStation::VehicleMessenger::SendVersionRequest"
+        },
+        {
+          "address": "007b9990",
+          "name": "BaseStation::VehicleMessenger::SendStopOnTransition"
+        }
+      ]
+    },
+    {
+      "file": "native-receive.c",
+      "sha256": "03aeb385bf89169152b5301efcfda8c0d97801a9b67cc4532b551dad97bf960b",
+      "coverage": [
+        "// COVERAGE selected=47 completed=47 failed=0 cancelled=false"
+      ],
+      "decompiler_warning_comments": 15,
+      "functions": [
+        {
+          "address": "00541748",
+          "name": "Anki::DriveEngine::Vehicle::Vehicle"
+        },
+        {
+          "address": "005417c0",
+          "name": "Anki::DriveEngine::Vehicle::HandleVehicleMessage"
+        },
+        {
+          "address": "00544b08",
+          "name": "SafeUtilMsgPack"
+        },
+        {
+          "address": "00544b20",
+          "name": "SafeUtilMsgUnpack"
+        },
+        {
+          "address": "005450cc",
+          "name": "Anki::DriveEngine::GameService::GamePlayer::ResetVehicleConnectionState"
+        },
+        {
+          "address": "00546c14",
+          "name": "Anki::DriveEngine::Vehicle::Vehicle"
+        },
+        {
+          "address": "00546cec",
+          "name": "Anki::DriveEngine::Vehicle::RegisterResponderForMessageType"
+        },
+        {
+          "address": "00546cf8",
+          "name": "Anki::DriveEngine::Vehicle::UnregisterResponderForMessageType"
+        },
+        {
+          "address": "00547304",
+          "name": "Anki::DriveEngine::Vehicle::SendMessage"
+        },
+        {
+          "address": "0054755c",
+          "name": "Anki::DriveEngine::VirtualVehicle::CreateVirtualVehicleConnectionId"
+        },
+        {
+          "address": "00547598",
+          "name": "Anki::DriveEngine::Vehicle::Vehicle"
+        },
+        {
+          "address": "0054b060",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::VehicleConnectionMessage"
+        },
+        {
+          "address": "0054ba8c",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::VehicleConnectionMessage"
+        },
+        {
+          "address": "00553f94",
+          "name": "BaseStation::Vehicle::HandleSpeedUpdateFromMessage"
+        },
+        {
+          "address": "0055952c",
+          "name": "BaseStation::Vehicle::ParseOperatingMode"
+        },
+        {
+          "address": "00559a54",
+          "name": "BaseStation::Vehicle::SendUIStateMessages"
+        },
+        {
+          "address": "0055a2e8",
+          "name": "BaseStation::Vehicle::Vehicle"
+        },
+        {
+          "address": "0057401c",
+          "name": "Anki::DriveEngine::VehicleConnectionStateFromString"
+        },
+        {
+          "address": "005ef1fe",
+          "name": "Anki::DriveEngine::GameService::GamePlayer::ResetVehicleConnectionState"
+        },
+        {
+          "address": "0062e0a8",
+          "name": "Anki::DriveEngine::Vehicle::Vehicle"
+        },
+        {
+          "address": "0062e850",
+          "name": "Anki::DriveEngine::Vehicle::Vehicle"
+        },
+        {
+          "address": "0062ead8",
+          "name": "Anki::DriveEngine::Vehicle::EncodeToMessageData"
+        },
+        {
+          "address": "0062f3e0",
+          "name": "Anki::DriveEngine::Vehicle::SendMessage"
+        },
+        {
+          "address": "0062f482",
+          "name": "Anki::DriveEngine::Vehicle::SendMessageImp"
+        },
+        {
+          "address": "0062f828",
+          "name": "Anki::DriveEngine::Vehicle::RegisterResponderForMessageType"
+        },
+        {
+          "address": "0062f8c4",
+          "name": "Anki::DriveEngine::Vehicle::HandleVehicleStatusMessage"
+        },
+        {
+          "address": "0062f91c",
+          "name": "Anki::DriveEngine::Vehicle::UnregisterResponderForMessageType"
+        },
+        {
+          "address": "006301f8",
+          "name": "Anki::DriveEngine::Vehicle::GetResponderIndexForMessageType"
+        },
+        {
+          "address": "0063021c",
+          "name": "Anki::DriveEngine::Vehicle::HandleVehicleMessage"
+        },
+        {
+          "address": "00638bf0",
+          "name": "Anki::DriveEngine::VirtualVehicle::CreateVirtualVehicleConnectionId"
+        },
+        {
+          "address": "006390d6",
+          "name": "Anki::DriveEngine::VirtualVehicle::SendMessageImp"
+        },
+        {
+          "address": "0069295c",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::VehicleConnectionMessage"
+        },
+        {
+          "address": "006929c8",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::VehicleConnectionMessage"
+        },
+        {
+          "address": "00692a18",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::~VehicleConnectionMessage"
+        },
+        {
+          "address": "00692a40",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::~VehicleConnectionMessage"
+        },
+        {
+          "address": "00692a6c",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::WriteToBuffer"
+        },
+        {
+          "address": "00692bdc",
+          "name": "Anki::DriveEngine::VehicleConnectionMessage::ReadPayloadFromBuffer"
+        },
+        {
+          "address": "0069b8cc",
+          "name": "Java_com_anki_VehicleController_NativeOnVehicleConnectionDiscovered"
+        },
+        {
+          "address": "0069bbf8",
+          "name": "Java_com_anki_VehicleController_NativeOnVehicleConnectionDisappeared"
+        },
+        {
+          "address": "0069bde4",
+          "name": "Java_com_anki_VehicleController_NativeOnUpdateValueForToPhoneCharacteristic"
+        },
+        {
+          "address": "007a72a0",
+          "name": "BaseStation::Vehicle::Vehicle"
+        },
+        {
+          "address": "007a7624",
+          "name": "BaseStation::Vehicle::ParseOperatingMode"
+        },
+        {
+          "address": "007a7ea6",
+          "name": "BaseStation::Vehicle::SendUIStateMessages"
+        },
+        {
+          "address": "007a93c4",
+          "name": "BaseStation::Vehicle::HandleSpeedUpdateFromMessage"
+        },
+        {
+          "address": "00a2ce2c",
+          "name": "Anki::DriveEngine::VehicleConnectionStateFromString"
+        },
+        {
+          "address": "00a850bc",
+          "name": "SafeUtilMsgPack"
+        },
+        {
+          "address": "00a852bc",
+          "name": "SafeUtilMsgUnpack"
+        }
+      ]
+    }
+  ]
+}

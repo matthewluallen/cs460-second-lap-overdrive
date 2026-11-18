@@ -1,5 +1,10 @@
 # Optional worksheet investigation: two authorization weaknesses
 
+> **Status: repaired.** An operator can now read and add records only for their own team. Reading another team's record returns the same `No such record` answer as a missing record (CWE-639), and adding to another workgroup is refused (CWE-862).
+> The steps further down describe the original flawed baseline and are kept as
+> a record of what was investigated; on this branch they now end in a refusal.
+> See [SECURITY.md](../SECURITY.md) for the change list and the baseline commit.
+
 Complete the charging, connection and light activity first. Save the evidence
 page's traces and disconnect the car before this exercise. Open the separate
 [Support worksheet](worksheet.html) (`http://localhost:8000/worksheet.html`

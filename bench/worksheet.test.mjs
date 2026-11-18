@@ -23,11 +23,14 @@ test('MOCK standalone worksheet runs all forms without car controls and renders 
   vm.runInNewContext(script,context,{filename:'bench/worksheet.mjs'});
   const el=id=>elements.get(id);
   await el('list').onclick();assert.deepEqual(JSON.parse(el('out').textContent).map(x=>x.id),[101]);
-  el('rid').value='102';await el('read').onclick();assert.equal(JSON.parse(el('out').textContent).team,'blue');
+  el('rid').value='102';await el('read').onclick();assert.equal(el('out').textContent,'No such record');
+  el('rid').value='101';await el('read').onclick();assert.equal(JSON.parse(el('out').textContent).team,'red');
   const hostile='<img src=x onerror=alert(1)>';
   el('group').value='blue';el('entry').value=hostile;await el('add').onclick();
+  assert.match(el('out').textContent,/only for their own workgroup/);
+  el('group').value='red';await el('add').onclick();
   assert.equal(JSON.parse(el('out').textContent).note,hostile);
-  assert.equal(JSON.parse(el('out').textContent).team,'blue');
+  assert.equal(JSON.parse(el('out').textContent).team,'red');
   el('entry').value='';await el('add').onclick();assert.match(el('out').textContent,/1–160 characters/);
 });
 

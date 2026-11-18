@@ -23,27 +23,24 @@ function blockNetwork(require){
 function fixedExperiment(){
   const require=createRequire(import.meta.url);
   const networkAttempts=blockNetwork(require);
-  const express=require('express'),lodash=require('lodash');
-  const versions={express:require('express/package.json').version,lodash:require('lodash/package.json').version};
+  const express=require('express');
+  const versions={express:require('express/package.json').version};
 
-  // GHSA-p6mc-m468-83gw: a path to constructor.prototype reaches the shared
-  // prototype in this pinned release. The only value is a harmless fixed marker.
-  // https://github.com/advisories/GHSA-p6mc-m468-83gw
-  const prototypeBefore=Object.hasOwn(Object.prototype,marker);
-  if(prototypeBefore)throw Error('Expected a clean child-process prototype');
-  let prototypeDuring,inheritedValue,freshObjectOwnMarker;
-  try{
-    lodash.zipObjectDeep(['constructor.prototype.'+marker],[markerValue]);
-    prototypeDuring=Object.hasOwn(Object.prototype,marker);
-    const fresh={};inheritedValue=fresh[marker]??null;
-    freshObjectOwnMarker=Object.hasOwn(fresh,marker);
-  }finally{delete Object.prototype[marker];}
-  const prototypeAfter=Object.hasOwn(Object.prototype,marker);
+  // Lodash was removed: the server only needed a sort and a count. Confirm it
+  // is not resolvable, so GHSA-p6mc-m468-83gw and its siblings cannot apply.
+  let lodashInstalled=true;
+  try{require.resolve('lodash');}catch{lodashInstalled=false;}
 
-  // Adapted from Express's actual fixed-release regression case, changing only
-  // the domain names to reserved .example names. Call the installed location()
-  // method with an inert header receiver; do not serve or follow a redirect.
-  // https://github.com/expressjs/express/blob/04bc62787be974874bc1467b23606c36bc9779ba/test/res.location.js
+  // GHSA-qw6h-vgh9-j6wx family: nested query keys must not reach a prototype
+  // through Express's own configured parser. Fixed input, harmless marker.
+  const app=express();app.set('query parser','simple');
+  const parsed=app.get('query parser fn')('__proto__['+marker+']='+markerValue+'&constructor[prototype]['+marker+']='+markerValue);
+  const queryPolluted=Object.hasOwn(Object.prototype,marker)||({})[marker]!==undefined;
+  delete Object.prototype[marker];
+  const queryKeysLiteral=Object.keys(parsed).every(key=>typeof parsed[key]==='string');
+
+  // Express's own regression case for GHSA-rv95-896h-c2vc, with reserved
+  // .example names. Call location() with an inert receiver; nothing is served.
   // https://github.com/expressjs/express/security/advisories/GHSA-rv95-896h-c2vc
   const input='http://trusted.example\\@other.example';
   let location;
@@ -53,29 +50,32 @@ function fixedExperiment(){
   }},input);
   const inputHost=parseLegacyUrl(input,false,true).host;
   const locationHost=parseLegacyUrl(location,false,true).host;
+  const redirectReproduced=inputHost!==locationHost;
 
+  const reproduced=lodashInstalled||queryPolluted||!queryKeysLiteral||redirectReproduced;
   return {
-    source:'LOCAL DEPENDENCY EXPERIMENT',hardwareEvidence:false,
+    source:'LOCAL DEPENDENCY CHECK',hardwareEvidence:false,
     scope:'Fixed library calls in a fresh process; no server, browser, Bluetooth, or navigation.',
     versions,networkAttempts:networkAttempts(),
-    lodash:{case:'zipObjectDeep prototype marker',advisory:'GHSA-p6mc-m468-83gw',
-      prototypeBefore,prototypeDuring,prototypeAfter,inheritedValue,freshObjectOwnMarker,
-      reproduced:prototypeDuring&&inheritedValue===markerValue&&!freshObjectOwnMarker&&!prototypeAfter},
-    express:{case:'location header changes parsed host',advisory:'GHSA-rv95-896h-c2vc',
-      input,location,inputHost,locationHost,reproduced:inputHost==='trusted.example'&&locationHost==='other.example'},
-    limitation:'These library cases do not prove that ordinary platform endpoints expose either advisory. Other installed advisories are not exercised.'
+    lodash:{case:'vulnerable utility library removed',advisory:'GHSA-p6mc-m468-83gw',installed:lodashInstalled,reproduced:lodashInstalled},
+    query:{case:'nested query keys stay literal strings',prototypePolluted:queryPolluted,keysLiteral:queryKeysLiteral,
+      reproduced:queryPolluted||!queryKeysLiteral},
+    express:{case:'location header keeps the parsed host',advisory:'GHSA-rv95-896h-c2vc',
+      input,location,inputHost,locationHost,reproduced:redirectReproduced},
+    reproduced,regressionCheckPassed:!reproduced,
+    limitation:'Fixed checks for the advisories this project previously demonstrated. Use npm audit for the full dependency tree.'
   };
 }
 
 export function runDependencyLab(){
   // Do not inherit preload hooks or alternative package lookup paths into this
-  // fixed child. Importing this module never loads the vulnerable dependencies.
+  // fixed child.
   const env={...process.env};delete env.NODE_OPTIONS;delete env.NODE_PATH;
   const child=spawnSync(process.execPath,[filename,'--fixed-child'],{
     encoding:'utf8',env,timeout:timeoutMs,maxBuffer:maxOutputBytes,killSignal:'SIGKILL'
   });
   if(child.error)throw Error('Dependency experiment could not finish within its process/output limits: '+child.error.code);
-  if(child.status!==0)throw Error('Dependency experiment failed: '+child.stderr.trim().slice(0,1000));
+  if(child.status!==0&&child.status!==2)throw Error('Dependency experiment failed: '+child.stderr.trim().slice(0,1000));
   const result=JSON.parse(child.stdout);
   return {...result,processLimits:{timeoutMs,maxOutputBytes}};
 }
@@ -83,6 +83,8 @@ export function runDependencyLab(){
 if(process.argv[1]&&resolve(process.argv[1])===filename){
   try{
     if(process.argv.length>3||(process.argv[2]&&process.argv[2]!=='--fixed-child'))throw Error('This experiment accepts no input or options');
-    console.log(JSON.stringify(process.argv[2]==='--fixed-child'?fixedExperiment():runDependencyLab(),null,2));
+    const report=process.argv[2]==='--fixed-child'?fixedExperiment():runDependencyLab();
+    console.log(JSON.stringify(report,null,2));
+    if(report.reproduced)process.exitCode=2;
   }catch(error){console.error(error.message);process.exitCode=1;}
 }

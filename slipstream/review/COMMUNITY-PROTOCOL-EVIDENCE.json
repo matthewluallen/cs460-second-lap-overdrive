@@ -1,0 +1,387 @@
+{
+  "reviewDate": "2026-11-12",
+  "repositories": [
+    {
+      "repository": "https://github.com/MasterAirscrachDev/Anki-Partydrive",
+      "commit": "c2d161bfd47ee453aa343658e86fa2762e259354",
+      "reportedLicense": null,
+      "files": [
+        {
+          "path": "OverdriveServer/Bluetooth/BluetoothProviderFactory.cs",
+          "sha256": "a4831b93eb5913815786196cbb5e9bda5a25400cfd42ed3833dcff3e88338d86"
+        },
+        {
+          "path": "OverdriveServer/Bluetooth/CoreBluetoothProvider.cs",
+          "sha256": "a4f605153ac4c43595a4923fddaef11022b4c3b19f328814b89b2699040dc1fd"
+        },
+        {
+          "path": "OverdriveServer/Bluetooth/IBluetoothInterfaces.cs",
+          "sha256": "c04b1fddbb560696716658286a9fd44fed798ecf2ce77713051a53eaf00d1e7a"
+        },
+        {
+          "path": "OverdriveServer/Bluetooth/SimpleBLEProvider.cs",
+          "sha256": "48c12485ca88fa3c90c07b5591219446518329c92a0bd8588e3bb5ccfd3a1bed"
+        },
+        {
+          "path": "OverdriveServer/Bluetooth/UWPBluetoothProvider.cs",
+          "sha256": "acfad843cdc070d253a91f9c1d4300c4516665e041f8cd9b965d40ebfd696050"
+        },
+        {
+          "path": "OverdriveServer/BluetoothInterface.cs",
+          "sha256": "80c2c71ed51f67844830a7bdb0d79abbc54f54ceb8b9188c40bf26dd410c594d"
+        },
+        {
+          "path": "OverdriveServer/CarSystem.cs",
+          "sha256": "ba48facfdb713c92f504f9524f09a8df18223aa8d33ac09bad73bfd9603ec095"
+        },
+        {
+          "path": "OverdriveServer/ControlPanel/script.js",
+          "sha256": "bdfe3c39f75d8a3adcd63c82c63a520844ad62227a178820ebf54669dfa04014"
+        },
+        {
+          "path": "OverdriveServer/FileSuper.cs",
+          "sha256": "69a306c911fb71eb89ace439420f283e4b915a9b75199368a75c9e529e110504"
+        },
+        {
+          "path": "OverdriveServer/MacWindow.cs",
+          "sha256": "e807b49841fabd6029c8ff5575123813265d580e4a33674f5bca393542d5ac6c"
+        },
+        {
+          "path": "OverdriveServer/MessageManager.cs",
+          "sha256": "a6f61ed3dba15967c3ddbb1d39e582c2878419d3bc8717bd19f33d0c82bdb0f4"
+        },
+        {
+          "path": "OverdriveServer/NetDefinitions.cs",
+          "sha256": "7fb7246f8a258ff245e564a40a396302b77303c66f4e9997e6839ca2103d9ad6"
+        },
+        {
+          "path": "OverdriveServer/Overdrive BLE.md",
+          "sha256": "263d7669cdb94ebd0760af3c3026565d48cb275228738e015b6f06dc9bc829d1"
+        },
+        {
+          "path": "OverdriveServer/Overdrive Cars.md",
+          "sha256": "968e10a15d70ae2d19ee254b4221faac22feb77a3cac218a8b03a68202442bf2"
+        },
+        {
+          "path": "OverdriveServer/Program.cs",
+          "sha256": "b842c76ca2ef4d332e06b6465b6775bc22c29b475fdd1ce30d36dce285fdc9c2"
+        },
+        {
+          "path": "OverdriveServer/Protocol.cs",
+          "sha256": "4d9ba2fb8ffd343828331aaeb0405faccb489df755da43d44ff1025f04114bb3"
+        },
+        {
+          "path": "OverdriveServer/README.md",
+          "sha256": "f40b97bb645fe2010b4f7be36afd72dd32df67659de8be2e337837ec0b4773d2"
+        },
+        {
+          "path": "OverdriveServer/Tracking/Location.cs",
+          "sha256": "4ef558074d2df24b2cd09d96d00930d808343e10b2d8acb828fefc15561e6d7b"
+        },
+        {
+          "path": "OverdriveServer/Tracking/TrackManager.cs",
+          "sha256": "fda13b0d35c96bd6075b06f99bcdd20588178d1bcf3c2bb5ee020dde73496b01"
+        },
+        {
+          "path": "OverdriveServer/Tracking/TrackScanner.cs",
+          "sha256": "fa5c2f31d3d78e5b092b88e6bfbbf4a1fd75bc92dc5920e1b74f84bb5d7bcb00"
+        },
+        {
+          "path": "OverdriveServer/Tracking/Tracks.cs",
+          "sha256": "7c43235447263be287132735a17438b89e47ea0a96afd4231528a5f212a2cccb"
+        },
+        {
+          "path": "OverdriveServer/WebInterface.cs",
+          "sha256": "697189b62077b8b5e30292204259b9f2fcb89d36fdffb812c7047cabf942c14e"
+        },
+        {
+          "path": "OverdriveServer/WebsocketManager.cs",
+          "sha256": "65f03b6d621f0f9070c9f3a78397c78e49823e8a3175ec91957c0e2ddcc789a0"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/gravesjohnr/AnkiNodeDrive",
+      "commit": "91ef23d3ede63197e2a8da38bb91eb3511dafd01",
+      "reportedLicense": "GPL-3.0",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "87e32945f8aafa76aca17227c41d99bba6337783cd8e1b4e7de063af042df3da"
+        },
+        {
+          "path": "ankiNodeUtils.js",
+          "sha256": "c3c37ec75905b97835c507c62a6dba8ea6e0ac50d813af3119c28a714807fb01"
+        },
+        {
+          "path": "messageParse.js",
+          "sha256": "72bbea3fb0cc4a105988721346454efdecd91650205dbcac84330bdf05911acb"
+        },
+        {
+          "path": "server.js",
+          "sha256": "1264440aa7bec6bc962be24ac9db19e1f9fe0653f57c0ce08e2a6eb65db2e228"
+        },
+        {
+          "path": "trackMap.js",
+          "sha256": "0356488e06461dc8d5bc471a4d49c39435251cc24ebe1e6cb0281d371c165ce3"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/dschwen/OpenOverdrive",
+      "commit": "a7062464d87686ea09acf5892bb5b9a2d14c255c",
+      "reportedLicense": null,
+      "files": [
+        {
+          "path": "DESIGN.md",
+          "sha256": "b6cae548130ba76c66244aa9375a5384c3bea778ef32d06a74794efd62070419"
+        },
+        {
+          "path": "app/src/main/java/app/openoverdrive/BleProvider.kt",
+          "sha256": "98ebefbbbdb8e0aa3d54e45b58c889c9f0685f4f39551ffed2ba9262f1033e33"
+        },
+        {
+          "path": "core-ble/src/main/java/core/ble/AndroidBleClient.kt",
+          "sha256": "3721026229af539da32a36772c4a60269400d9b1a6b9e46b169671f2da30b1ab"
+        },
+        {
+          "path": "core-ble/src/main/java/core/ble/BleClient.kt",
+          "sha256": "38f0e57a063d8828dff179251f6cf7733d7def59dc8c18a4b1dedc39b899a877"
+        },
+        {
+          "path": "core-ble/src/main/java/core/ble/BleModels.kt",
+          "sha256": "cb60ff5e43dbe273fea2ffad185d30106956ad55e42d5ebdc01f1e7907f95be8"
+        },
+        {
+          "path": "core-protocol/src/main/java/core/protocol/VehicleProtocol.kt",
+          "sha256": "236edee0fee385a4fb303df5a61ea97e58b7a902d0fccab89d224d97da0fd74c"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/super-anki/anki-sdk",
+      "commit": "7cb97e683353be13bbbee5025b4370c5445138f5",
+      "reportedLicense": "MIT",
+      "files": [
+        {
+          "path": "src/ble/bluetooth.ts",
+          "sha256": "7f14a1c7d521ecd90bbe8e0e8b959912c1db68701a0598e1c9d9b5cce2999467"
+        },
+        {
+          "path": "src/ble/device.ts",
+          "sha256": "46c9b9f091ed3d061466b2a1e250647bff3d0eb180a74409068f020ceaad2b53"
+        },
+        {
+          "path": "src/ble/index.ts",
+          "sha256": "591cb6a1933cd5fa712f6b871cb11ae50cef8347d97779f8b815e675d2d7ed30"
+        },
+        {
+          "path": "src/car/car.ts",
+          "sha256": "a49b07515ce1774919bfb42f3a36361262b08f4ab03802f73de6a036e9d5716e"
+        },
+        {
+          "path": "src/car/index.ts",
+          "sha256": "3fee65e6d165ee26e7331d3cba97f69604e6b33f50a756561ca99d6e530053fd"
+        },
+        {
+          "path": "src/car/scanner.ts",
+          "sha256": "d5c5f9165da0d459e4b78cd6403c0bbaacc4bd0121a8b008b5862a0a78fc241e"
+        },
+        {
+          "path": "src/constants.ts",
+          "sha256": "7b0ab4c4caf57d0b8bcc084eb23eb2c73269a184fc81de7dc5436a0fde64cbe5"
+        },
+        {
+          "path": "src/index.ts",
+          "sha256": "cc9fa8d9291cab9951e1e8e480983d50f95b95e406b3c7cdfc5ff15d2fe62292"
+        },
+        {
+          "path": "src/message/builder.ts",
+          "sha256": "74964085c99ddbf9c6f84e99587a3ed44cc16be0be719045ab3b86996535210b"
+        },
+        {
+          "path": "src/message/index.ts",
+          "sha256": "4e82f4b5d370e5b767ce16ed3bdf530492f0aad8e53ebb7ed2e502f2bdea7a83"
+        },
+        {
+          "path": "src/message/message.ts",
+          "sha256": "7467d61c19e03b93363bbaab3c12df70d6658280c6264913051a6f90d5b81973"
+        },
+        {
+          "path": "src/message/request/battery-level.ts",
+          "sha256": "5a587d91ec0fe50a45388d877ce8e6390c52a0f59e5451ae153da200c829e60b"
+        },
+        {
+          "path": "src/message/request/cancel-lane-change.ts",
+          "sha256": "d098dba4418341360f035ccc10b7f4d71c4ba6fdf7c80c69efdfffb3b06919aa"
+        },
+        {
+          "path": "src/message/request/change-lane.ts",
+          "sha256": "7b53a5b9d29330054f4fe2ecdb7441d9143005a06841fb828b720267c951429a"
+        },
+        {
+          "path": "src/message/request/disconnect.ts",
+          "sha256": "e841c7d93af2f762e3d81eeb5fa1ecfd70f10ac87d6d6065b99131bc1ba2439a"
+        },
+        {
+          "path": "src/message/request/index.ts",
+          "sha256": "152231b8390b7601fcb7f88f278f41767e64af6a1119c8213989c7e67ada1596"
+        },
+        {
+          "path": "src/message/request/lights-pattern.ts",
+          "sha256": "ebf6febf4e999fc9045965ff5faa8c104e18d06364cfaa0fa1cec5a0221c9403"
+        },
+        {
+          "path": "src/message/request/lights.ts",
+          "sha256": "baa1d55068517513c4dd3fd8b1cbe00975a148fe812d1ebf910054f5f0550d6a"
+        },
+        {
+          "path": "src/message/request/offset-road-center.ts",
+          "sha256": "28a4b6c2070f694f937a23aa43f1f5e5076cf00fb7c45a9cad49dfeb65198090"
+        },
+        {
+          "path": "src/message/request/ping.ts",
+          "sha256": "c30f7e7e5d836fe6bb6e1b1b0550940b26f76cf0323053cd104ea6991171113d"
+        },
+        {
+          "path": "src/message/request/sdk-mode.ts",
+          "sha256": "fcea9d7832eef935154f1f8fa3baa208a3d54a5909b65fbd192e3aff2e6c3860"
+        },
+        {
+          "path": "src/message/request/speed.ts",
+          "sha256": "b987964210042f67faf8494827e4f80bfb65bc5004a08c9f967be6cf69ad5908"
+        },
+        {
+          "path": "src/message/request/turn.ts",
+          "sha256": "b2807bd8e1c92c58771e6eadead496a5337fc481cb6c1e433878771bf0d4ad00"
+        },
+        {
+          "path": "src/message/request/version.ts",
+          "sha256": "b80b1538fa2b0eeb4bee2696b6ce26109c3004dc0a39df4e63ab66455e3f23cb"
+        },
+        {
+          "path": "src/message/response/battery-level.ts",
+          "sha256": "322333e0f237d161837de99aa4e724134c0123ab29ac5a299b91da8c478505b0"
+        },
+        {
+          "path": "src/message/response/collision.ts",
+          "sha256": "cf59d34a101ff3e1e98619e0dd856e8c8eac612183ce6db3281bdcc788975b01"
+        },
+        {
+          "path": "src/message/response/cycle-overtime.ts",
+          "sha256": "158ffe0855d15cf071cc1d1a7784844374e0ef4557bd2f1c81352d7f217a8f6e"
+        },
+        {
+          "path": "src/message/response/delocalized.ts",
+          "sha256": "fcea829a28d16ba02046aba51c2d6fa7dd1392ed77e460ef1c7a6d2372a42632"
+        },
+        {
+          "path": "src/message/response/index.ts",
+          "sha256": "40866940b60f576fe570e59bffbac46b4d01bea12f6c8a24583542b1686ea530"
+        },
+        {
+          "path": "src/message/response/intersection-update.ts",
+          "sha256": "77e2dc020fada24641987b6d440d0a7a43a323ef094a1c03cf05cfea940e3e40"
+        },
+        {
+          "path": "src/message/response/offset-road-center.ts",
+          "sha256": "1a8daf3a17e812342a92465c41e2199585a359f6f60db571abf68e49f5ae26fc"
+        },
+        {
+          "path": "src/message/response/ping.ts",
+          "sha256": "78a10e5972dca23d5399e41a8a01ac87b4ec0f66cfa1446c34bba42f2f755053"
+        },
+        {
+          "path": "src/message/response/position-update.ts",
+          "sha256": "d5cbfd1151b9c0a418ddbcb445fbeb1a20f39d43db8c79c7c7e5b799451a8e9a"
+        },
+        {
+          "path": "src/message/response/status.ts",
+          "sha256": "e4c3556a12af624f44713ce83ec65b7e2ce4437601009a3bfdc67b07e38f69a8"
+        },
+        {
+          "path": "src/message/response/transition-update.ts",
+          "sha256": "00d71f8e2dd95513afa562ecd938c2eb1c780fd77b9d8982f2d52249ed9fcf2d"
+        },
+        {
+          "path": "src/message/response/version.ts",
+          "sha256": "ae00d168fb47702976f05a1ca03d3b82f369b975d60d3f293f8fee4f8fdb3d62"
+        },
+        {
+          "path": "src/store/cars.ts",
+          "sha256": "1429472685404132c8e57c9edc60ad254f9d346fc8ba4a43e586b709cf98e49e"
+        },
+        {
+          "path": "src/track/index.ts",
+          "sha256": "e76b853ddb309ab9a75a1f04dcce6884289706683cd2b870b6779d866aa09e07"
+        },
+        {
+          "path": "src/track/piece.ts",
+          "sha256": "92323b3ba6e702e99f822876c0a944a6c8a0dd8e7b7109a5e66de1a3a3e408da"
+        },
+        {
+          "path": "src/track/scanner.ts",
+          "sha256": "a4f75e240987face657f9262fa8b6e6bd1d976f1596f5b04ca636b5ae949fabf"
+        },
+        {
+          "path": "src/types.ts",
+          "sha256": "c19431c5d6cbd50cef415de669a2c801588a94b005f629add6d00ebf214cc621"
+        },
+        {
+          "path": "src/utils.ts",
+          "sha256": "27fc0c927640d8ab0e75f0f6f75509cbb0eacd76612f5929dc223628c47523eb"
+        }
+      ]
+    }
+  ],
+  "recordedHardware": [
+    {
+      "fixture": "mxt-short-transitions.json",
+      "frameCounts": {
+        "0x29/8bytes": 32,
+        "0x1b/4bytes": 6,
+        "0x36/4bytes": 1
+      },
+      "laneChangeObservations": []
+    },
+    {
+      "fixture": "mxt-app-init-link-loss.json",
+      "frameCounts": {
+        "0x86/12bytes": 21,
+        "0x1b/4bytes": 10,
+        "0x17/2bytes": 5,
+        "0x19/6bytes": 1,
+        "0x36/4bytes": 1
+      },
+      "laneChangeObservations": []
+    },
+    {
+      "fixture": "groundshock-app-init-timeout.json",
+      "frameCounts": {
+        "0x3f/6bytes": 1,
+        "0x86/12bytes": 1,
+        "0x17/2bytes": 5,
+        "0x19/6bytes": 1,
+        "0x23/4bytes": 1,
+        "0x1b/4bytes": 1,
+        "0x41/15bytes": 1
+      },
+      "laneChangeObservations": [
+        {
+          "timeMs": 62735,
+          "currentOffsetMm": 654321.0,
+          "targetOffsetMm": 654321.0,
+          "raw": "0e 41 10 bf 1f 49 10 bf 1f 49 00 00 00 00 80"
+        }
+      ]
+    }
+  ],
+  "nativeExport": {
+    "script": "ExportOffsetDiscovery.java",
+    "librarySHA256": "0eef63a8135f4cfe7bb16b4effa1f720192cc2c1f340d0c8c8f0c2b9835f3d7f",
+    "selected": 29,
+    "completed": 29,
+    "failed": 0,
+    "exportSHA256": "250c0741f91bde8b2f6e7c4261ac052e0f560b13ba237dc7d10cee7d2d1480f6"
+  }
+}

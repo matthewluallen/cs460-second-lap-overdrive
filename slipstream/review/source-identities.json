@@ -1,0 +1,76 @@
+{
+  "reviewDate": "2026-11-12",
+  "download": "https://assets.anki.bot/anki-apks/Overdrive.zip",
+  "artifacts": [
+    {
+      "path": "Overdrive.zip",
+      "bytes": 194592577,
+      "sha256": "5b3746e8fc25889968d17d3a5fadf78edf51ebff99cd59488e3f09c37ae8c62e"
+    },
+    {
+      "path": "Overdrive/1502.apk",
+      "bytes": 22327418,
+      "sha256": "b38cfb62e99b7d530f8a58da74cf6ba3cd62c88a426707e3022cdbb05ab97155"
+    },
+    {
+      "path": "Overdrive/obb_type_main.1502.obb",
+      "bytes": 171924068,
+      "sha256": "9af1b668ecb086740a0e380b281b22454a3942ed8dab10baeedfd879abccc4fc"
+    },
+    {
+      "path": "Overdrive/obb_type_patch.1502.obb",
+      "bytes": 21226791,
+      "sha256": "a1c959caa2c5fea49923b1c958d1521c6ebba0f1e09ea78c7f9d419922785d9a"
+    },
+    {
+      "path": "apk/lib/armeabi-v7a/libDriveEngine.so",
+      "bytes": 15537284,
+      "sha256": "88bbb08b2226826d599cffde4b60c693ab460ae86f7e25eed5c862b615887778"
+    }
+  ],
+  "repositories": [
+    {
+      "repository": "https://github.com/anki/drive-sdk.git",
+      "commit": "410352617b8660338746a6bb2b2dd173afb1b91a"
+    },
+    {
+      "repository": "https://github.com/Leicas/overdrive-arena.git",
+      "commit": "ff03e265e77be237c329a512b92b6fb579abbeb9"
+    },
+    {
+      "repository": "https://github.com/dschwen/OpenOverdrive.git",
+      "commit": "a7062464d87686ea09acf5892bb5b9a2d14c255c"
+    },
+    {
+      "repository": "https://github.com/jtg-code/anki-overdrive-windows-sdk.git",
+      "commit": "2eae856ff20f78c5079778bfd05e9f8fd5bd1e3e"
+    },
+    {
+      "repository": "https://github.com/praneet22/Anki-Overdrive-Python.git",
+      "commit": "8e54c89210753d541f700387945b5e1d7314fe9b"
+    },
+    {
+      "repository": "https://github.com/andy008/AnkiOverDriveJS.git",
+      "commit": "3e131303de85e1b2db9da2118e3031c0eb42935f"
+    },
+    {
+      "repository": "https://github.com/gravesjohnr/AnkiNodeDrive.git",
+      "commit": "91ef23d3ede63197e2a8da38bb91eb3511dafd01"
+    },
+    {
+      "repository": "https://github.com/morluto/rea.git",
+      "commit": "a8527d43b8439476f5c9d1497315dfe7dd5e1f38"
+    },
+    {
+      "repository": "https://github.com/MasterAirscrachDev/Anki-Partydrive",
+      "commit": "c2d161bfd47ee453aa343658e86fa2762e259354",
+      "scope": "Targeted raw CarSystem.cs and Protocol.cs inspection; no full clone"
+    }
+  ],
+  "tools": {
+    "jadx": "1.5.3",
+    "ghidra": "12.2",
+    "java": "OpenJDK 25.0.2"
+  },
+  "scope": "Static inspection only. Hash equality identifies bytes, not authenticity or hardware compatibility."
+}

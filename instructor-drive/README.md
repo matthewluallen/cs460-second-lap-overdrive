@@ -124,3 +124,7 @@ Complete this record for **one specifically identified car** before student acce
 - [ ] Instructor reviews residual browser/link-loss risk, signs this exact setup, and separately approves any student release. Leave LIVE unpublished until then.
 
 A failed item is an investigation result, not permission to raise the speed, remove a gate, flash firmware or switch to a guessed packet format.
+
+Slipstream likewise marks Fast & Furious IDs 53, 54 and 57 special/unverified and
+blocks scored rounds on maps containing them. Neither controller certifies their
+geometry or Power Zone behavior.

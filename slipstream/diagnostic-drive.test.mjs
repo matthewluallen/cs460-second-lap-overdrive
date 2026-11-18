@@ -1,0 +1,102 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {Game} from './game.mjs';
+const data=n=>JSON.parse(readFileSync(new URL('./data/'+n+'.json',import.meta.url)));
+const settle=()=>new Promise(r=>setImmediate(r));
+async function rig(){
+ let now=0;const timers=[];
+ const game=new Game({pieces:data('pieces'),weapons:data('weapons'),vehicles:data('vehicles'),clock:()=>now,schedule:(fn,ms)=>{const t={fn,ms};timers.push(t);return t;},unschedule:t=>{t.cancelled=true;}});
+ let notify;const radio={sent:[],onNotify(fn){notify=fn;return()=>{};},async write(b){await radio.block?.();radio.sent.push([...b]);},close(){},emit(b){notify(Uint8Array.from(b));}};
+ const driver=game.addCar(radio,{control:'browser'});await settle();game.stopAll();await settle();radio.emit([3,0x1b,0,16]);
+ return {game,driver,radio,timers,time:t=>now=t};
+}
+const speeds=r=>r.sent.filter(b=>b[1]===0x24).map(b=>b[2]+256*b[3]);
+test('diagnostic deadline stops without animation ticks and never resumes stale inputs',async()=>{
+ const {game,driver,radio,timers}=await rig();game.startDiagnostic(driver);await settle();
+ assert.equal(driver.car.speed,150);assert.equal(game.halted,true);assert.equal(timers[0].ms,500);
+ driver.input={throttle:1,lane:45,attack:true};game.tick(.1,100);assert.equal(driver.car.speed,150);
+ timers[0].fn();await settle();assert.equal(driver.car.speed,0);assert.equal(game.diagnostic,null);
+ game.tick(.1,1000);await settle();assert.deepEqual(speeds(radio).slice(-2),[150,0]);assert.equal(driver.armed,false);
+ assert.equal(radio.sent.some(b=>[0x25,0x2c].includes(b[1])),false);
+});
+test('manual STOP and late deadline cannot restart diagnostic or a subsequent session',async()=>{
+ const {game,driver,radio,timers}=await rig();game.startDiagnostic(driver);await settle();game.stopAll();await settle();
+ const count=radio.sent.length;timers[0].fn();await settle();assert.equal(radio.sent.length,count);assert.equal(driver.car.speed,0);
+});
+test('deadline discards pending motion behind a delayed write',async()=>{
+ const {game,driver,radio,timers}=await rig();let release;let first=true;
+ radio.block=()=>{if(first){first=false;return new Promise(r=>release=r);}};
+ game.startDiagnostic(driver);await settle();timers[0].fn();release();await settle();
+ assert.equal(speeds(radio).includes(150),false);assert.equal(speeds(radio).at(-1),0);
+});
+test('diagnostic refuses stale battery and recent charger/low-battery reports',async()=>{
+ const {game,driver,radio,time}=await rig();time(30001);assert.throws(()=>game.startDiagnostic(driver),/Refresh/);
+ radio.emit([3,0x1b,0,16]);radio.emit([5,0x3f,0,1,0,0]);assert.throws(()=>game.startDiagnostic(driver),/charging/);
+ radio.emit([5,0x3f,0,0,1,0]);assert.throws(()=>game.startDiagnostic(driver),/low battery/);
+ assert.equal(driver.car.speed,0);
+});
+test('collision during diagnostic stops and latches shared pit',async()=>{
+ const {game,driver,radio}=await rig();game.startDiagnostic(driver);await settle();radio.emit([3,0x4d,1,0]);await settle();
+ assert.match(game.pitReason,/Collision during diagnostic/);assert.equal(driver.car.speed,0);assert.equal(game.diagnostic,null);
+ assert.throws(()=>game.startDiagnostic(driver),/clear the pit/);
+});
+test('driver reassignment cancels diagnostic and cannot restart from its timer',async()=>{
+ const {game,driver,timers}=await rig();game.startDiagnostic(driver);await settle();game.setControl(driver,'bot');timers[0].fn();game.tick(.1,1000);await settle();assert.equal(driver.car.speed,0);assert.equal(driver.cpuArmed,false);
+});
+test('diagnostics preserve independent battery and status sample ages',async()=>{
+ const {driver,radio,time}=await rig();time(100);radio.emit([5,0x3f,0,0,1,0]);time(1000);
+ const d=driver.car.diagnostics();assert.equal(d.batteryAgeMs,1000);assert.equal(d.statusAgeMs,900);assert.equal(d.status.lowBattery,true);assert.equal(d.positionAgeMs,null);
+ d.status.lowBattery=false;assert.equal(driver.car.status.lowBattery,true);
+});
+
+test('optical telemetry during straight diagnostic cannot trigger automatic offset writes',async()=>{
+ const {game,driver,radio}=await rig();game.startDiagnostic(driver);await settle();
+ radio.emit([16,0x27,0x0e,0x12,0x10,0xbf,0x1f,0x49,0x3d,1,7,0xff,0xff,0,0,0x2c,1]);await settle();
+ assert.equal(driver.car.telemetry.positions,1);
+ assert.equal(radio.sent.some(b=>[0x25,0x2c].includes(b[1])),false);
+ game.stopAll();await settle();
+});
+
+test('expired clock rejects motion even when transport completion beats timer callback',async()=>{
+ const {game,driver,radio,time}=await rig();let release,first=true;
+ radio.block=()=>{if(first){first=false;return new Promise(r=>release=r);}};
+ game.startDiagnostic(driver);await settle();time(600);release();await settle();await settle();
+ assert.equal(speeds(radio).includes(150),false);
+ assert.equal(driver.car.speed,0);
+});
+test('aging cannot clear a known low-battery or charger warning',async()=>{
+ for(const flag of [[0,1],[1,0]]){
+  const {game,driver,radio,time}=await rig();radio.emit([5,0x3f,0,...flag,0]);time(30001);radio.emit([3,0x1b,0,16]);
+  assert.throws(()=>game.startDiagnostic(driver),/charging or low battery/);
+ }
+});
+
+// Hardware capture includes an earlier pulse; replay only the batch attempt.
+test('Groundshock batch capture latches pit at 339 ms and refuses remaining pulses',async()=>{
+ const trace=JSON.parse(readFileSync(new URL('./fixtures/groundshock-sdk-batch-collision.json',import.meta.url)));
+ const {game,driver,radio,time,timers}=await rig();
+ game.startDiagnostic(driver);await settle();
+ const start=462647;
+ for(const [at,,direction,hex] of trace.events){
+  if(at<start || direction!=='rx')continue;
+  time(at-start);radio.emit(hex.split(' ').map(b=>parseInt(b,16)));await settle();
+  if(at===462986){
+   assert.equal(driver.car.speed,0);assert.match(game.pitReason,/Collision during diagnostic/);
+   assert.equal(game.diagnostic,null);
+  }
+ }
+ timers[0].fn();await settle();
+ assert.throws(()=>game.startDiagnostic(driver),/clear the pit/);
+ assert.deepEqual(speeds(radio).filter(v=>v>0),[150]);
+ assert.equal(speeds(radio).at(-1),0);
+ assert.equal(driver.car.telemetry.positions,0);
+});
+
+test('collision freshness remains separate from optical localization and physical impact',async()=>{
+ const {driver,radio,time}=await rig();assert.equal(driver.car.diagnostics().collisionAgeMs,null);
+ time(200);radio.emit([3,0x4d,1,0]);time(900);
+ const d=driver.car.diagnostics();assert.equal(d.collisionAgeMs,700);assert.equal(d.collisions,1);
+ assert.equal(d.lastCollision.wasSideOnCollision,true);assert.equal(d.lastCollision.wasFrontBackCollision,false);
+ assert.equal(d.positions,0);assert.equal(d.positionAgeMs,null);assert.equal(d.physicalStopVerified,false);
+});
