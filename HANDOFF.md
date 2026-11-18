@@ -1,4 +1,12 @@
-# Latest: Guardian completed three forward laps — 18 November 2026
+# Latest: relative lane controls repaired; Guardian steering pending
+
+Before the authorized left/right tests, review reproduced a manual target-selection defect: after forward-only driving, the first browser/keyboard nudge could use the stale zero steering target rather than Guardian's measured +22.5 mm lane. The fix anchors the first physical discrete nudge to fresh current-drive optical evidence; later explicit nudges may accumulate only within that drive. Missing/stale evidence refuses the press instead of queuing delayed motion. STOP invalidates discrete intent. The separate battle-effect relative helper is unchanged and remains unaccepted on hardware.
+
+Both **Clear track · one left-lane test** and **Clear track · one right-lane test** now use the same existing gates, countdown, 300 mm/s ceiling, single request and automatic STOP. Direction is recorded and shown in the HUD. No firmware encoding, watchdog, arming or cancellation policy changed. Guardian must begin near the entrance of the long ordinary straight on a printed lane with room in the test direction; start/finish is not an ordinary-straight diagnostic code. Browser reconnection after reload is still required. No new physical steering result is claimed. Read [the reproduction and acceptance scope](slipstream/review/RELATIVE-LANE-CONTROLS.md).
+
+Validation: **780/780 Node tests on Node 22.23.5**, **38/38 Python tests**, CWE/dependency checks pass; npm audit reports zero vulnerabilities. The focused host suite also passes **111/111 on Node 25.6.1**. Trace build is `2026-11-18-relative-steering`. Guardian's accepted scan and three forward laps below remain the physical baseline.
+
+# Previous: Guardian completed three forward laps — 18 November 2026
 
 After the accepted scan below, Guardian completed the separately authorized **Supervised · 3 forward laps** check in Classic SDK mode at a requested **300 mm/s**. The operator confirms **stopped; all laps stayed on track without spinning**. The unchanged runtime `84f799c` reacquired an unambiguous map reference, counted three full laps, then sent automatic STOP after 36.310 seconds of commanded forward driving. The run added 52 positions and 29 transitions, one ordinary optical calibration, and no lane/turn requests, recovery or off-road messages. Guardian is now Parked and stopped.
 

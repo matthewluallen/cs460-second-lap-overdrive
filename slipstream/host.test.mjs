@@ -511,7 +511,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-scan-recovery');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-relative-steering');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
@@ -624,4 +624,31 @@ test('scan status reports a complete simulated map and retains only that attempt
   assert.equal(h.run('scanAttempt.transitions'),h.run('game.drivers[0].car.telemetry.transitions-7'));
   const result=h.node('scanStatus').textContent;
   h.run('game.drivers[0].car.telemetry.positions++;refresh()');assert.equal(h.node('scanStatus').textContent,result,'late telemetry does not revise a completed scan');
+});
+
+for(const [side,direction] of [['left',1],['right',-1]])test('host '+side+'-lane diagnostic preserves selected car, direction and three-second countdown',async()=>{
+  const h=host();h.node('addSim').click();h.node('addSim').click();await settle();
+  h.run("game.useTrack(world.track);game.stopAll();recorder.start(game.drivers,'Directional host test');const diagnosticCalls=[];const testDiagnosticStart=game.startDiagnostic.bind(game);game.startDiagnostic=(d,options)=>{diagnosticCalls.push({id:d.id,...options});return testDiagnosticStart(d,options);}");
+  h.run("cards.get(game.drivers[1]).card.children.find(n=>n.textContent==='Clear track · one "+side+"-lane test').click()");
+  assert.equal(h.run('countdown.direction'),direction);assert.equal(h.run('countdown.driverId'),2);
+  assert.equal(h.run('game.drivers.every(d=>d.car.speed===0)'),true);
+  assert.match(h.node('roundTitle').textContent,new RegExp('One '+side+'-lane test'));
+  assert.match(h.node('roundGoal').textContent,new RegExp('One '+side+' request only after a fresh readable straight code'));
+  assert.equal(h.run("recorder.markers.find(m=>m.kind==='diagnostic-request').details.direction"),direction);
+  assert.equal(h.run('diagnosticCalls.length'),0);h.tick(2999);await settle();assert.equal(h.run('diagnosticCalls.length'),0);
+  h.tick(3001);await settle();
+  try {
+    assert.deepEqual(JSON.parse(h.run('JSON.stringify(diagnosticCalls)')),[{id:2,steering:true,direction}]);
+    assert.equal(h.run('game.diagnostic.driver.id'),2);assert.equal(h.run('game.diagnostic.direction'),direction);
+    assert.equal(h.run('game.drivers[0].car.speed'),0);assert.equal(h.run('game.drivers[1].car.speed'),300);
+    h.tick(3200);await settle();assert.match(h.node('roundTitle').textContent,new RegExp('One '+side+'-lane test'));
+  }finally{h.node('stop').click();}
+});
+
+test('STOP cancels a right-lane diagnostic countdown without invoking a driver',async()=>{
+  const h=host();h.node('addSim').click();await settle();h.run('game.useTrack(world.track);game.stopAll();');
+  h.run("cards.get(game.drivers[0]).card.children.find(n=>n.textContent==='Clear track · one right-lane test').click()");
+  h.node('stop').click();h.tick(4000);await settle();
+  assert.equal(h.run('countdown'),null);assert.equal(h.run('game.diagnostic'),null);
+  assert.equal(h.run('game.drivers[0].car.speed'),0);assert.equal(h.run('game.halted'),true);
 });

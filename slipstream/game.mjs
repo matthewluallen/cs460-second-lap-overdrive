@@ -1,6 +1,6 @@
 // Game orchestration with no DOM: drivers, scanning, battle and the control loop.
 import {Car, LANE_STEP} from './car.mjs';
-import {Pieces, Track, TrackMapper, traversal, trackFromPlan, LANE_LIMIT} from './track.mjs';
+import {Pieces, Track, TrackMapper, traversal, trackFromPlan, LANE_LIMIT, POSITION_MAX_AGE_MS} from './track.mjs';
 import {Battle, Bot, loadout} from './battle.mjs';
 
 export const MAX_CARS = 4;
@@ -58,7 +58,11 @@ export class Game {
     driver.bot = control === 'bot' && this.battle ? new Bot(driver.car, this.battle) : null;
   }
   #message(driver, message) {
-    if (message.type==='hostStopped') { if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll(); return; }
+    if (message.type==='hostStopped') {
+      if(driver.laneNudge){driver.input.lane=null;driver.laneNudge=null;}
+      if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll();
+      return;
+    }
     if (this.forwardBaseline?.driver===driver) {
       const now=this.clock();
       if (now>=this.forwardBaseline.until) { this.requestPit(driver,'Forward baseline time budget exceeded'); return; }
@@ -93,13 +97,13 @@ export class Game {
     if (trial?.steering && trial.driver===driver && message.type==='position' && !trial.laneRequested) {
       const now=this.clock(), car=driver.car, definition=this.pieces.get(message.pieceId);
       const spot=definition?.kind==='straight' && !definition.unverified ? this.pieces.locate(message.pieceId,message.locationId,message.reverse) : null;
-      const target=spot ? spot.lateral+LANE_STEP : Infinity;
+      const target=spot ? spot.lateral+trial.direction*LANE_STEP : Infinity;
       if (now>trial.started && now<trial.until && trial.until-now>=750 && message.speed>0 && spot && (1-spot.progress)*definition.length>=250 && Math.abs(target)<=LANE_LIMIT && car.lateralEstimate?.source==='printed-code' && car.lateralEstimate.at===now) {
         // Commit the single attempt before any queued write can produce a reply.
         trial.laneRequested=true; trial.until=Math.min(trial.until,now+750); car.diagnosticUntil=trial.until;
         trial.laneTimer=this.schedule(()=>{if(this.diagnostic===trial){this.stopAll();this.log('Steering test completed: STOP requested; confirm physical stop');}},trial.until-now);
         if (!car.steerDiagnosticOnce(target)) { this.stopAll(); this.log('Steering test stopped: lane request unavailable'); return; }
-        this.log('Steering test: one left request from fresh printed lane '+spot.lateral+' to '+target+' mm');
+        this.log('Steering test: one '+(trial.direction===1?'left':'right')+' request from fresh printed lane '+spot.lateral+' to '+target+' mm');
       }
     }
     if (this.phase === 'scanning' && driver === this.scanner) {
@@ -377,7 +381,8 @@ export class Game {
   }
   // One supervised pulse, bounded independently of the animation/control loop.
   // This is a host deadline, never a guarantee across suspension or BLE loss.
-  startDiagnostic(driver, {steering=false} = {}) {
+  startDiagnostic(driver, {steering=false,direction=1} = {}) {
+    if(direction!==1 && direction!==-1)throw new Error('Steering direction must be +1 (left) or -1 (right)');
     if (this.forwardBaseline || this.laneCancellationComparison || this.diagnostic || this.pitReason || this.phase === 'scanning' || this.battle?.active) throw new Error('Stop and clear the pit before a diagnostic');
     if (!this.drivers.includes(driver) || !driver.car.connected || driver.car.initializing || driver.car.faulted || driver.car.closing) throw new Error('Car is not ready');
     if (this.drivers.some(d => d.car.speed > 0)) throw new Error('Stop all cars first');
@@ -388,14 +393,14 @@ export class Game {
     if (d.status.onCharger || d.status.lowBattery) throw new Error('Car reports charging or low battery');
     this.stopAll(); c.recover();
     const duration=steering?4000:500;
-    const pulse = {driver, steering:!!steering, started:this.clock(), until:this.clock()+duration, timer:null, laneTimer:null, laneRequested:false};
+    const pulse = {driver, steering:!!steering, direction, started:this.clock(), until:this.clock()+duration, timer:null, laneTimer:null, laneRequested:false};
     this.diagnostic = pulse; c.diagnosticMotion = true; c.diagnosticSteering=!!steering; c.diagnosticLaneSent=false; c.diagnosticUntil = pulse.until;
     pulse.timer = this.schedule(() => {
       if (this.diagnostic !== pulse) return;
       this.stopAll(); this.log('Diagnostic deadline: STOP requested; confirm physical stop');
     },duration);
     c.setSpeed(Math.min(steering?300:150,this.topSpeed));
-    this.log(steering?'Experimental steering test: at most 300 mm/s, 4 s total; one left request only after a fresh ordinary straight code; raw collision packets follow ordinary driving policy':'Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');
+    this.log(steering?'Experimental steering test: at most 300 mm/s, 4 s total; one '+(direction===1?'left':'right')+' request only after a fresh ordinary straight code; raw collision packets follow ordinary driving policy':'Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');
   }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
@@ -471,8 +476,29 @@ export class Game {
   }
   // Discrete controls shared by keyboard, gamepad and phone pads.
   nudge(driver, direction) {
+    if(direction!==1 && direction!==-1)return false;
+    const car=driver.car;
+    if(!car.simulated && ['sdk','fast-furious'].includes(car.transport.initializationProfile)) {
+      const reference=car.physicalLaneReference,now=this.clock();
+      // Every physical keypress needs a current optical basis. Reject an early
+      // keypress rather than leaving a new maneuver to run on some later code.
+      if(this.halted || car.initializing || car.safetyReason || car.closing || car.faulted || !car.connected ||
+          car.steeringLocked || car.maneuversLocked || car.diagnosticMotion || car.speed<=0 ||
+          !reference || reference.epoch!==car.driveEpoch || !Number.isFinite(reference.lateral) ||
+          !Number.isFinite(reference.at) || !Number.isFinite(car.motionSince) || reference.at<car.motionSince ||
+          now<reference.at || now-reference.at>POSITION_MAX_AGE_MS)return false;
+      // Only this driver's deliberate same-epoch nudges supply a pending target.
+      // Cached Car targets or lane values from another controller are not facts
+      // about the car's present lane after a scan, STOP or forward-only run.
+      const pending=driver.laneNudge;
+      const anchor=pending?.epoch===car.driveEpoch && pending.target===driver.input.lane ? pending.target : reference.lateral;
+      const target=anchor+direction*LANE_STEP;
+      if(!Number.isFinite(target) || Math.abs(target)>LANE_LIMIT)return false;
+      driver.input.lane=target;driver.laneNudge={epoch:car.driveEpoch,target};return true;
+    }
     const lanes = Math.round((driver.input.lane ?? driver.car.targetLateral) / LANE_STEP) + direction;
     driver.input.lane = Math.max(-3, Math.min(3, lanes)) * LANE_STEP;
+    return true;
   }
   snapshot(now = this.clock()) {
     return this.drivers.map(d => {
