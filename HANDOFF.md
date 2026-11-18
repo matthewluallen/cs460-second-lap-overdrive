@@ -1,4 +1,12 @@
-# Latest: relative lane controls repaired; Guardian steering pending
+# Latest: short Guardian trial sent no steering; diagnostic health stop repaired
+
+On `a028e4e`, Guardian's authorized short left test read finish 33 and curves 17/20, not the ordinary straight required by the steering gate. **No lane, offset or turn request was sent.** The operator confirms physically stopped and only halfway around; this was the four-second diagnostic, not a full-lap run. A low-battery status arrived 359 ms after positive speed, but the old diagnostic waited until its deadline to stop. The immutable capture and separate repaired replay are documented in [the trial report](slipstream/review/RELATIVE-LANE-CONTROLS.md#first-short-guardian-trial-no-lane-request).
+
+Straight and steering diagnostics now invoke the existing shared-pit STOP immediately when their active car reports low battery or charging. No voltage threshold, firmware command, speed ceiling or timeout changed. A steering deadline with no eligible code now explicitly reports that no lane request was sent. **789/789 Node tests pass on Node 22.23.5**; the eight new health/replay tests reproduced six failures before repair. The 38 Python tests, CWE/dependency checks and zero-vulnerability audit also passed during this repair session. Trace build: `2026-11-18-diagnostic-health`.
+
+Guardian is physically confirmed stopped and disconnected from the controller. Charging was requested; power-off or charge completion has not yet been confirmed. After charging, place it near the entrance of the long straight **opposite the checkered start/finish piece**, with room in the requested direction. No right test or variable-speed race has run. Earlier accepted scanning and three forward laps remain valid; completed left/right steering is still the next physical milestone.
+
+# Previous: relative lane controls repaired; Guardian steering pending
 
 Before the authorized left/right tests, review reproduced a manual target-selection defect: after forward-only driving, the first browser/keyboard nudge could use the stale zero steering target rather than Guardian's measured +22.5 mm lane. The fix anchors the first physical discrete nudge to fresh current-drive optical evidence; later explicit nudges may accumulate only within that drive. Missing/stale evidence refuses the press instead of queuing delayed motion. STOP and explicit recovery/off-track notifications invalidate discrete intent. The separate battle-effect relative helper is unchanged and remains unaccepted on hardware.
 

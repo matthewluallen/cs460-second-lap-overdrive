@@ -82,6 +82,9 @@ export class Game {
     if (this.laneCancellationComparison?.driver===driver && this.laneCancellationComparison.stage==='acquiring-reference' && ['position','transition'].includes(message.type)) {
       this.#comparisonReference(driver,message);return;
     }
+    if (this.diagnostic?.driver === driver && message.type === 'status' && (message.onCharger || message.lowBattery)) {
+      this.requestPit(driver, 'Car reports charging or low battery during diagnostic'); return;
+    }
     if (this.diagnostic?.driver === driver && !this.diagnostic.steering && message.type === 'collision') { this.requestPit(driver, 'Collision during diagnostic'); return; }
     if (message.type === 'laneChange' && message.cancelled) {
       driver.input.lane = null;
@@ -402,7 +405,10 @@ export class Game {
     this.diagnostic = pulse; c.diagnosticMotion = true; c.diagnosticSteering=!!steering; c.diagnosticLaneSent=false; c.diagnosticUntil = pulse.until;
     pulse.timer = this.schedule(() => {
       if (this.diagnostic !== pulse) return;
-      this.stopAll(); this.log('Diagnostic deadline: STOP requested; confirm physical stop');
+      this.stopAll();
+      this.log(pulse.steering && !pulse.laneRequested
+        ? 'Diagnostic deadline: no lane request sent; no eligible ordinary-straight reading. STOP requested; confirm physical stop'
+        : 'Diagnostic deadline: STOP requested; confirm physical stop');
     },duration);
     c.setSpeed(Math.min(steering?300:150,this.topSpeed));
     this.log(steering?'Experimental steering test: at most 300 mm/s, 4 s total; one '+(direction===1?'left':'right')+' request only after a fresh ordinary straight code; raw collision packets follow ordinary driving policy':'Diagnostic: at most 150 mm/s requested for a 500 ms host window; no steering');

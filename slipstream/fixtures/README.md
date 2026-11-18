@@ -25,6 +25,21 @@ and replay path works; it proves nothing about real cars.
 
 A trace holds car names, model ids and message bytes. It holds no player names.
 
+### guardian-sdk-lane-no-attempt-low-battery-2026-11-18.json
+
+Unmodified 46-event export from `a028e4e`; SHA-256
+`3c2dc7aec7e200b6b203a425c73523cb6e36d823c38de93aa39c12ef0fc3947d`.
+Trace car 0 is the other device, removed without motion; trace car 1 / driver 2
+is Guardian reconnected as “Z. Drive.” Its initial battery reading is 3631 mV.
+The short left diagnostic requests 300 mm/s, then receives a low-battery status
+359 ms later. Five position readings identify finish 33 and curves 17/20, so no
+ordinary-straight gate qualifies and no lane/offset/turn command is sent. STOP
+comes from the four-second deadline. The operator subsequently confirms physically
+stopped and only about halfway around; power-off/charging is requested, not confirmed.
+This is **no steering attempt**, not a failed lane maneuver or race. See
+[the trial and diagnostic-health repair](../review/RELATIVE-LANE-CONTROLS.md#first-short-guardian-trial-no-lane-request).
+The original snapshot predates that observation; no credentials are present.
+
 ### guardian-sdk-three-forward-laps-2026-11-18.json
 
 Unmodified cumulative 184-event export from runtime `84f799c`; SHA-256
