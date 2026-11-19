@@ -37,3 +37,11 @@ The phone at 390 CSS pixels had no horizontal overflow. Sound remained off, engi
 ## Physical acceptance remains limited
 
 No physical car was connected or commanded in this update. Guardian's earlier 300 mm/s scan, forward, left/right and Computer-round acceptance remains the hardware baseline. Higher speeds, recovery grace, Power Zone effects, real phone driving, multi-car interaction and device-specific sound/haptics still require supervised acceptance. Groundshock remains excluded after its independent Drone Mode spin. Neither these tests nor a report establishes full original-app equivalence or a formal proof of the cyber-physical system.
+
+## Public deployment verified
+
+Implementation commit **`b0b2169`** was pushed and fast-forwarded into the existing Codespace's clean `week-4-student-driving` checkout. The managed live-only server was identified by its saved process, command and boot ID before restart on the existing port 3000. No visibility/access setting changed. The pre-existing missing Git LFS post-merge hook warning did not prevent the fast-forward; the hook was preserved.
+
+Anonymous public preflight passed readiness, controller availability and teaching-route isolation. All four new browser modules returned **200/no-store**; the three new test modules returned **404**. The served application contains the expected classroom build identifier. Browser verification showed the readiness instructions, Sound & screen and Run report, **STOPPED**, **0 / 4 cars**, and no warning/error console entries. Host and phone simulator layouts were also checked at 390 CSS pixels without horizontal overflow. Local simulator tabs/server were closed after testing.
+
+Refresh any already-open host and phone pages before reconnecting. [Public deployment screenshot](assets/classroom-public.png). This deployment check did not create a live car connection or establish classroom-network/hardware acceptance.
