@@ -4,6 +4,10 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Game, TEAM_COLORS} from './game.mjs';
 import {rgb} from './protocol.mjs';
+import {drivingReadiness} from './readiness.mjs';
+import {buildRunReport, renderRunReportText} from './run-report.mjs';
+import {AudioCues} from './audio-cues.mjs';
+import {ScreenAwake} from './wake-lock.mjs';
 import {DriveNarrator, cameraCar} from './camera-director.mjs';
 import {FaultTransport, FaultRelay} from './faults.mjs';
 import {trackFromPlan, trackValidation} from './track.mjs';
@@ -22,7 +26,7 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
   function element(tag = 'div') {
     const n = {tagName: tag.toUpperCase(), children: [], textContent: '', value: '', hidden: false, disabled: false,
       style: {setProperty() {}}, classList: {add() {}, remove() {}, toggle() {}}, dataset: {},
-      attributes:{}, setAttribute(key,value) { this.attributes[key]=value; }, addEventListener() {}, setPointerCapture() {}, select() {}, remove() {}, focus() { this.focused=true; }, blur() { this.blurred=true; }, scrollIntoView() {},
+      attributes:{}, setAttribute(key,value) { this.attributes[key]=value; }, addEventListener() {}, setPointerCapture() {}, select() {}, remove() {}, showModal() { this.open=true; }, close() { this.open=false; }, focus() { this.focused=true; }, blur() { this.blurred=true; }, scrollIntoView() {},
       append(...items) { this.children.push(...items); if (this.tagName === 'SELECT' && !this.value && items.length) this.value = items[0].value; },
       prepend(...items) { this.children.unshift(...items); },
       replaceChildren(...items) { this.children = []; if (this.tagName === 'SELECT') this.value = ''; this.append(...items); },
@@ -44,7 +48,7 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
   document.body.dataset.view=view;
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
   const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, trackValidation, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
-    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, DriveNarrator, cameraCar, mountStudentLab() {},
+    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, DriveNarrator, cameraCar, drivingReadiness, buildRunReport, renderRunReportText, AudioCues, ScreenAwake, mountStudentLab() {},
     performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
     Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => !!bluetoothLink, chooseCar: async () => bluetoothLink,
@@ -514,7 +518,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-week4-drive');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-week4-classroom');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
@@ -889,4 +893,64 @@ test('camera choices and captions never arm or change car control, and missing s
   assert.equal(h.node('commentaryMode').value,'captions');assert.match(h.node('sceneNote').textContent,/unavailable/);
   assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.drivers[0].car.speed'),0);
   assert.equal(h.run('countdown'),null);
+});
+
+test('Student readiness names an unapproved phone instead of silently disabling Start',async()=>{
+  const h=host({view:'student'});h.node('addSim').click();h.node('addSim').click();await settle();
+  h.run("game.useTrack(world.track);game.setControl(game.drivers[1],'phone');refresh()");
+  assert.equal(h.node('resume').disabled,true);assert.match(h.node('readinessItems').children.map(n=>n.textContent).join(' '),/Boson.*waiting for a phone/);
+  h.run("game.setControl(game.drivers[1],'none');refresh()");assert.equal(h.node('resume').disabled,false);assert.equal(h.node('readinessTitle').textContent,'Ready to start');
+  h.node('resume').click();h.run('refresh()');assert.equal(h.node('readinessTitle').textContent,'Driving enabled');
+  assert.equal(h.run('game.drivers.every(d=>d.car.speed===0)'),true,'explanation never applies throttle');
+});
+
+test('four phone dashboards carry bounded health/effect durations without leaking host clocks',()=>{
+  const h=host();for(let i=0;i<4;i++)h.node('addSim').click();
+  h.run(`game.useTrack(world.track);for(const d of game.drivers){game.setControl(d,'phone');const p={id:d.id,name:'Driver',approved:true,car:d.id};players.set(p.id,p);seat(p);}
+    room={link:{send:async value=>{window.lastDashboard=value;}}};
+    session.start('team',scoringSnapshot(0),0,{mission:'dawn-patrol'});
+    const rows=game.snapshot(200).map(s=>({...s,telemetryHealth:{state:'degraded',until:999999999,maximumSpeed:999999},speedPlan:{requested:9999,commanded:9999,rampMs:99999},powerZone:{effect:{type:'boost',at:123456},expiresAt:999999999}}));
+    pushState(rows,200);`);
+  const payload=JSON.parse(h.run('JSON.stringify(window.lastDashboard)'));
+  for(const row of Object.values(payload.players)){
+    assert.deepEqual(row.telemetryHealth,{recoveryId:0,state:'degraded',remainingMs:1000,maximumSpeed:300});
+    assert.deepEqual(row.speedPlan,{requested:1200,commanded:1200,rampMs:10000});
+    assert.deepEqual(row.powerZone,{effect:'boost',remainingMs:3000});assert.equal(typeof row.located,'boolean');
+  }
+  const size=Buffer.byteLength(JSON.stringify({t:'state',...payload}));assert.ok(size<3500,'bounded four-car dashboard is '+size+' bytes');
+  assert.equal(JSON.stringify(payload).includes('999999999'),false);
+});
+
+test('phone neutral steering holds the lane and missed recovery rejects delayed pre-recovery gestures',()=>{
+ const h=host({view:'student'});h.node('addSim').click();
+ h.run(`const d=game.drivers[0];game.useTrack(world.track);game.setControl(d,'phone');const p={id:1,approved:true,name:'P',car:d.id};players.set(1,p);seat(p);game.resume();
+   onRelay({type:'input',player:1,throttle:0,steer:0,steeringActive:false,recoveryId:0});
+   onRelay({type:'input',player:1,throttle:.5,steer:0,steeringActive:false,recoveryId:0});readControls(.04);`);
+ assert.equal(h.run('d.input.throttle'),.5);assert.equal(h.run('d.input.lane'),null,'neutral does not mean recenter');
+ h.run("onRelay({type:'input',player:1,throttle:.5,steer:.2,steeringActive:true,recoveryId:0});readControls(.04)");assert.equal(h.run('d.input.lane'),-13.5);
+ h.run("d.car.telemetry.telemetryHealth={state:'reacquired',since:100};readControls(.04)");
+ assert.equal(h.run('d.pad.recoveryId'),1);assert.equal(h.run('d.input.lane'),null);
+ for(const input of [{steeringActive:false,steer:0,recoveryId:0},{steeringActive:true,steer:.2,recoveryId:0},{steeringActive:false,steer:0}]){
+  h.run('onRelay('+JSON.stringify({type:'input',player:1,throttle:.5,...input})+');readControls(.04)');
+  assert.equal(h.run('d.pad.maneuversNeedRelease'),true);assert.equal(h.run('d.input.lane'),null);assert.equal(h.run('d.input.throttle'),.5);
+ }
+ h.run("onRelay({type:'input',player:1,throttle:.5,steer:0,steeringActive:false,recoveryId:1});readControls(.04)");
+ assert.equal(h.run('d.pad.maneuversNeedRelease'),false);assert.equal(h.run('d.input.lane'),null);
+ h.run("onRelay({type:'input',player:1,throttle:.5,steer:.2,steeringActive:true,recoveryId:0});readControls(.04)");assert.equal(h.run('d.input.lane'),null,'late old intent remains rejected after new acknowledgment');
+ h.run("onRelay({type:'input',player:1,throttle:.5,steer:-.2,steeringActive:true,recoveryId:1});readControls(.04)");assert.equal(h.run('d.input.lane'),13.5);
+ h.run("d.car.telemetry.telemetryHealth={state:'degraded',since:200};d.telemetryGrace={};onRelay({type:'input',player:1,throttle:.5,steer:0,steeringActive:false,recoveryId:2});readControls(.04)");
+ assert.equal(h.run('d.pad.recoveryId'),2);assert.equal(h.run('d.pad.maneuversNeedRelease'),true,'ongoing grace cannot be unlocked');
+ h.run("d.telemetryGrace=null;onRelay({type:'input',player:1,throttle:.5,steer:0,steeringActive:false,recoveryId:1});readControls(.04)");assert.equal(h.run('d.pad.maneuversNeedRelease'),true,'each recovery needs its own acknowledgment');
+});
+
+test('run report is stopped-only, preserves observations as text and recording never starts a car',async()=>{
+ const h=host({view:'student'});h.node('addSim').click();await settle();h.run('game.useTrack(world.track);refresh()');
+ assert.equal(h.node('openReport').disabled,false);h.node('operatorNotes').value='<b>I observed no movement</b>';
+ h.node('openReport').click();assert.equal(h.node('reportDialog').open,true);assert.match(h.node('reportContent').textContent,/SLIPSTREAM RUN REPORT/);
+ assert.match(h.node('reportContent').textContent,/<b>I observed no movement<\/b>/);
+ assert.match(h.node('reportContent').textContent,/Physical stop: unverified/);
+ h.node('reportRecord').click();assert.equal(h.run('recorder.active'),true);assert.equal(h.run('game.drivers[0].car.speed'),0);
+ h.node('closeReport').click();assert.equal(h.node('reportDialog').open,false);
+ h.node('resume').click();h.run('refresh()');assert.equal(h.node('openReport').disabled,true);
+ h.node('openReport').click();assert.equal(h.node('reportDialog').open,false);assert.match(h.node('reportNote').textContent,/STOP/);
 });

@@ -108,6 +108,8 @@ export function createRelay({hostCode, studentRooms = true, now = () => Date.now
     if(room.student && player.invitedCar!==null && b.car!==undefined && b.car!==player.invitedCar)return {status:403,error:'This invitation belongs to a different car'};
     const message = {type: 'input', player: player.id, throttle: Math.max(0, unit(b.throttle)), steer: unit(b.steer),
       attack: b.attack === true, support: b.support === true, special: b.special === true};
+    if (typeof b.steeringActive === 'boolean') message.steeringActive=b.steeringActive;
+    if (Number.isSafeInteger(b.recoveryId) && b.recoveryId>=0 && b.recoveryId<=1000000) message.recoveryId=b.recoveryId;
     if (Number.isSafeInteger(b.car) && b.car > 0 && b.car < 1e6) message.car = b.car;
     if (b.release === true) { message.release = true; player.car = null; }
     if (b.cycle === 'attack' || b.cycle === 'support' || b.cycle === 'special') message.cycle = b.cycle;

@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {AudioCues} from './audio-cues.mjs';
+import {ScreenAwake} from './wake-lock.mjs';
 
 // Real controller handlers with a fake relay and browser events. No Bluetooth
 // connection, sensor permission, or physical car behavior is implied.
@@ -17,12 +19,12 @@ function pad(search='?view=student',hash='#r=12345678&s='+'a'.repeat(24)) {
   const storage={getItem(){return null;},setItem(){},removeItem(){}};
   const document={hidden:false,getElementById:node,body:node('body'),documentElement:node('html'),createElement:()=>node('new'),addEventListener:(type,fn)=>{documentEvents[type]=fn;}};
   const location={search,hash,reload(){reloads++;}};
-  const context=vm.createContext({console,URLSearchParams,Date:{now:()=>now},location,
+  const context=vm.createContext({AudioCues:class extends AudioCues {constructor(options){super({...options,AudioContext:null,document,now:()=>now});}},ScreenAwake:class extends ScreenAwake {constructor(options){super({...options,wakeLock:null,document});}},console,URLSearchParams,Date:{now:()=>now},location,
     sessionStorage:storage,localStorage:storage,navigator:{},document,window:{},screen:{orientation:{angle:0}},
     addEventListener:(type,fn)=>{windowEvents[type]=fn;},setInterval:fn=>{intervals.push(fn);},setTimeout(){},
     api:async(path,options)=>{requests.push({path,...options});return{player:1,playerKey:'b'.repeat(48)};},
     channel:options=>{Object.assign(callbacks,options);return{send:async body=>{sent.push({...body});},stop(){closes++;}};}});
-  vm.runInContext(readFileSync(new URL('./pad.mjs',import.meta.url),'utf8').replace("import {api, channel} from './net.mjs';",''),context);
+  vm.runInContext(readFileSync(new URL('./pad.mjs',import.meta.url),'utf8').replace(/^import .*;$/gm,''),context);
   const run=code=>vm.runInContext(code,context);
   const state={type:'state',me:{id:1,name:'Guardian',color:[0,1,0],energy:1,speed:0,kills:0,deaths:0,laps:0,bays:{},disabled:false,connected:true},lobby:{phase:'ready',cars:[]}};
   const ready=async()=>{await node('go').onclick();callbacks.onStatus('online');callbacks.onMessage({type:'approved'});callbacks.onMessage(state);};
@@ -126,4 +128,101 @@ test('switching QR invitations neutralizes and closes the old controller before 
   for(const interval of p.intervals)interval();assert.equal(p.sent.at(-1).throttle,0);
   const loaded=pad('?view=student',p.location.hash);await loaded.node('go').onclick();
   assert.equal(loaded.requests[0].body.joinKey,'c'.repeat(24));assert.equal(loaded.run('state.throttle'),0);
+});
+
+
+test('phone telemetry grace preserves forward hold while every maneuver path is neutral and visibly locked',async()=>{
+  for(const search of ['?view=student','']) {
+    const p=pad(search);await p.ready();
+    if(search)p.node('drive').events.pointerdown(p.event());else p.run('setThrottle(1)');
+    p.run('setSteer(.7);state.attack=state.support=state.special=true;once.uturn=true;tiltOn=true;tiltWanted=true');
+    const degraded={...p.state,me:{...p.state.me,telemetryHealth:{state:'degraded',maximumSpeed:300,remainingMs:800}},lobby:{phase:'battle'}};
+    p.callbacks.onMessage(degraded);
+    assert.equal(p.run('state.throttle'),1,'forward control is allowed during the bounded host grace');
+    assert.equal(p.node('drive').disabled,false,'Student hold remains usable');
+    for(const id of ['left','right','tilt','flip','centerTilt','uturn','attack','support','special'])assert.equal(p.node(id).disabled,true,search+id);
+    assert.match(p.node('status').textContent,/Forward speed limited to 300.*steering, tilt and attacks locked/);
+    assert.equal(p.run('tiltOn'),false);assert.equal(p.run('tiltWanted'),false);
+    p.node('left').onclick();p.node('right').onclick();p.node('uturn').onclick();await p.node('tilt').onclick();
+    p.node('attack').events.pointerdown(p.event());p.windowEvents.keydown(p.event({code:'KeyX'}));p.windowEvents.keydown(p.event({code:'KeyF'}));
+    p.run('onTilt({beta:0,gamma:24});lastSentAt=0;send()');
+    const sent=p.sent.at(-1);assert.equal(sent.throttle,1);assert.equal(sent.steer,0);assert.equal(sent.attack,false);assert.equal(sent.support,false);assert.equal(sent.special,false);assert.equal(sent.uturn,false);
+    p.callbacks.onMessage({...p.state,me:{...p.state.me,telemetryHealth:{state:'reacquired'}},lobby:{phase:'battle'}});
+    assert.equal(p.run('state.throttle'),1);assert.equal(p.run('state.steer'),0);assert.equal(p.run('tiltOn'),false);assert.equal(p.node('left').disabled,false);
+    assert.match(p.node('feedback').textContent,/Track readings restored/);
+    p.run('onTilt({beta:0,gamma:36});lastSentAt=0;send()');assert.equal(p.sent.at(-1).steer,0,'prior tilt cannot resume itself');
+    p.node('right').onclick();assert.ok(p.run('state.steer')>0,'a new action can steer');
+    p.node('brake').onclick();assert.equal(p.sent.at(-1).throttle,0);
+  }
+});
+
+test('expired phone updates release held forward control during grace and recovery cannot replay it',async()=>{
+  const p=pad();await p.ready();p.node('drive').events.pointerdown(p.event());
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,telemetryHealth:{state:'degraded',maximumSpeed:180,remainingMs:300}}});
+  assert.equal(p.run('state.throttle'),1);p.time(11001);p.run('send()');
+  assert.equal(p.sent.at(-1).throttle,0);assert.equal(p.sent.at(-1).steer,0);assert.match(p.node('status').textContent,/Host updates delayed/);
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,telemetryHealth:{state:'reacquired'}}});
+  assert.equal(p.run('state.throttle'),0);assert.equal(p.run('drivePointer'),null);
+  p.node('drive').events.pointerup(p.event());p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).throttle,0);
+});
+
+test('phone reports bounded ramp and Power Zone durations without using host clock timestamps or replaying cues',async()=>{
+  const p=pad();await p.ready();
+  const charged={...p.state,me:{...p.state.me,speedPlan:{requested:600,commanded:240,rampMs:2000},powerZone:{effect:'shield',remainingMs:2500,expiresAt:999999999}}};
+  p.callbacks.onMessage(charged);
+  assert.match(p.node('status').textContent,/Ramping command 240 toward 600/);assert.match(p.node('status').textContent,/Power Zone shield.*2.5 s/);
+  assert.equal(p.node('feedback').textContent,'Power Zone shield charged.');
+  p.node('feedback').textContent='Another cue';p.callbacks.onMessage(charged);assert.equal(p.node('feedback').textContent,'Another cue');
+  p.callbacks.onMessage({...charged,me:{...charged.me,powerZone:{effect:'boost',remainingMs:750}}});assert.match(p.node('status').textContent,/Power Zone boost.*0.8 s/);
+  p.callbacks.onMessage(p.state);assert.doesNotMatch(p.node('status').textContent,/Power Zone|Ramping/);
+  p.callbacks.onMessage({...charged,me:{...charged.me,speedPlan:{requested:Infinity,commanded:-20,rampMs:2000},powerZone:{effect:'bogus',remainingMs:999999}}});
+  assert.doesNotMatch(p.node('status').textContent,/Infinity|bogus|999999/);
+});
+
+
+test('each recovery identity clears steering intent even if a brief degraded update was missed',async()=>{
+  const p=pad();await p.ready();p.node('drive').events.pointerdown(p.event());p.node('left').onclick();
+  p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).steeringActive,true);
+  for(const recoveryId of [1,2]) {
+    p.callbacks.onMessage({...p.state,me:{...p.state.me,telemetryHealth:{state:'reacquired',recoveryId}}});
+    const neutral=p.sent.at(-1);
+    assert.equal(neutral.steeringActive,false,'fresh recovery sends the neutral intent acknowledgement immediately');
+    assert.equal(neutral.recoveryId,recoveryId,'neutral acknowledgement identifies this exact recovery');
+    assert.equal(neutral.throttle,1,'allowed forward hold survives recovery identity change');
+    assert.equal(neutral.steeringActive,false);assert.equal(neutral.steer,0);assert.equal(neutral.attack,false);
+    p.node('right').onclick();p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).steeringActive,true);assert.equal(p.sent.at(-1).recoveryId,recoveryId);
+    assert.ok(p.sent.at(-1).steer>0,'explicit new steering intent follows the neutral acknowledgement');
+  }
+  p.node('brake').onclick();assert.equal(p.sent.at(-1).steeringActive,false);
+});
+
+test('phone sound is opt-in and receives only fresh location state; unsupported APIs never block driving',async()=>{
+  const p=pad();await p.ready();
+  assert.equal(p.run('sounds.snapshot().enabled'),false);assert.equal(p.run('awake.snapshot().active'),true);
+  assert.equal(p.node('soundToggle').disabled,true);assert.match(p.node('soundStatus').textContent,/unavailable/);assert.match(p.node('wakeStatus').textContent,/unavailable/);
+  await p.node('soundToggle').onclick();assert.equal(p.run('sounds.snapshot().enabled'),false);
+  p.node('drive').events.pointerdown(p.event());
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,located:true,speed:300}});
+  assert.equal(p.run('sounds.previous.fresh'),true);assert.equal(p.run('sounds.previous.halted'),false);
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,located:true,telemetryHealth:{state:'degraded',remainingMs:500,maximumSpeed:300}}});
+  assert.equal(p.run('sounds.previous.fresh'),false);assert.equal(p.run('state.throttle'),1);
+  p.time(11001);p.run('send()');assert.equal(p.run('sounds.previous.fresh'),false);assert.equal(p.run('state.throttle'),0);
+  p.callbacks.onMessage({type:'kicked'});assert.equal(p.run('awake.snapshot().active'),false);
+  p.windowEvents.pagehide();assert.equal(p.run('sounds.disposed'),true);assert.equal(p.run('awake.disposed'),true);
+});
+
+
+test('phone echoes the bounded recovery identity through stale state and ignores invalid identity updates',async()=>{
+  const p=pad();await p.ready();p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).recoveryId,0);
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,telemetryHealth:{state:'reacquired',recoveryId:7}}});
+  assert.equal(p.sent.at(-1).recoveryId,7);
+  p.time(11001);p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).recoveryId,7,'stale input remains neutral in the same recovery epoch');
+  assert.equal(p.sent.at(-1).steeringActive,false);assert.equal(p.sent.at(-1).throttle,0);
+  for(const invalid of [-1,1.5,1000001,Infinity,'8',null]) {
+    p.callbacks.onMessage({...p.state,me:{...p.state.me,telemetryHealth:{state:'normal',recoveryId:invalid}}});
+    p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).recoveryId,7,String(invalid));
+  }
+  p.callbacks.onMessage({...p.state,me:{...p.state.me,id:2,telemetryHealth:{state:'normal',recoveryId:0}}});
+  p.run('lastSentAt=0;send()');assert.equal(p.sent.at(-1).recoveryId,0,'a different car establishes its own host-provided recovery identity');
+  assert.equal(p.sent.at(-1).throttle,0);
 });

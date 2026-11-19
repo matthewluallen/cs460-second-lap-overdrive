@@ -54,6 +54,7 @@ body.student{background:radial-gradient(ellipse at top,#17263c,#0b0e13 65%)}
 .student details{border:1px solid #2d3c50;border-radius:.85rem;background:#101923;padding:.8rem 1rem}.student summary{cursor:pointer;min-height:30px;color:#bdcad9;font-size:.9rem}.student details .row{margin-top:.6rem}.student details #fire{margin-top:.7rem;min-height:100px;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr}.student details #score{margin-top:.8rem}
 .student #hint,.student #lane,.student .bar{display:none}.student #link{font-size:.8rem}.student #cars button{min-height:64px}
 @media(orientation:landscape) and (max-height:600px){.student #mid{display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:.6rem 1rem}.student #studentHeader,.student #car,.student #status,.student #mission,.student #cars{grid-column:1/-1}.student #drive{grid-column:1;grid-row:6/span 2;min-height:156px}.student #steering{grid-column:2}.student #maneuvers{grid-column:2}.student #studentGuide,.student #feedback{grid-column:1/-1}.student #studentOptions,.student #studentGame{grid-column:auto}.student #steering button{min-height:84px}}
+.client-comfort{margin-top:14px;border:1px solid #2d3c50;border-radius:12px;padding:12px;background:#101923}.client-comfort summary{cursor:pointer}.client-comfort label{display:block;margin-top:12px;font-size:.85rem}.client-comfort input[type=range]{width:100%}.client-comfort p{font-size:.78rem;color:#afc5d8;margin:.6rem 0}.client-comfort button{padding:10px;min-height:44px}.student .client-comfort{grid-column:1/-1}
 </style>
 </head>
 <body>
@@ -83,6 +84,7 @@ body.student{background:radial-gradient(ellipse at top,#17263c,#0b0e13 65%)}
     <div id="hint">Keyboard: W S speed · A D lane · F fire · G support · R special · Q E switch · X U-turn</div>
     <div id="score"><span id="hits"></span><span id="link"></span></div>
     <details id="studentOptions" hidden><summary>Tilt &amp; controller options</summary><div class="row" id="studentOptionsButtons"></div></details>
+    <details class="client-comfort"><summary>Sound &amp; screen</summary><div class="row"><button id="soundToggle" aria-pressed="false">Enable sound</button><button id="wakeRetry">Keep screen awake</button></div><label><input id="engineSound" type="checkbox"> Engine game sound</label><label>Sound volume<input id="soundVolume" type="range" min="0" max="100" value="20"></label><p id="soundStatus" role="status">Sound off.</p><p id="wakeStatus" role="status">Screen-awake request inactive.</p></details>
     <details id="studentGame" hidden><summary>Game controls &amp; score</summary></details>
   </div>
   <div id="fire">

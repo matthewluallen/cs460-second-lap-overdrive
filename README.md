@@ -154,6 +154,14 @@ controller inputs. Start the managed live-only server with `npm run slipstream:u
 ordinary `npm start` remains the stationary course bench. Follow the
 [Week 4 Canvas quickstart](slipstream/CANVAS-STUDENT-QUICKSTART.md).
 
+The Student readiness panel explains which car or action is blocking a start.
+Phones show limited-speed recovery and Power Zone state; steering stays locked
+until fresh post-recovery input. After **STOP ALL**, choose **Run report**, enter
+what you observed and download the evidence summary. **Record from now** captures
+future evidence when recording is inactive. Optional **Sound & screen** controls
+provide muted-by-default game audio and visible screen-awake support status.
+Refresh the host and phone pages after updates; rejoin with fresh car invitations.
+
 Guardian has limited supervised scan, lane-change and three-lap hardware acceptance.
 Other models, multiple physical cars, attacks, phone driving and the new higher-speed,
 ramp, gap-recovery and Power Zone options remain unverified on hardware. The map and

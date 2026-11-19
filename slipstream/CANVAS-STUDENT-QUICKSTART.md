@@ -46,6 +46,10 @@ A new **Scan track** action starts a separate countdown.
 
 ## 4. Choose your controller
 
+Read the readiness panel below the header before starting. It names the car and
+next action when a scan, connection, approval or pit recovery is still needed.
+A visible status is software evidence; keep watching the physical car.
+
 **Laptop:** choose **Drive here → Start driving**. Keep throttle at zero until
 ready, then raise it. Use the left/right buttons on a readable straight; **Brake**
 returns throttle to zero. Start driving enables control without applying throttle.
@@ -57,6 +61,10 @@ returns throttle to zero. Start driving enables control without applying throttl
 3. On the laptop, choose **Let in** for your name, then **Start driving**.
 4. On the phone, **hold** the drive button to drive and **release** it to request
    a stop. Use arrows for steering and **STOP** when needed. Tilt is optional.
+
+If the phone reports delayed track readings, forward drive is limited and
+steering/tilt/attacks are locked. After recovery, choose a new steering action;
+enable tilt again if wanted. Releasing the drive button still requests STOP.
 
 An unused QR stays stable. Approval replaces it; changing controller, removing the
 car or revoking its invitation invalidates the old access. Choose **Phone / QR**
@@ -74,11 +82,27 @@ Press **STOP ALL** before changing driving settings. Start with the defaults.
 | Telemetry gaps | Keep **Strict · stop after 2 seconds** initially. Optional brief-gap recovery gives eligible mapped driving at most one extra second at limited speed, with steering and attacks locked. It needs two consistent readings to recover; otherwise STOP is requested at the 3-second gap. Scans and diagnostic tests stay strict. |
 | Power Zone rule | Default **Off**. On a mapped piece 57, **Charge shield** earns a virtual shield after a confirmed crossing and ordinary exit. **Boost after exit** can add up to 75 mm/s for up to one second after a suitable straight exit, within your maximum and throttle. At the maximum there is no extra boost. These are custom Slipstream rules, not the original app's lane attack, and remain physically unverified. |
 
-Open **3D studio** to choose **Circuit overview**, **Chase cam**, **Driver view**,
+Open **3D driving view** to choose **Circuit overview**, **Chase cam**, **Driver view**,
 **Trackside** or **Auto director**, and select a car. These are rendered views of
 track readings, not live video. Uncertain position returns to overview. Captions
 are the default; **Captions + voice** is optional, and **Off** disables commentary.
 Camera and voice controls do not drive the car.
+
+## 6. Sound, screen and your run report
+
+- Open **Sound & screen**. Sound starts off; **Enable sound** adds game cues.
+  **Engine game sound** is separately optional. Set the volume or mute. These are
+  phone/laptop sounds, not a speaker command sent to the car.
+- Check the screen-awake status. The app requests support while connected; use
+  **Keep screen awake** to retry when offered. If unavailable, keep the screen on
+  manually. The host tab must stay visible regardless.
+- Choose **STOP ALL**, confirm the physical car is stopped, then **Run report**.
+  Enter what you saw, choose **Update report**, then **Download report** or
+  **Print report**. Keep unknown physical results unknown.
+- If history is missing, **Record from now** starts future capture. Close the
+  report, conduct the next supervised run, stop, and update the report afterward.
+- After a software update, refresh the laptop **and every phone**. Reconnect cars
+  and approve fresh per-car invitations; don't resume from an old controller page.
 
 ## Practice and investigate
 

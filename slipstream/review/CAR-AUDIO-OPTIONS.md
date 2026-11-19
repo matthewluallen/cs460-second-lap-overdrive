@@ -48,3 +48,20 @@ Fresh static work used Ghidra 12.1.3, `-readOnly -noanalysis`, against the exist
 - `/tmp/slipstream-sdk-acquisition/include/ankidrive/protocol.h` at SDK revision `410352617b8660338746a6bb2b2dd173afb1b91a` — `5982fb0f866b7c36fbfbcc8cc8b7adc386ce591fa00310c659ab051faf4e8fcd`.
 
 No new physical test was conducted. Browser/iPad audio behavior, room acoustics and any prospective payload still require separate acceptance checks.
+
+## Implementation update — 18 November 2026, classroom build
+
+The browser-side proposal above is now implemented in
+`2026-11-18-week4-classroom`: host and phone **Sound & screen** controls provide
+opt-in synthesized cues, volume/mute and a separately optional engine game tone.
+Both audio choices start off. The tone follows allowed displayed game state;
+STOP, hidden pages, stale state and lost connections silence it. Spoken 3D
+commentary remains a separate option. No original sound bank or new BLE audio
+command was added, and no onboard speaker capability is claimed.
+
+The same panel shows screen-awake request status and explicit retry; support is
+requested while connected and may be denied or released. Its lifecycle cannot
+resume driving. Mocked audio/wake-lock and simulator checks pass as part of the
+917-test Node suite. Actual audible output, phone/browser differences and room
+acoustics remain unaccepted on hardware. The earlier recommendations remain the
+research record; the on-car audio retrofit is still only a future experiment.

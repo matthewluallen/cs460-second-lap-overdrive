@@ -1,0 +1,72 @@
+SLIPSTREAM RUN REPORT
+Source: simulator · build: 2026-11-18-week4-classroom
+Recorded: 2026-11-19T01:02:22.324Z · exported: 2026-11-19T01:08:00.259Z
+
+FINAL CONTROLLER STATE
+Phase: ready · halt requested: yes · shared pit: not recorded.
+
+RECORDING COVERAGE
+28 recorded events analyzed; 0 invalid; 0 omitted by report limit.
+Recorder losses: 0 events, 0 annotations. Event span: 303.19 s.
+Clock discontinuities: 0. A zero loss count does not prove complete capture.
+
+SELECTED SETTINGS (final controller snapshot)
+Maximum 300 mm/s · acceleration ramp 0.00 s · optional telemetry grace 0.00 s.
+First-reading limit 5.00 s · ordinary gap limit 2.00 s · scan budget 45.00 s / 3 laps.
+Power Zone: off. Earlier settings may differ; inspect the trace for chronology.
+
+MAP (final controller snapshot)
+9 sections · 3999 mm · geometric closure: reported closed.
+Piece IDs: 34, 33, 39, 17, 18, 36, 40, 20, 23. Special pieces: none reported.
+Map issues: none reported; not physical validation.
+
+CAR 1 · BigBang
+Model ID 14 · firmware 9511 · profile simulator/legacy · simulator.
+7 TX / 17 RX; 7 positions; 3 transitions; 0 malformed frames/packets.
+Written speed requests: 7 samples; min 0, max 300, sample mean 85.71 mm/s.
+Reported position speeds: 7 samples; min 300, max 300, sample mean 300 mm/s.
+Reported speed-update values: 7 samples; min 0, max 300, sample mean 85.71 mm/s.
+Positive-command windows: 2; 2 closed by a recorded STOP; 0 open at recording end; 0 split by clock.
+Observed commanded-window duration 4.28 s; 0 windows without a decoded position.
+First position delay: max 0.52 s. Tail silence to STOP/end: max 0.24 s.
+Between-position gaps while commanded: 5; maximum 0.72 s.
+0–250 ms: 0 | 251–500 ms: 0 | 501–1000 ms: 5 | 1001–2000 ms: 0 | over 2000 ms: 0
+0 position notifications outside recorded positive-command windows.
+STOP writes: 5. Final controller reason: Host stopped. Physical stop: unverified.
+Laps: not recorded; not inferred from repeated piece IDs.
+Final snapshot requested 0 mm/s, reported 0 mm/s (report age 17.82 s).
+Battery 3950 mV (sample age 366.52 s). Final connection: connected.
+
+CAR 2 · Boson
+Model ID 2 · firmware 9511 · profile simulator/legacy · simulator.
+2 TX / 2 RX; 0 positions; 0 transitions; 0 malformed frames/packets.
+Written speed requests: 2 samples; min 0, max 0, sample mean 0 mm/s.
+Reported position speeds: no recorded samples.
+Reported speed-update values: 2 samples; min 0, max 0, sample mean 0 mm/s.
+Positive-command windows: 0; 0 closed by a recorded STOP; 0 open at recording end; 0 split by clock.
+Observed commanded-window duration 0.00 s; 0 windows without a decoded position.
+First position delay: max not recorded. Tail silence to STOP/end: max not recorded.
+Between-position gaps while commanded: 0; maximum not recorded.
+0–250 ms: 0 | 251–500 ms: 0 | 501–1000 ms: 0 | 1001–2000 ms: 0 | over 2000 ms: 0
+0 position notifications outside recorded positive-command windows.
+STOP writes: 2. Final controller reason: Host stopped. Physical stop: unverified.
+Laps: not recorded; not inferred from repeated piece IDs.
+Final snapshot requested 0 mm/s, reported 0 mm/s (report age 17.82 s).
+Battery 3950 mV (sample age 366.52 s). Final connection: connected.
+
+RECORDED CONTROLLER ANNOTATIONS (not physical observations)
+320.12 s · All cars stopped
+
+OPERATOR OBSERVATIONS (unverified, entered by a person)
+Simulator-only browser check. No physical car was connected or moved.
+
+COVERAGE WARNINGS
+No additional data-quality warning detected; limitations below still apply.
+
+LIMITS
+- A recorded TX is a completed transport write, not proof the firmware accepted it or the physical car moved/stopped.
+- Position gaps are intervals between decoded position notifications inside positive SPEED-command windows. Paused periods are excluded; transitions are counted separately. Startup delay and trailing silence are separate.
+- Speed averages are sample averages, not time-weighted speeds; position speed and speed-update replies are separate evidence sources.
+- Only recorded events are analyzed. Missing or malformed events can hide commands, stops or readings; final diagnostics may cover a different time span.
+- Lap counts, maps and notes are controller/operator claims. This report does not independently verify physical completion, track shape, collision or stopping.
+- Raw packet bytes, transport identifiers, room keys and connection URLs are not included. Operator-entered observations remain verbatim plain text.

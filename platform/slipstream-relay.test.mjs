@@ -69,6 +69,7 @@ test('controller and relay do not exist unless the server is started with the sl
 test('enabled controller serves only its browser assets, with security headers', async t => {
   const {origin, host} = await start(t);
   for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs', '/slipstream/student-lab.mjs', '/slipstream/camera-director.mjs', '/slipstream/power-zone.mjs',
+    '/slipstream/readiness.mjs', '/slipstream/run-report.mjs', '/slipstream/audio-cues.mjs', '/slipstream/wake-lock.mjs',
     '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 200, path);
@@ -78,6 +79,7 @@ test('enabled controller serves only its browser assets, with security headers',
     assert.equal(response.headers.get('cache-control'), 'no-store', path);
   }
   for (const path of ['/slipstream/core.test.mjs', '/slipstream/student-lab.test.mjs', '/slipstream/camera-director.test.mjs', '/slipstream/power-zone.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
+    '/slipstream/readiness.test.mjs', '/slipstream/run-report.test.mjs', '/slipstream/client-comfort.test.mjs',
     '/slipstream/../package.json', '/slipstream/data/../core.test.mjs', '/slipstream/vendor/qrcode.js', '/slipstream/vendor/three.cjs', '/slipstream/vendor/../package.json', '/slipstream/.git/config']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 404, path);
@@ -140,6 +142,11 @@ test('nobody drives until the host lets them in; inputs are range-checked; state
     car: 3, cycle: 'attack', uturn: true, player: 2, type: 'kick', approved: true, extra: 'x'.repeat(50)}});
   assert.equal(sent.status, 204);
   assert.deepEqual(await host.next(), {type: 'input', player: 1, throttle: 1, steer: -1, attack: true, support: false, special: false, car: 3, cycle: 'attack', uturn: true});
+  for(const value of [false,true,'false']) {
+    await call(r.base+'/input',{method:'POST',key:p1.playerKey,body:{steeringActive:value,recoveryId:23,throttle:.5,steer:0}});
+    const forwarded=await host.next();assert.equal(forwarded.steeringActive,typeof value==='boolean'?value:undefined);assert.equal(forwarded.recoveryId,23);
+  }
+  await call(r.base+'/input',{method:'POST',key:p1.playerKey,body:{recoveryId:'23'}});assert.equal((await host.next()).recoveryId,undefined);
   for (const raw of ['[]', 'null', '"x"', '{']) assert.equal((await call(r.base + '/input', {method: 'POST', key: p1.playerKey, raw})).status, 400);
   assert.equal((await call(r.base + '/input', {method: 'POST', key: r.hostKey, body: {}})).status, 403);
 

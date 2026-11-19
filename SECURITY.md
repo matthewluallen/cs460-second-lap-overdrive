@@ -9,6 +9,16 @@ of scope.
 preserved as `course-vulnerable-baseline`. Check that tag or commit out to
 reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
+## Classroom phone recovery and presentation boundaries — 18 November 2026
+
+A source-level concern was reproduced in the host test harness: a phone could retain pre-gap steering/attack intent and present it again after the bounded telemetry recovery ended. The host now increments a per-seat `recoveryId` generation whenever it observes a new recovery episode, clears maneuver intent, and requires a matching generation plus an explicitly released steering/attack state before accepting a new maneuver. A stale packet or a phone that missed the degraded-state update cannot unlock that gate. The relay reconstructs only validated `steeringActive` and bounded integer `recoveryId` fields; this generation is not an authentication token and does not replace room/player authorization. Approved forward throttle during grace still obeys the existing cap/deadline. Full STOP, driver changes and disconnects retain the existing neutral-input arming rule.
+
+The phone receives an allowlisted, bounded health/speed/effect projection with remaining durations rather than host-clock timestamps. Its disabled controls are explanatory; the host remains the authority. Refresh both host and phones after this update. An old phone lacking the recovery handshake cannot re-enable maneuvers after a recovery episode.
+
+The public static allowlist adds only `readiness.mjs`, `run-report.mjs`, `audio-cues.mjs` and `wake-lock.mjs`. Test files, traces and research artifacts remain outside that allowlist. Reports use text content and plain-text downloads, not HTML interpolation; raw packet bytes, connection identifiers and room credentials are excluded from the selected output. Operator-entered observations remain visible as unverified text. Reports are generated only while stopped, so decoding a large recording cannot occupy the active driving loop.
+
+Audio and screen-awake status are client presentation features. Sound is opt-in; synthesized tones do not replay proprietary assets or issue BLE packets. Hidden/stale/disconnected states silence the game audio. A released/denied wake lock is shown without automatically resuming vehicle control. These features provide no new guarantee of STOP delivery through host suspension or Bluetooth loss. Regression checks include host/pad recovery-generation cases, bounded four-car relay state, report evidence/escaping, and mocked audio/wake-lock lifecycles.
+
 ## Week 4 capability rooms and bounded telemetry recovery — 18 November 2026
 
 Student QR setup no longer needs a shared code. `POST /api/slipstream/student/rooms` creates only a new isolated room with fresh host and join capabilities; it grants no authority over another room or car. Per-car invitations remain bound to a car, require host approval, and are revoked with pending/approved claims when the controller changes or the car is removed. A Student player cannot select a different car using the approved invitation. Delayed responses cannot resurrect a revoked invitation. Host credentials are never placed in QR links.

@@ -1,6 +1,8 @@
 // Phone controller: throttle slider, tilt (or buttons) to steer, weapon buttons.
 // It only ever talks to the relay; the host browser decides what a car does.
 import {api, channel} from './net.mjs';
+import {AudioCues} from './audio-cues.mjs';
+import {ScreenAwake} from './wake-lock.mjs';
 
 const $ = id => document.getElementById(id);
 const student = new URLSearchParams(location.search || '').get('view') === 'student';
@@ -18,7 +20,9 @@ const params = new URLSearchParams(location.hash.slice(1));
 const room = params.get('r') || '', joinKey = params.get('s') || params.get('j') || '', seated = params.has('s');
 const KEY = 'slipstream.pad.' + room + '.' + joinKey.slice(0, 8);
 const state = {throttle: 0, steer: 0, attack: false, support: false, special: false};
-let lastStateAt = 0;
+let lastStateAt = 0, telemetryDegraded = false, steeringActive=false, recoveryId=0, mediaState=null;
+const finiteBound = (value,max) => Number.isFinite(value)?Math.max(0,Math.min(max,value)):0;
+const maneuversReady = () => driveReady && !telemetryDegraded && !document.hidden;
 let throttlePointer = null, drivePointer = null, driveKey = null, releasePending = false, releaseCar = null;
 let online = false, driveReady = false, previousView = null, previousRoundStatus = null, tiltNeutral = null, tiltSample = null, tiltAngle = null;
 let haptics = false, lastBuzz = -Infinity;
@@ -41,15 +45,33 @@ showHaptics();
 let me = null, link = null, allowed = false, invitationChanging = false, once = {}, tiltOn = false, tiltWanted = false, listening = false, flip = 1, lastSent = '', lastSentAt = 0, hasCar = false;
 try { flip = sessionStorage.getItem('slipstream.flip') === '-1' ? -1 : 1; } catch {}
 
+const sounds=new AudioCues({onStatus:s=>{
+  $('soundToggle').textContent=s.state==='on'?'Mute sound':'Enable sound'; $('soundToggle').disabled=s.state==='unsupported';
+  $('soundToggle').setAttribute('aria-pressed',String(s.enabled&&s.state==='on'));
+  $('engineSound').checked=s.engine; $('soundVolume').value=String(Math.round(s.volume*100)); $('soundStatus').textContent=s.text;
+}});
+const awake=new ScreenAwake({onStatus:s=>{ $('wakeStatus').textContent=s.text; $('wakeRetry').disabled=!s.active||s.state==='held'||s.state==='requesting'||s.state==='unsupported'; }});
+function updatePhoneSound() {
+  const mine=mediaState?.me,round=mediaState?.lobby?.round,connected=online&&allowed&&!invitationChanging&&!!mine;
+  sounds.update({online:connected,halted:!driveReady||state.throttle<=0,carId:mine?.id??null,speed:finiteBound(mine?.speed,1200),
+    fresh:connected&&!document.hidden&&Date.now()-lastStateAt<=1000&&mine.located===true&&!telemetryDegraded,
+    telemetryState:telemetryDegraded?'degraded':mine?.telemetryHealth?.state??'normal',lap:mine?.laps,
+    powerZone:mine?.powerZone?.remainingMs>0?mine.powerZone.effect:null,countdown:round?.status==='countdown'?Math.ceil(finiteBound(round.remainingMs,10000)/1000):null});
+}
+$('soundToggle').onclick=async()=>{if(sounds.snapshot().state==='on')sounds.disable();else await sounds.enable();updatePhoneSound();};
+$('engineSound').onchange=()=>{sounds.setEngine($('engineSound').checked);updatePhoneSound();};
+$('soundVolume').oninput=()=>sounds.setVolume(Number($('soundVolume').value)/100);
+$('wakeRetry').onclick=()=>awake.retry();
 const say = text => { $('msg').textContent = text; };
 const throttleCue = () => student ? 'Hold to drive when ready.' : 'Raise the throttle when ready.';
 function syncStudentControls() {
+  for(const id of ['left','right','tilt','flip','centerTilt','uturn']) $(id).disabled=!maneuversReady();
   if (!student) return;
   const enabled = driveReady && !document.hidden;
-  for (const id of ['drive','left','right']) $(id).disabled = !enabled;
+  $('drive').disabled = !enabled;
   $('drive').setAttribute('aria-pressed', String(enabled && state.throttle > 0));
   $('drive').classList.toggle('on', enabled && state.throttle > 0);
-  $('connection').textContent = !online ? 'Not connected' : !allowed ? 'Waiting for approval' : releasePending ? 'Leaving car' : !hasCar ? 'Choose a car' : !enabled ? 'Connected · waiting' : state.throttle > 0 ? 'Driving · release to stop' : 'Ready to drive';
+  $('connection').textContent = !online ? 'Not connected' : !allowed ? 'Waiting for approval' : releasePending ? 'Leaving car' : !hasCar ? 'Choose a car' : !enabled ? 'Connected · waiting' : telemetryDegraded ? 'Limited drive · track readings delayed' : state.throttle > 0 ? 'Driving · release to stop' : 'Ready to drive';
 }
 if (!/^[0-9a-f]{8}$/.test(room) || !/^[0-9a-f]{24}$/.test(joinKey)) { say('This link is incomplete. Scan the QR code on the host screen again.'); $('go').disabled = true; }
 try { const saved = JSON.parse(sessionStorage.getItem(KEY)); if (saved?.playerKey) { me = saved; start(); } } catch {}
@@ -74,24 +96,34 @@ function start() {
     if (!online) { lockControls(); feedback('Connection lost. Throttle reset; wait for the host.', 'disabled'); }
     syncStudentControls();
     $('link').textContent = status === 'online' ? '' : status === 'refused' ? 'Room closed' : 'Reconnecting…';
-    if (status === 'refused') { try { sessionStorage.removeItem(KEY); } catch {} }
+    if (status === 'refused') { awake.setActive(false); try { sessionStorage.removeItem(KEY); } catch {} }
+    updatePhoneSound();
   }});
   setInterval(send, 66);
-  navigator.wakeLock?.request?.('screen').catch(() => {});
+  awake.setActive(true);
 }
 
 function onMessage(m) {
   if (invitationChanging) return;
-  if (m.type === 'kicked') { allowed = false; lockControls(); $('car').textContent = 'Removed'; $('status').textContent = 'The host removed you.'; return; }
+  if (m.type === 'kicked') { allowed = false; awake.setActive(false); lockControls(); $('car').textContent = 'Removed'; $('status').textContent = 'The host removed you.'; return; }
   if (m.type === 'pending') { allowed = false; lockControls(); $('car').textContent = 'Waiting…'; $('status').textContent = 'Waiting for the host to let you in.'; return; }
   if (m.type === 'approved') { allowed = true; feedback(student ? 'Approved. Wait for your car, then hold to drive.' : 'Approved. Wait for a car, then raise the throttle.', 'ready'); $('status').textContent = 'You are in.'; syncStudentControls(); return; }
   if (m.type !== 'state') return;
-  lastStateAt = Date.now();
+  lastStateAt = Date.now(); mediaState=m;
   const mine = m.me, lobby = m.lobby ?? {};
   hasCar = !!mine;
   if (releasePending && (!mine || mine.id !== releaseCar)) { releasePending = false; releaseCar = null; }
   const ready = online && allowed && !releasePending && hasCar && !mine.needsNeutral && mine.connected !== false && !mine.safetyReason && !mine.disabled && !['stopped', 'scanning'].includes(lobby.phase) && !['countdown', 'paused', 'finished'].includes(lobby.round?.status);
   const changedCar = !!mine && mine.id !== previousView?.id;
+  const suppliedRecovery=mine?.telemetryHealth?.recoveryId;
+  const validRecovery=Number.isSafeInteger(suppliedRecovery)&&suppliedRecovery>=0&&suppliedRecovery<=1000000;
+  if(changedCar)recoveryId=validRecovery?suppliedRecovery:0;
+  else if(validRecovery)recoveryId=suppliedRecovery;
+  const wasDegraded=telemetryDegraded;
+  telemetryDegraded=!!mine && mine.telemetryHealth?.state==='degraded';
+  const newRecovery=validRecovery && mine.telemetryHealth.recoveryId>0 && mine.telemetryHealth.recoveryId!==previousView?.telemetryHealth?.recoveryId;
+  const freshRecovery=newRecovery || (mine?.telemetryHealth?.state==='reacquired' && previousView?.telemetryHealth?.state!=='reacquired');
+  if(telemetryDegraded || freshRecovery) clearManeuvers();
   if (!ready || changedCar) resetInputs({keepSelection: !mine});
   if (changedCar) { setSteer(0); tiltNeutral = null; feedback('Car changed. ' + throttleCue(), 'ready'); }
   driveReady = ready;
@@ -104,6 +136,9 @@ function onMessage(m) {
     else if (Number.isFinite(mine.score) && Number.isFinite(previousView.score) && mine.score > previousView.score) feedback('+' + (mine.score - previousView.score) + ' points!', 'score');
     else if (mine.laps > previousView.laps) feedback('Lap ' + mine.laps + ' complete!', 'lap');
   }
+  if(ready && telemetryDegraded && !wasDegraded) feedback('Track readings delayed. Forward drive is limited; steering and attacks are locked.', 'ready');
+  else if(ready && (wasDegraded||newRecovery) && !telemetryDegraded) feedback('Track readings restored. Choose a fresh steering action; tilt must be enabled again.', 'recovered');
+  if(ready && !telemetryDegraded && ['shield','boost'].includes(mine?.powerZone?.effect) && mine.powerZone.remainingMs>0 && mine.powerZone.effect!==previousView?.powerZone?.effect) feedback(mine.powerZone.effect==='shield'?'Power Zone shield charged.':'Power Zone boost active.', 'score');
   previousView = mine ? {...mine} : null;
   const round = lobby.round;
   if (round?.status !== previousRoundStatus) {
@@ -133,13 +168,21 @@ function onMessage(m) {
     else if (student && mine.safetyReason === 'Host stopped') $('status').textContent = 'Stopped. Choose Start driving on the laptop when ready.';
     else if (student && mine.needsNeutral && !mine.safetyReason) $('status').textContent = 'Keep controls released while your car gets ready.';
     if (student && !allowed) $('status').textContent = 'Waiting for the host to approve your controller.';
+    if(ready && telemetryDegraded) {
+      const limit=finiteBound(mine.telemetryHealth?.maximumSpeed,300),windowMs=finiteBound(mine.telemetryHealth?.remainingMs,1000);
+      $('status').textContent='Track readings delayed. Forward speed limited to '+Math.round(limit)+' mm/s; steering, tilt and attacks locked. Release to stop. Host recovery window: up to '+(windowMs/1000).toFixed(1)+' s at this update.';
+    } else if(ready) {
+      const plan=mine.speedPlan;
+      if(plan && plan.rampMs>0 && plan.commanded<plan.requested) $('status').textContent+=' Ramping command '+Math.round(finiteBound(plan.commanded,1200))+' toward '+Math.round(finiteBound(plan.requested,1200))+' mm/s.';
+      if(['shield','boost'].includes(mine.powerZone?.effect) && mine.powerZone.remainingMs>0) $('status').textContent+=' Power Zone '+mine.powerZone.effect+' · up to '+(finiteBound(mine.powerZone.remainingMs,3000)/1000).toFixed(1)+' s remaining at this update.';
+    }
     $('hits').textContent = Number.isFinite(mine.score) ? 'Score ' + mine.score + ' · Laps ' + mine.laps : 'Hits ' + mine.kills + ' · Lost ' + mine.deaths + ' · Laps ' + mine.laps;
     if (mine.assists) $('hits').textContent += ' · Assists ' + mine.assists;
     if (mine.targets?.length) $('hits').textContent += ' · Target ' + mine.targets.join(', ');
     for (const bay of ['attack', 'support', 'special']) {
       const info = mine.bays[bay], button = $(bay);
       button.hidden = !info && bay === 'special';
-      button.disabled = !driveReady || lobby.phase !== 'battle';
+      button.disabled = !maneuversReady() || lobby.phase !== 'battle';
       button.title = lobby.phase === 'battle' ? '' : 'Weapons are available in Battle rush';
       $(bay + 'Name').textContent = info ? info.label + (info.charge > 0 ? ' ' + info.charge + 's' : '') : '—';
       button.classList.toggle('wait', !!info && !info.ready);
@@ -153,17 +196,22 @@ function onMessage(m) {
     $('status').textContent = free.length ? 'Pick a car:' : 'Ask the host to set a car to “Phone”.';
     $('cars').replaceChildren(...free.map(c => { const b = document.createElement('button'); b.textContent = c.name; b.onclick = () => { once.car = c.id; }; return b; }));
   }
-  syncStudentControls();
+  syncStudentControls(); updatePhoneSound();
+  // A fresh recovery must acknowledge neutral steering before another user
+  // gesture can re-enable it; do not let the periodic send deduplicator skip it.
+  if(freshRecovery) { lastSent=''; send(); }
 }
 
 function send() {
   if (invitationChanging || !me || !link || !allowed || !online) return;
-  if (Date.now() - lastStateAt > 1000) lockControls();
-  const body = {...state, throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once, ...(releasePending ? {release:true} : {})};
+  if (Date.now() - lastStateAt > 1000) { lockControls(); $('status').textContent='Host updates delayed. Controls released; wait for a fresh update.'; }
+  const body = {...state, recoveryId, steeringActive:steeringActive&&maneuversReady(), throttle: +state.throttle.toFixed(2), steer: +state.steer.toFixed(2), ...once, ...(releasePending ? {release:true} : {})};
   // Tilt samples and arrow buttons can change steering while controls are locked.
   // The host requires BOTH throttle and steering neutral before it can re-arm.
   // Keep lobby/release requests, but never send a driving action until ready.
   if (!driveReady || document.hidden) Object.assign(body, {throttle:0, steer:0, attack:false, support:false, special:false, uturn:false});
+  if(telemetryDegraded) { Object.assign(body,{steer:0,attack:false,support:false,special:false,uturn:false}); delete body.cycle; }
+  updatePhoneSound();
   const text = JSON.stringify(body), now = Date.now();
   // Always refresh a few times a second so the host's dead-man timer stays happy.
   if (text === lastSent && now - lastSentAt < 250) return;
@@ -177,10 +225,10 @@ function setThrottle(value) {
   state.throttle = driveReady && !document.hidden ? Math.max(0, Math.min(1, value)) : 0;
   $('throttle').setAttribute('aria-valuenow', String(Math.round(state.throttle * 100)));
   $('fill').style.height = Math.round(state.throttle * 100) + '%'; $('pct').textContent = Math.round(state.throttle * 100);
-  syncStudentControls();
+  syncStudentControls(); updatePhoneSound();
 }
 function lockControls() {
-  driveReady = false; resetInputs();
+  driveReady = false; telemetryDegraded=false; resetInputs(); clearManeuvers();
   $('throttle').setAttribute('aria-disabled', 'true');
   for (const bay of ['attack', 'support', 'special']) $(bay).disabled = true;
   syncStudentControls();
@@ -192,9 +240,10 @@ function resetInputs({keepSelection = false} = {}) {
   down.clear();
   $('fill').style.height = '0%'; $('pct').textContent = '0'; $('throttle').setAttribute('aria-valuenow', '0');
   for (const bay of ['attack', 'support', 'special']) $(bay).classList.remove('on');
-  if (student) { setSteer(0); $('drive').classList.remove('on'); $('drive').setAttribute('aria-pressed','false'); }
+  clearManeuvers();
+  if (student) { $('drive').classList.remove('on'); $('drive').setAttribute('aria-pressed','false'); }
   syncStudentControls();
-  lastSent = '';
+  lastSent = ''; updatePhoneSound();
 }
 slider.addEventListener('keydown', event => {
   if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.code)) return;
@@ -210,7 +259,7 @@ slider.addEventListener('pointermove', event => { if (throttlePointer === event.
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) slider.addEventListener(type, event => {
   if (throttlePointer === event.pointerId) throttlePointer = null;
 });
-$('brake').onclick = () => { resetInputs(); send(); feedback('Braking. Throttle reset.', 'ready'); };
+$('brake').onclick = () => { resetInputs(); send(); feedback('Braking. Throttle reset.', 'ready'); sounds.cue('stop'); };
 
 // Student throttle is held, never latched. A stopped/reassigned/disconnected
 // controller discards its gesture; readiness cannot restart it without a press.
@@ -241,13 +290,13 @@ drive.addEventListener('blur', () => {
 // --- weapons --------------------------------------------------------------------
 for (const bay of ['attack', 'support', 'special']) {
   const button = $(bay);
-  const set = down => { state[bay] = down && driveReady; button.classList.toggle('on', state[bay]); };
+  const set = down => { state[bay] = down && maneuversReady(); button.classList.toggle('on', state[bay]); };
   button.addEventListener('pointerdown', event => { button.setPointerCapture(event.pointerId); set(true); });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) button.addEventListener(type, () => set(false));
   // Double-tap the label area cycles weapons on cars that carry more than one.
   button.addEventListener('dblclick', () => { once.cycle = bay; });
 }
-$('uturn').onclick = () => { if (driveReady) once.uturn = true; };
+$('uturn').onclick = () => { if (maneuversReady()) once.uturn = true; };
 $('leave').onclick = () => {
   if (!hasCar) return;
   releasePending = true; releaseCar = previousView?.id; lockControls(); once.release = true; send();
@@ -266,11 +315,11 @@ addEventListener('keydown', event => {
   if (student && ['KeyS','ArrowDown'].includes(event.code)) { resetInputs(); send(); }
   if (event.code === 'KeyA' || event.code === 'ArrowLeft') $('left').click();
   if (event.code === 'KeyD' || event.code === 'ArrowRight') $('right').click();
-  if (event.code === 'KeyX' && driveReady) once.uturn = true;
+  if (event.code === 'KeyX' && maneuversReady()) once.uturn = true;
   if (event.code === 'KeyQ') once.cycle = 'attack';
   if (event.code === 'KeyE') once.cycle = 'support';
   if (event.code === 'Escape') { resetInputs(); send(); }
-  for (const [bay, codes] of Object.entries(KEYS)) if (codes.includes(event.code)) { state[bay] = driveReady; $(bay).classList.toggle('on', driveReady); }
+  for (const [bay, codes] of Object.entries(KEYS)) if (codes.includes(event.code)) { state[bay] = maneuversReady(); $(bay).classList.toggle('on', state[bay]); }
 });
 addEventListener('keyup', event => {
   down.delete(event.code);
@@ -285,10 +334,16 @@ setInterval(() => {
 }, 50);
 
 // --- steering ---------------------------------------------------------------------
-function setSteer(value) { state.steer = Math.max(-1, Math.min(1, value)); $('dot').style.left = (50 + state.steer * 44) + '%'; }
-$('left').onclick = () => { if (!student || driveReady) setSteer(Math.round(state.steer * 3 - 1) / 3); };
-$('right').onclick = () => { if (!student || driveReady) setSteer(Math.round(state.steer * 3 + 1) / 3); };
+function setSteer(value,deliberate=false) { state.steer = telemetryDegraded?0:Math.max(-1, Math.min(1, value)); if(deliberate&&maneuversReady())steeringActive=true; $('dot').style.left = (50 + state.steer * 44) + '%'; }
+$('left').onclick = () => { if (maneuversReady()) setSteer(Math.round(state.steer * 3 - 1) / 3,true); };
+$('right').onclick = () => { if (maneuversReady()) setSteer(Math.round(state.steer * 3 + 1) / 3,true); };
+function clearManeuvers() {
+  steeringActive=false; setSteer(0); state.attack=state.support=state.special=false; delete once.uturn; delete once.cycle;
+  for(const bay of ['attack','support','special']) $(bay).classList.remove('on');
+  tiltOn=false; tiltWanted=false; tiltNeutral=null; $('tilt').textContent='Tilt steering'; $('tilt').classList.remove('on'); $('flip').hidden=$('centerTilt').hidden=true;
+}
 function onTilt(event) {
+  if(telemetryDegraded)return;
   if (!Number.isFinite(event.beta) || !Number.isFinite(event.gamma)) return;
   // Only a device that really reports motion counts as having tilt steering.
   if (tiltWanted && !tiltOn) { tiltOn = true; $('tilt').textContent = 'Tilt on'; $('tilt').classList.add('on'); $('flip').hidden = false; $('centerTilt').hidden = false; }
@@ -299,36 +354,39 @@ function onTilt(event) {
   if (tiltNeutral === null || tiltAngle !== angle) { tiltNeutral = degrees; tiltAngle = angle; }
   const relative = degrees - tiltNeutral;
   const dead = Math.abs(relative) < 3 ? 0 : relative - Math.sign(relative) * 3;
-  setSteer(flip * dead / 24);
+  setSteer(flip * dead / 24,true);
 }
 async function askTilt() {
   if (typeof DeviceOrientationEvent === 'undefined') return false;
   try {
     if (typeof DeviceOrientationEvent.requestPermission === 'function' && await DeviceOrientationEvent.requestPermission() !== 'granted') return false;
   } catch { return false; }
+  if(!maneuversReady())return false;
   if (!listening) { addEventListener('deviceorientation', onTilt); listening = true; }
   tiltNeutral = null; tiltWanted = true;
   return true;
 }
 $('tilt').onclick = async () => {
+  if(!maneuversReady())return;
   if (tiltOn) { tiltOn = false; tiltWanted = false; $('tilt').textContent = 'Tilt steering'; $('tilt').classList.remove('on'); $('flip').hidden = true; $('centerTilt').hidden = true; setSteer(0); return; }
   if (!await askTilt()) { $('status').textContent = 'Tilt is not available here. Use the arrow buttons.'; return; }
   setTimeout(() => { if (!tiltOn) $('link').textContent = 'No motion sensor found: use the arrows or A / D'; }, 1200);
 };
-$('centerTilt').onclick = () => { if (tiltSample !== null) { tiltNeutral = tiltSample; setSteer(0); feedback('Steering centered. Hold the phone comfortably.', 'ready'); } };
+$('centerTilt').onclick = () => { if (tiltSample !== null) { tiltNeutral = tiltSample; setSteer(0,true); feedback('Steering centered. Hold the phone comfortably.', 'ready'); } };
 $('flip').onclick = () => { flip = -flip; try { sessionStorage.setItem('slipstream.flip', String(flip)); } catch {} };
-document.addEventListener('visibilitychange', () => { if (document.hidden) { resetInputs(); send(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { resetInputs(); send(); } updatePhoneSound(); });
+addEventListener('pagehide',()=>{resetInputs();send();awake.dispose();sounds.dispose();});
 addEventListener('hashchange', async () => {
   // A browser can reuse this page for a different car's QR fragment without
   // rerunning the module. Never keep driving or joining with the old binding.
   if (invitationChanging) return;
-  invitationChanging = true;
+  invitationChanging = true; awake.setActive(false); sounds.disable();
   const previousLink = link, couldSend = allowed && online;
   allowed = false; lockControls(); $('go').disabled = true;
   if (previousLink && couldSend) {
     try {
       await Promise.race([
-        previousLink.send({throttle:0,steer:0,attack:false,support:false,special:false,uturn:false}),
+        previousLink.send({throttle:0,steer:0,steeringActive:false,recoveryId,attack:false,support:false,special:false,uturn:false}),
         new Promise(resolve => setTimeout(resolve,250))
       ]);
     } catch {} // A lost connection still closes; the host's dead-man remains active.

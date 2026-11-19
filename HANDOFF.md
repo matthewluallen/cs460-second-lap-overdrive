@@ -1,4 +1,16 @@
-# Latest: Week 4 driving, per-car QR and cinematic views
+# Latest: Week 4 classroom readiness, phone health and run reports
+
+Branch **`week-4-student-driving`**, follow-up to **`9cb2bff`**. Do not merge main. Browser trace build: **`2026-11-18-week4-classroom`**. Refresh the host and every phone after updating; reconnect and approve fresh per-car invitations before driving.
+
+- The Student readiness panel names the car and action blocking **Start driving**. It also distinguishes advisory battery/model/charger information from actual start gates; it does not certify the physical track or silently add a motor command.
+- Phones now show bounded telemetry recovery, requested/commanded speed and custom Power Zone effects. During recovery, forward input remains subject to the existing cap/deadline, while steering, tilt, attacks and U-turns are visibly unavailable. Reacquisition requires a fresh steering action; tilt must be enabled again.
+- A reproduced stale-intent defect is repaired at the host: a per-seat `recoveryId` generation and released-maneuver handshake prevent pre-gap steering/attack input from becoming active after recovery, including a phone that missed the degraded-state update. This is not a credential. Existing full STOP/neutral-input arming remains in force.
+- **STOP ALL → Run report** produces readable, downloadable/printable plain text. It separates written commands, car reports and operator observations; gaps exclude stopped intervals. Missing history, dropped packets, clock resets and unconfirmed physical outcomes stay explicit. **Record from now** captures future evidence when no recording is active. Report generation is stopped-only to keep decoding work out of the driving loop.
+- **Sound & screen** provides opt-in original synthesized cues, an optional engine game sound, volume/mute, and visible screen-awake request status/retry. Sound starts off; engine sound is separately off. Screen-awake requests activate with the connection and can be released or denied by the browser. Neither feature controls the car or guarantees an awake host. No APK sound assets or new BLE sound commands are used.
+
+Validation: **917/917 Node tests pass**. No new physical car motion, phone-network acceptance or audible device acceptance is claimed. Guardian's previously accepted 300 mm/s results remain the hardware baseline; higher speeds, gap recovery, custom Power Zone effects, phones and multi-car play still require their own supervised acceptance. The existing special-piece scored-round gate remains unchanged. See [the classroom implementation and browser evidence](slipstream/review/WEEK4-CLASSROOM-REPORT.md).
+
+# Previous: Week 4 driving, per-car QR and cinematic views
 
 Branch **`week-4-student-driving`**, based on the latest `slipstream-and-security-hardening` commit **`da2ba34`**. Do not merge main. Browser trace build: **`2026-11-18-week4-drive`**.
 

@@ -17,6 +17,20 @@ Story missions. Simulated practice works without owning any hardware.
 
 Phones must be able to reach the same HTTPS address as the host page. Localhost QR links work only on the host machine; for class use the public Codespaces forwarded address described in [DEPLOYMENT.md](DEPLOYMENT.md). The QR stays stable while unused. Approval replaces it; changing controllers, removing the car or revoking the invitation retires the old claims. Show **Phone / QR** again when another driver needs a fresh invitation. QR links never include the server's Advanced host code or a room's host key; approval remains required.
 
+The readiness panel below the header explains the exact blocking car/action when **Start driving** is unavailable. Follow its instruction rather than repeatedly pressing start. Advisory model, battery and charger information is not a physical acceptance certificate.
+
+During optional telemetry recovery, the phone explains limited forward speed and locks steering, tilt, attacks and U-turns. After readings return, use a fresh steering action; enable tilt again if needed. A full STOP still requires released controls before rearming. After a software update, refresh **both** the host and every phone, reconnect cars and approve fresh invitations.
+
+### Save your driving evidence
+
+Choose **STOP ALL**, confirm the physical stop, then **Run report**. Add only what you actually saw in **What you observed on the physical track**, choose **Update report**, and use **Download report** or **Print report**. The summary distinguishes written speed commands, reported speeds, active-driving telemetry gaps, controller lap counts and unverified human observations. It cannot prove physical movement or stopping. Missing history remains labeled; **Record from now** starts future capture when no recording is active. Close the report before starting another run, then stop and update it afterward.
+
+### Sound and screen support
+
+Open **Sound & screen** on the host or phone. Sound starts off: choose **Enable sound** for original synthesized cues, adjust **Sound volume**, and optionally enable **Engine game sound**. The engine tone is a game effect, not measured motor RPM. Mute it independently of the 3D spoken-commentary setting. Existing haptics remain optional where supported.
+
+Screen-awake support is requested while connected and its current status is displayed. Use **Keep screen awake** to retry when offered. A browser may deny or release the request; keep the host tab visible and supervise the track regardless. Returning to a page may reacquire screen support, but never restarts driving. Phone/laptop sound output and screen behavior have software checks, not physical-device acceptance.
+
 **Investigate the system** has four expandable activities: how the car reads the track, a hardware-capability inventory, direct software dependencies, FCC-label research, and security evidence. The dependency inventory is an SBOM starting point, not a complete SBOM; exact hardware components and FCC identity must be established from the specific car's evidence.
 
 **Advanced** retains simulation, games, diagnostic tools, telemetry and traces. Switching between Student and Advanced requests STOP and clears driving intent. It never starts a car.
@@ -51,9 +65,9 @@ The countdown leads into a short round and a result card. **Play again** explici
 starts a new round. Simulated cars exercise the controller code; agreement with
 the simulator does not prove agreement with physical hardware.
 
-## 3D studio and remote hosting
+## 3D driving view and remote hosting
 
-Select **3D studio** above the map, then choose **Circuit overview**, **Chase cam**,
+Select **3D driving view** above the map, then choose **Circuit overview**, **Chase cam**,
 **Driver view**, **Trackside** or **Auto director**. Select a particular car or
 **Active car**. Captions are on by default; **Captions + voice** is optional when
 the browser supports speech, and **Off** silences commentary. These are virtual
@@ -283,10 +297,10 @@ Tests: `node --test slipstream/*.test.mjs platform/slipstream-relay.test.mjs`.
 
 ## Not done yet
 
-- No run against physical cars from this code (see Status).
+- Guardian has limited supervised acceptance at 300 mm/s: scanning, three forward laps, left/right shifts and a three-lap Computer round on the test circuit. Higher speeds, brief-gap recovery, custom Power Zone effects, phone control, attacks and multi-car driving still need their own physical acceptance (see Status).
 - Jumps are mapped and drawn; nothing special is sent to help a car clear one.
 - At an intersection a car's position is known only from its entry and exit codes.
-- Weapon upgrades, a persistent/branching campaign, commanders and sound are not included.
+- Weapon upgrades, a persistent/branching campaign and commanders are not included. Optional original client sound cues are available; no stock app audio or onboard speaker command is included.
 - A firmware-level QEMU "digital twin" of the car is not practical; see
   [FIRMWARE-TWIN.md](FIRMWARE-TWIN.md). The behavioural twin in `sim.mjs` is the
   working alternative.

@@ -44,6 +44,30 @@ room and rejoin; do not expect continuity. Printed status messages do not guaran
 Codespace uptime. Verify an approved phone can join, send inputs and reconnect
 through the actual classroom network before operating physical cars.
 
+### Updating an existing classroom session
+
+Stop the cars and verify the physical stop before updating/restarting the server.
+Refresh the host page and every phone after deploying
+`2026-11-18-week4-classroom`; reconnect cars, show fresh per-car invitations and
+approve the drivers again. The phone recovery-generation handshake requires both
+ends to be current. A legacy phone remains maneuver-locked after a recovery episode.
+
+Use the Student readiness panel for a specific connection/approval/pit blocker.
+Phones now show bounded telemetry recovery, requested/commanded pace and Power
+Zone effects. After recovery, steering needs a new action and tilt must be enabled
+again. These messages do not prove the physical car is correctly located.
+
+**Sound & screen** is entirely client-side. Sound and engine effects start off;
+**Enable sound**, volume/mute and the engine checkbox control optional synthesized
+feedback. Screen-awake requests activate while connected; their status and retry
+control are visible. Wake locks can be denied/released and do not keep the control
+loop reliable through every suspension. Existing hidden-host STOP behavior remains.
+
+After **STOP ALL**, **Run report** summarizes the current recording and final
+snapshot; observations remain explicitly unverified. **Record from now** captures
+future evidence when needed. Report decoding is stopped-only; raw traces and
+reports are generated in the browser rather than exposed as public server files.
+
 ### Student room access
 
 The public Student endpoint creates only **new isolated rooms**. Its room host key

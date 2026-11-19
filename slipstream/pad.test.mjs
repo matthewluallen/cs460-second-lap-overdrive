@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
+import {AudioCues} from './audio-cues.mjs';
+import {ScreenAwake} from './wake-lock.mjs';
 
 // Execute the actual phone handlers against a small browser surface. No radio,
 // permissions or device sensor is implied by these logic-level regressions.
@@ -15,16 +17,17 @@ function pad({vibration = true} = {}) {
     return nodes.get(id);
   }
   const storage = {getItem() { return null; }, setItem() {}, removeItem() {}};
-  const context = vm.createContext({console, URLSearchParams, Date,
+  let browserDocument;
+  const context = vm.createContext({AudioCues:class extends AudioCues {constructor(options){super({...options,AudioContext:null,document:browserDocument});}},ScreenAwake:class extends ScreenAwake {constructor(options){super({...options,wakeLock:null,document:browserDocument});}},console, URLSearchParams, Date,
     location: {hash: '#r=12345678&j=' + 'a'.repeat(24)}, sessionStorage: storage, localStorage: storage,
     navigator: vibration ? {vibrate(p) { buzzes.push(p); return true; }} : {},
-    document: {hidden: false, getElementById: node, body: node('body'), documentElement: node('html'), addEventListener() {}, createElement: () => node('new')},
+    document: browserDocument={hidden: false, getElementById: node, body: node('body'), documentElement: node('html'), addEventListener() {}, createElement: () => node('new')},
     window: {}, screen: {orientation: {angle: 0}},
     setInterval() {}, setTimeout() {}, addEventListener() {},
     api: async () => ({player: 1, playerKey: 'b'.repeat(48)}),
     channel(options) { Object.assign(callbacks, options); return {send: async body => { sent.push(body); }}; }
   });
-  vm.runInContext(readFileSync(new URL('./pad.mjs', import.meta.url), 'utf8').replace("import {api, channel} from './net.mjs';", ''), context);
+  vm.runInContext(readFileSync(new URL('./pad.mjs', import.meta.url), 'utf8').replace(/^import .*;$/gm,''), context);
   const run = code => vm.runInContext(code, context);
   const state = {type: 'state', me: {name: 'Car', color: [0, 1, 0], energy: 1, speed: 0, kills: 0, deaths: 0, laps: 0, bays: {}, disabled: false}, lobby: {phase: 'ready', cars: []}};
   const ready = async () => { await node('go').onclick(); callbacks.onStatus('online'); callbacks.onMessage({type: 'approved'}); callbacks.onMessage(state); };

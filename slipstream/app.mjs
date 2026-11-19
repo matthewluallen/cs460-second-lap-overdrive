@@ -12,6 +12,10 @@ import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 import {mountStudentLab} from './student-lab.mjs';
 import {rgb} from './protocol.mjs';
 import {DriveNarrator, cameraCar} from './camera-director.mjs';
+import {drivingReadiness} from './readiness.mjs';
+import {buildRunReport, renderRunReportText} from './run-report.mjs';
+import {AudioCues} from './audio-cues.mjs';
+import {ScreenAwake} from './wake-lock.mjs';
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...children) => { const n = Object.assign(document.createElement(tag), props); n.append(...children); return n; };
@@ -30,6 +34,25 @@ const mapRenderer = new Renderer($('map'));
 let renderer = mapRenderer, studioRenderer = null, studioLoading = false, requestedView = '2d';
 const recorder = new Recorder();
 const narrator = new DriveNarrator();
+const sound = new AudioCues({document,now:()=>performance.now(),onStatus:state=>{
+  $('soundStatus').textContent=state.text; $('soundToggle').textContent=state.state==='on'?'Mute sound':'Enable sound';
+  $('soundToggle').disabled=state.state==='unsupported'; $('soundToggle').setAttribute('aria-pressed',String(state.state==='on'));
+}});
+const screenAwake = new ScreenAwake({document,wakeLock:navigator.wakeLock,onStatus:state=>{
+  $('wakeStatus').textContent=state.text; $('wakeRetry').disabled=!state.active||['unsupported','held','requesting'].includes(state.state);
+}});
+$('soundVolume').value='20'; $('engineSound').checked=false;
+$('soundToggle').onclick=()=>{if(sound.snapshot().state==='on')sound.disable();else void sound.enable();};
+$('soundVolume').oninput=()=>sound.setVolume(Number($('soundVolume').value)/100);
+$('engineSound').onchange=()=>sound.setEngine($('engineSound').checked);
+$('wakeRetry').onclick=()=>screenAwake.retry();
+function updateComfort(snapshot,now) {
+  screenAwake.setActive(game.drivers.some(d=>d.car.connected));
+  const requested=Number($('cameraCar').value),car=requested?snapshot.find(s=>s.id===requested):snapshot.find(s=>s.connected&&s.located&&s.speed>0)??snapshot.find(s=>s.connected&&s.located)??snapshot[0];
+  sound.update({online:car?.connected===true,halted:game.halted||!!car?.safetyReason,carId:car?.id??null,speed:car?.speed??0,fresh:car?.located===true,
+    telemetryState:car?.telemetryHealth?.state??'normal',lap:car?.laps??null,powerZone:car?.powerZone?.effect?.type??null,countdown:countdown?Math.max(1,Math.ceil((countdown.until-now)/1000)):null});
+}
+addEventListener('pagehide',()=>{sound.dispose();screenAwake.dispose();});
 $('cameraMode').value='orbit'; $('cameraCar').value='0'; $('commentaryMode').value='captions';
 const session = new RoundSession();
 let countdown = null, sessionResultShown = false;
@@ -332,7 +355,7 @@ $('scan').onclick = () => {
 };
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
-$('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); if(isStudent() && !studentDriveReady())throw new Error('Scan the track and connect a driver before starting.'); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); refresh(); } catch (error) { log(error.message); } };
+$('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); if(isStudent() && !studentDriveReady())throw new Error(drivingReadiness(game,{countdown,now:performance.now()}).blockers.join(' ')||'Driving is already enabled.'); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); refresh(); } catch (error) { log(error.message); } };
 $('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); syncDrivingSettings(); };
 function syncDrivingSettings() {
   const speed=String(game.topSpeed);
@@ -606,11 +629,14 @@ function readControls(dt) {
       input.lane = -(Math.abs(pad.axes[0]) > 0.12 ? pad.axes[0] : 0) * 67.5;
       input.attack = !!pad.buttons[0]?.pressed; input.support = !!pad.buttons[1]?.pressed; input.special = !!pad.buttons[3]?.pressed;
     } else if (d.control === 'phone') {
+      syncPhoneManeuvers(d);
       const pad = d.pad, fresh = pad && performance.now() - pad.seen < 700;
       if (!fresh) { d.armed = false; if(pad) pad.armed = false; }
       // Dead-man: a phone that stops sending (locked, out of range) stops its car.
-      input.throttle = fresh ? pad.throttle : 0; input.attack = fresh && pad.attack; input.support = fresh && pad.support; input.special = fresh && pad.special;
-      if (fresh) input.lane = -pad.steer * 67.5;
+      input.throttle = fresh ? pad.throttle : 0;
+      const maneuvers=fresh&&!pad.maneuversNeedRelease&&!d.telemetryGrace;
+      input.attack = maneuvers && pad.attack; input.support = maneuvers && pad.support; input.special = maneuvers && pad.special;
+      input.lane = maneuvers && pad.steeringActive !== false ? -pad.steer * 67.5 : null;
     } else if (d.control === 'none') { input.throttle = 0; input.attack = input.support = input.special = false; d.level = 0; }
     if (d.control !== 'bot' && !d.armed) {
       if (d.control !== 'phone' && input.throttle === 0 && !input.attack && !input.support && !input.special) d.armed = true;
@@ -635,6 +661,12 @@ function revokeCarInvite(driver) {
   });
   return driver.inviteRevocation;
 }
+function syncPhoneManeuvers(driver) {
+  const pad=driver.pad,since=driver.car.telemetry.telemetryHealth?.since;
+  if(!pad || !Number.isFinite(since) || pad.recoverySince===since)return;
+  pad.recoverySince=since;pad.recoveryId=((pad.recoveryId??0)%1000000)+1;pad.maneuversNeedRelease=true;
+  pad.steeringActive=false;pad.steer=0;pad.attack=pad.support=pad.special=false;
+}
 function releasePad(driver, revoke = false) { if (driver.pad) { const player = driver.pad.player; player.driver = null; if (revoke) { player.car = undefined; player.manual = true; } driver.pad = null; driver.input.throttle = 0; driver.car.stop(); } }
 function seat(player, wantedId = player.car) {
   if (player.driver || !player.approved) return;
@@ -642,7 +674,7 @@ function seat(player, wantedId = player.car) {
   const free = d => d.control === 'phone' && !d.pad && d.car.connected;
   const driver = game.drivers.find(d => free(d) && d.id === wantedId) ?? (wantedId ? null : game.drivers.find(free));
   if (!driver) return;
-  driver.armed = false; driver.pad = {player, seen: 0, throttle: 0, steer: 0, attack: false, support: false, special: false};
+  driver.armed = false; driver.pad = {player, seen: 0, throttle: 0, steer: 0, steeringActive:false, recoveryId:0, maneuversNeedRelease:false, attack: false, support: false, special: false};
   player.driver = driver; log(player.name + ' is driving ' + driver.car.name);
 }
 function onRelay(m) {
@@ -659,16 +691,20 @@ function onRelay(m) {
     if (!p.driver && Number.isSafeInteger(m.car)) seat(p, m.car);
     else if (!p.driver && !p.manual) seat(p);
     const pad = p.driver?.pad; if (!pad) return;
+    syncPhoneManeuvers(p.driver);
     pad.seen = performance.now();
     const neutral = Number(m.throttle) === 0 && (Number(m.steer)||0) === 0 && !m.attack && !m.support && !m.special && !m.uturn;
     if (!p.driver.armed) {
       if (neutral && !game.halted && !p.driver.car.safetyReason) p.driver.armed = true;
       else { pad.throttle = 0; pad.attack = pad.support = pad.special = false; return; }
     }
-    pad.throttle = Math.max(0, Math.min(1, Number(m.throttle) || 0)); pad.steer = Math.max(-1, Math.min(1, Number(m.steer) || 0));
-    pad.attack = m.attack === true; pad.support = m.support === true; pad.special = m.special === true;
-    if (m.cycle === 'attack' || m.cycle === 'support' || m.cycle === 'special') game.battle?.cycle(p.driver.car, m.cycle);
-    if (m.uturn === true && !game.halted && game.phase !== 'scanning') p.driver.car.uturn();
+    if(m.recoveryId===pad.recoveryId && m.steeringActive===false && (Number(m.steer)||0)===0 && !m.attack && !m.support && !m.special && !m.uturn && !m.cycle && !p.driver.telemetryGrace)pad.maneuversNeedRelease=false;
+    const maneuvers=!pad.maneuversNeedRelease&&!p.driver.telemetryGrace&&(pad.recoveryId===0||m.recoveryId===pad.recoveryId);
+    pad.throttle = Math.max(0, Math.min(1, Number(m.throttle) || 0)); pad.steer = maneuvers?Math.max(-1, Math.min(1, Number(m.steer) || 0)):0;
+    pad.steeringActive=maneuvers&&m.steeringActive!==false;
+    pad.attack = maneuvers&&m.attack === true; pad.support = maneuvers&&m.support === true; pad.special = maneuvers&&m.special === true;
+    if (maneuvers && (m.cycle === 'attack' || m.cycle === 'support' || m.cycle === 'special')) game.battle?.cycle(p.driver.car, m.cycle);
+    if (maneuvers && m.uturn === true && !game.halted && game.phase !== 'scanning') p.driver.car.uturn();
   }
   renderPlayers();
 }
@@ -756,22 +792,34 @@ function pushState(snapshot, now) {
   if (!room || now - lastState < 200) return;
   lastState = now;
   const round = session.view(), roundRows = new Map(round.rows.map(row => [row.id, row]));
-  const view = s => ({id: s.id, crew: s.crew, assists: s.assists, targets: s.targets, name: s.name, color: s.color, energy: +s.energy.toFixed(2), speed: Math.round(s.speed), disabled: s.disabled, shield: s.shield, connected: s.connected, safetyReason: s.safetyReason,
+  const bounded = (value,max) => Number.isFinite(value)?Math.round(Math.max(0,Math.min(max,value))):0;
+  const remaining = (until,max) => Number.isFinite(until)&&Number.isFinite(now)?bounded(until-now,max):0;
+  const view = (s,d) => ({id: s.id, crew: s.crew, assists: s.assists, targets: s.targets, name: s.name, color: s.color, energy: +s.energy.toFixed(2), speed: Math.round(s.speed), disabled: s.disabled, shield: s.shield, connected: s.connected, safetyReason: s.safetyReason, located:s.located===true,
+    telemetryHealth:{recoveryId:bounded(d?.pad?.recoveryId,1000000),state:['degraded','reacquired'].includes(s.telemetryHealth?.state)?s.telemetryHealth.state:'normal',remainingMs:s.telemetryHealth?.state==='degraded'?remaining(s.telemetryHealth.until,1000):0,maximumSpeed:s.telemetryHealth?.state==='degraded'?bounded(s.telemetryHealth.maximumSpeed,300):0},
+    speedPlan:{requested:bounded(s.speedPlan?.requested,1200),commanded:bounded(s.speedPlan?.commanded,1200),rampMs:bounded(s.speedPlan?.rampMs,10000)},
+    powerZone:{effect:['shield','boost'].includes(s.powerZone?.effect?.type)?s.powerZone.effect.type:null,remainingMs:s.powerZone?.effect?remaining(s.powerZone.expiresAt,3000):0},
     task: roundRows.get(s.id)?.task?.cue ?? '', score: roundRows.get(s.id)?.score ?? 0,
     kills: roundRows.get(s.id)?.hits ?? s.kills, deaths: roundRows.get(s.id)?.losses ?? s.deaths, laps: roundRows.get(s.id)?.laps ?? s.laps,
     bays: Object.fromEntries(['attack', 'support', 'special'].map(b => [b, s[b] ? {label: WEAPON_LABEL[s[b].type], style: s[b].style, ready: s[b].ready, charge: +s[b].charge.toFixed(1)} : null]))});
   const byDriver = new Map(snapshot.map(s => [s.id, s])), mine = {};
-  for (const p of players.values()) if (p.driver) mine[p.id] = {...view(byDriver.get(p.driver.id)), needsNeutral: !p.driver.armed};
+  for (const p of players.values()) if (p.driver) { syncPhoneManeuvers(p.driver); mine[p.id] = {...view(byDriver.get(p.driver.id),p.driver), needsNeutral: !p.driver.armed}; }
   const lobby = {phase: game.halted ? 'stopped' : game.phase, round: {title: countdown ? 'Get ready' : activeMission?.title ?? round.title, remainingMs: countdown ? Math.max(0, countdown.until - now) : round.remainingMs, status: countdown ? 'countdown' : round.status, mode: countdown?.mode ?? round.mode, goal: round.goal, teamLaps: round.teamLaps, objective: round.objective ?? ''}, cars: game.drivers.filter(d => d.control === 'phone').map(d => ({id: d.id, name: d.car.name, color: d.car.color, free: !d.pad}))};
   room.link.send({players: mine, lobby}).catch(() => {});
 }
 
 // --- loops ---------------------------------------------------------------------------
 const PHASE = {garage: 'Garage', scanning: 'Scanning', ready: 'Track ready', battle: 'Battle'};
-function studentDriveReady() {
-  const active = game.drivers.filter(d => d.car.connected && d.control !== 'none');
-  return !!game.track && game.halted && game.phase !== 'scanning' && !countdown && !game.pitReason && !game.diagnostic && !game.forwardBaseline && !game.laneCancellationComparison && active.length > 0 && active.every(d => !d.car.initializing && !d.car.faulted && (!d.car.safetyReason || d.car.safetyReason === 'Host stopped') && (d.control !== 'phone' || !!d.pad));
+function studentDriveReady() { return drivingReadiness(game,{countdown,now:performance.now()}).ready; }
+function showReadiness() {
+  const state=drivingReadiness(game,{countdown,now:performance.now()});
+  $('readinessTitle').textContent=state.title; $('readinessInstruction').textContent=state.instruction;
+  $('readinessPanel').dataset.state=state.state;
+  const items=[...state.blockers,...state.notes],key=JSON.stringify(items);
+  if($('readinessItems').dataset.key!==key){$('readinessItems').replaceChildren(...items.map(text=>el('li',{textContent:text})));$('readinessItems').dataset.key=key;}
+  $('readinessItems').hidden=!items.length;
+  $('resume').title=state.blockers.join(' ')||state.instruction;
 }
+
 function locationDescription(location) {
   const reference=location.reference;
   if (!reference) return 'Position unknown · '+(location.reason??'waiting for an optical code')+'. Map marker hidden.';
@@ -780,6 +828,8 @@ function locationDescription(location) {
   return state+'. '+reading+(reference.unverified?' · special-piece geometry unverified':'')+'.';
 }
 function refresh(snapshot = game.snapshot()) {
+  showReadiness();
+  $('openReport').disabled=!canReport(); $('openReport').title=game.halted?'View recorded evidence and your observations':'Choose STOP before generating a run report';
   const hasPowerZone = game.track?.pieces.some(p=>p.id===57);
   $('powerZoneStatus').hidden = !hasPowerZone;
   const powerMode=game.powerZoneMode??'off';
@@ -916,7 +966,7 @@ setInterval(() => {
     renderer.addEffect({...e, from: id(e.from), to: id(e.to), car: id(e.car), life: e.type === 'explosion' || e.type === 'disabled' ? 700 : e.type === 'beam' ? 160 : 400});
     if (e.type === 'disabled') log((game.drivers.find(d => d.car === e.car)?.car.name ?? 'A car') + ' was disabled' + (e.by ? ' by ' + e.by.name : ''));
   }
-  if (now - slow > 150) { slow = now; const snapshot = game.snapshot(now); refresh(snapshot); pushState(snapshot, now); }
+  if (now - slow > 150) { slow = now; const snapshot = game.snapshot(now); refresh(snapshot); pushState(snapshot, now); updateComfort(snapshot,now); }
 }, 40);
 
 function frame() {
@@ -940,7 +990,25 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-week4-drive',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-week4-classroom',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,model:d.car.model,simulated:d.car.simulated,...d.car.diagnostics()})),round:session.view(),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function canReport(){return game.halted&&!countdown&&game.phase!=='scanning'&&!game.diagnostic&&!game.forwardBaseline&&!game.laneCancellationComparison&&game.drivers.every(d=>d.car.speed===0)&&(recorder.cars.length>0||game.drivers.length>0);}
+let reportText='';
+function refreshReport() {
+  if(!canReport()){$('reportNote').textContent='Choose STOP before generating a report.';return false;}
+  reportText=renderRunReportText(buildRunReport(sessionTrace()));$('reportContent').textContent=reportText;
+  $('reportNote').textContent=recorder.active?'Recording continues. This report is a snapshot; Update report includes later evidence.':'Recording is not active. Missing history is labeled; Record from now captures future commands and readings.';
+  $('reportRecord').disabled=recorder.active||!game.drivers.length;return true;
+}
+$('openReport').onclick=()=>{if(refreshReport())$('reportDialog').showModal();};
+$('closeReport').onclick=()=>$('reportDialog').close();
+$('updateReport').onclick=refreshReport;
+$('downloadReport').onclick=()=>{
+  if(!refreshReport())return;
+  const url=URL.createObjectURL(new Blob([reportText],{type:'text/plain;charset=utf-8'}));
+  el('a',{href:url,download:'slipstream-run-report-'+new Date().toISOString().replace(/[:.]/g,'-')+'.txt'}).click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
+$('printReport').onclick=()=>{if(refreshReport())window.print();};
+$('reportRecord').onclick=()=>{if(!canReport()||recorder.active)return;$('record').onclick();refreshReport();};
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);

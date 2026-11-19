@@ -44,3 +44,27 @@ Simulator only; no physical acceptance is implied.
 ![Week 4 chase camera](assets/week4-chase-preview.png)
 
 ![Phone controller after STOP](assets/week4-phone-preview.png)
+
+## Classroom implementation update — 18 November 2026
+
+Follow-up to `9cb2bff`, runtime `2026-11-18-week4-classroom`: the Student readiness
+panel now explains start blockers; phones receive bounded health/speed/Power Zone
+state. A reproduced stale-maneuver replay after telemetry recovery is closed with
+a host recovery generation plus released-input handshake. Host authority, full
+STOP/neutral arming and the bounded recovery deadline remain intact.
+
+Readable run reports are available while stopped, with separate command and car
+speed evidence, within-command-window telemetry-gap statistics, loss/clock-reset
+warnings and unverified operator observations. Raw packet identifiers and room
+credentials are excluded from the plain-text summary. **Record from now** starts
+future capture when history is absent.
+
+Optional client engine/event sound is now implemented, superseding the earlier
+proposal status above. Sound and engine tone start off, use original synthesis
+and remain separate from BLE control and spoken commentary. Screen-awake support
+has visible status/retry and lifecycle handling. No onboard speaker was verified.
+
+**917/917 Node tests pass.** No new physical car movement, real phone-network
+acceptance or audible-device validation took place. This note records software
+implementation; the current deployment and browser evidence are recorded in the
+follow-up classroom report. Refresh host and phone pages together after updating.
