@@ -65,6 +65,10 @@ test('valid ordinary code authorizes exact SDK offset/lane bytes and fresh optic
 test('queued physical lane pair rechecks reference age and invalidation before entering the radio',async()=>{
   for(const state of ['expired','loss','new-position']){
     const r=rig(),{car,radio}=r;await r.reference();let release;
+    // Queue while the reference is still fresh, then let it expire during a
+    // short GATT wait. A multi-second held write would correctly fail the link
+    // timeout first and would never reach the reference-age guard under test.
+    if(state==='expired')r.time(2000);
     radio.block=b=>b[1]===0x1a?new Promise(resolve=>{release=resolve;}):undefined;
     car.refreshBattery();await settle();car.steerTo(45);
     if(state==='expired')r.time(102+POSITION_MAX_AGE_MS);

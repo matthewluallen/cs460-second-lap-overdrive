@@ -55,7 +55,9 @@ test('Guardian raw scan calibrates only after optical evidence and requests STOP
 });
 
 test('real Game replays Guardian into an observed closed map and remains stopped under default watchdogs',async()=>{
-  let now=0;const radio=new ReplayCar(trace,2);radio.initializationProfile='sdk';
+  // This car connected late in a cumulative recording. Start its host clock at
+  // that recorded connection, not zero followed by an artificial 23-minute gap.
+  let now=events[0].at;const radio=new ReplayCar(trace,2);radio.initializationProfile='sdk';
   const game=new Game({pieces:json('./data/pieces.json'),weapons:json('./data/weapons.json'),vehicles:json('./data/vehicles.json'),clock:()=>now});
   const driver=game.addCar(radio,{name:'Guardian',model:12,control:'none'});
   const writes=[];driver.car.tap=(direction,packet)=>{if(direction==='tx')writes.push({at:now,text:hex(packet),packet:Uint8Array.from(packet)});};

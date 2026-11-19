@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {buildRunReport,renderRunReportText,RUN_REPORT_SCHEMA} from './run-report.mjs';
 import {encode,hex} from './protocol.mjs';
+import {Car} from './car.mjs';
+import {Recorder} from './trace.mjs';
 
 function position(speed=300,piece=39,code=1){
   const b=new Uint8Array(11),v=new DataView(b.buffer);b[0]=10;b[1]=0x27;b[2]=code;b[3]=piece;v.setFloat32(4,0,true);v.setUint16(8,speed,true);return hex(b);
@@ -101,4 +103,78 @@ test('duplicate recording driver IDs cannot duplicate final snapshot identity or
   assert.equal(r.cars[0].controllerLaps,null);assert.equal(r.cars[1].controllerLaps,null);assert.equal(r.cars[2].snapshotOnly,true);
   assert.equal(r.cars[2].controllerLaps.count,3);assert.match(r.warnings.join(' '),/Duplicate recording driver IDs/);
   assert.match(renderRunReportText(r),/shared pit: Guardian: telemetry timeout/);
+});
+
+test('an optical notification before API completion stays visible without claiming silence or radio loss',async()=>{
+  let now=0,notify,finishWrite;
+  const radio={onNotify(fn){notify=fn;return()=>{};},close(){},write(bytes){
+    if(bytes[1]===0x24&&(bytes[2]||bytes[3]))return new Promise(resolve=>{finishWrite=resolve;});
+  }};
+  const car=new Car(radio,{simulated:true,clock:()=>now});
+  const recorder=new Recorder(()=>now);recorder.start([{id:7,car}]);
+  car.setSpeed(300);await Promise.resolve();
+  now=100;notify(Uint8Array.from(position().split(' '),value=>parseInt(value,16)));
+  now=200;finishWrite();await car.pumpPromise;
+  now=300;car.stop();await car.pumpPromise;
+  const recorded=recorder.toJSON();
+  assert.deepEqual(recorded.events.map(e=>[e[0],e[2]]),[[100,'rx'],[200,'tx'],[300,'tx']]);
+  const r=buildRunReport(recorded),c=r.cars[0],output=renderRunReportText(r);
+  assert.equal(c.events.positions,1);
+  assert.equal(c.events.positionsOutsideCommands,1,'v1 chronology is preserved, not shifted to an invented send time');
+  assert.equal(c.commandedWindows.withoutPosition,1);
+  assert.equal(c.reportedPositionSpeed.max,300,'the observed speed is not discarded because the write completed later');
+  assert.equal(c.commandedWindows.maximumFirstPositionDelayMs,null);
+  assert.match(output,/not proof of optical silence/);
+  assert.match(output,/API completion may follow a notification/);
+  assert.match(output,/Host-received optical gaps/);
+  assert.match(output,/not sensor timestamps or radio packet loss/);
+  assert.match(output,/does not measure RSSI, retransmissions or radio loss rate/);
+});
+
+test('transport and host timing are separate allowlisted lifetime snapshots, not inferred recording metrics',()=>{
+  const r=buildRunReport(trace([tx(0,300),rx(100),tx(200,0)],{diagnostics:{
+    hostTiming:{expectedIntervalMs:40,samples:1000,lastGapMs:40.2,maxGapMs:2700,over100Ms:3,over500Ms:2,over1000Ms:1,clockResets:0,hostKey:'HIDDEN-HOST'},
+    cars:[{carId:7,transportHealth:{writeMode:'without-response',completed:80,lateCompletions:1,failed:1,timeouts:2,suppressed:3,coalesced:4,
+      pendingCount:2,pendingAgeMs:70,inFlightAgeMs:120,lastQueueWaitMs:8.25,maxQueueWaitMs:450,lastCompletedApiMs:4.75,maxCompletedApiMs:800,
+      deviceId:'HIDDEN-DEVICE',rssi:-99,lossRate:.5,lastPacket:'PRIVATE-BYTES'}}]}}));
+  const a=r.cars[0].transportHealth,out=renderRunReportText(r),json=JSON.stringify(r);
+  assert.equal(a.completed,80);assert.equal(a.lateCompletions,1);assert.equal(a.failed,1);assert.equal(a.timeouts,2);
+  assert.equal(a.pendingAgeMs,70);assert.equal(a.inFlightAgeMs,120);assert.equal(a.lastQueueWaitMs,8.25);
+  assert.equal(a.lastCompletedApiMs,4.75);assert.equal(a.maxCompletedApiMs,800);
+  assert.equal(r.hostTiming.maxGapMs,2700);assert.equal(r.hostTiming.clockResets,0);
+  assert.equal(r.coverage.elapsedMs,200,'lifetime timing never replaces recording duration');
+  assert.equal(r.cars[0].events.tx,2,'lifetime write totals never replace recorded commands');
+  assert.match(a.source,/not limited to the recording/);
+  assert.match(out,/final page-lifetime snapshot/);assert.match(out,/final car-lifetime snapshot/);
+  assert.match(out,/Fulfilled API duration \(including known late completions\): latest 4.75 ms/);
+  assert.match(out,/Known late completions: 1 \(included in both completions and timeout breaches/);
+  assert.match(out,/those totals must not be added/);
+  assert.match(out,/not radio loss counts/);assert.match(out,/does not measure over-the-air latency/);
+  for(const secret of ['HIDDEN-HOST','HIDDEN-DEVICE','PRIVATE-BYTES','"rssi"','"lossRate"'])assert.equal(json.includes(secret),false);
+});
+
+test('missing and malformed timing fields remain unknown instead of healthy zero measurements',()=>{
+  const legacy=buildRunReport(trace([tx(0,0)],{diagnostics:{cars:[{carId:7,maxWriteMs:0,lastWriteMs:null}]}}));
+  assert.equal(legacy.hostTiming,null);assert.equal(legacy.cars[0].transportHealth,null);
+  assert.match(renderRunReportText(legacy),/Transport queue\/API timing: not recorded/);
+  const r=buildRunReport({diagnostics:{hostTiming:{expectedIntervalMs:'40',samples:-1,lastGapMs:NaN,maxGapMs:Infinity,over100Ms:1.5},
+    cars:[{carId:7,transportHealth:{writeMode:'secret-radio-mode',completed:-1,failed:1.5,timeouts:'0',suppressed:Infinity,coalesced:NaN,
+      pendingCount:Number.MAX_SAFE_INTEGER+1,pendingAgeMs:-20,inFlightAgeMs:NaN,lastQueueWaitMs:Infinity,lastCompletedApiMs:'2'}}]}});
+  const a=r.cars[0].transportHealth;
+  assert.equal(a.writeMode,'unknown');
+  for(const [key,value]of Object.entries(a))if(!['source','writeMode'].includes(key))assert.equal(value,null,key);
+  for(const [key,value]of Object.entries(r.hostTiming))if(key!=='source')assert.equal(value,null,key);
+  assert.equal(JSON.stringify(r).includes('secret-radio-mode'),false);
+});
+
+test('per-car queue/API snapshots match unique driver IDs independently of recording order',()=>{
+  const r=buildRunReport(trace([],{cars:[{driverId:7,name:'First'},{driverId:9,name:'Second'}],diagnostics:{cars:[
+    {carId:9,transportHealth:{writeMode:'with-response',completed:21,timeouts:1}},
+    {carId:7,transportHealth:{writeMode:'without-response',completed:3,timeouts:0}},
+    {carId:12,transportHealth:{writeMode:'simulator',completed:10,timeouts:0}}
+  ]}}));
+  assert.deepEqual(r.cars.map(c=>[c.driverId,c.transportHealth.completed]),[[7,3],[9,21],[12,10]]);
+  assert.equal(r.cars[2].snapshotOnly,true);assert.equal(r.cars[2].events.tx,0);
+  assert.equal(r.cars[0].transportHealth.failed,null,'a missing failure counter is not zero');
+  assert.equal(r.cars[0].transportHealth.lateCompletions,null,'older summaries do not establish zero late completions');
 });

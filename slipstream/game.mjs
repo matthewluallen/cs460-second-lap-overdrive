@@ -47,6 +47,11 @@ export class Game {
     const color = TEAM_COLORS.find(color => !this.drivers.some(d => d.car.color === color));
     const car = new Car(transport, {name: name || this.modelName(model), model, color, pieces: this.pieces, simulated, clock: this.clock});
     const driver = {id: this.nextId++, car, input: emptyInput(), control, bot: null, previous: emptyInput(),telemetryGrace:null,speedRamp:null};
+    // A delayed optical callback or queued GATT write may run before an overdue
+    // control-loop timer. Evaluate the old reference before replacing it or
+    // allowing another motion command across the transport boundary.
+    car.beforeTrackObservation = (_message, observedAt) => this.#checkMotionDeadlines(driver, observedAt);
+    car.beforeMotionWrite = now => this.#checkMotionDeadlines(driver, now);
     car.on((message, _car, observedAt) => this.#message(driver, message, observedAt));
     this.drivers.push(driver);
     if (this.track) car.useTrack(this.track);
@@ -455,6 +460,33 @@ export class Game {
     this.stopAll();
     this.log('Diagnostic deadline: '+outcome+'. STOP requested; confirm physical stop');
   }
+  #checkMotionDeadlines(driver, now) {
+    const car=driver.car;
+    if (car.speed<=0) return true;
+    const comparison=this.laneCancellationComparison?.driver===driver?this.laneCancellationComparison:null;
+    if(comparison?.stage==='acquiring-reference'){
+      if(now>=comparison.referenceUntil){this.#referenceFailure(driver,'Reference timeout: expected start/finish and a consistent follow-up');return false;}
+      if(comparison.reference && now-comparison.lastOpticalAt>this.safety.trackGapMs){
+        this.#referenceFailure(driver,'Reference lost: optical follow-up exceeded '+this.safety.trackGapMs+' ms; expected a new start/finish acquisition');return false;
+      }
+    }
+    const pulse=this.diagnostic?.driver===driver?this.diagnostic:null;
+    if (pulse) {
+      if(now>=pulse.until){this.#diagnosticDeadline(pulse);return false;}
+      if(!pulse.steering)return true; // The existing straight diagnostic has its own 500 ms deadline.
+    }
+    if(driver.telemetryGrace && now>=driver.telemetryGrace.until){
+      this.requestPit(driver,'Telemetry timeout: bounded recovery expired');return false;
+    }
+    const hasTrack=car.lastTrackAt!==undefined && car.lastTrackAt>=car.motionSince;
+    if(!driver.telemetryGrace && now-(hasTrack?car.lastTrackAt:car.motionSince)>(hasTrack?this.safety.trackGapMs:this.safety.firstTrackMs)){
+      if(!hasTrack || !this.#beginTelemetryGrace(driver,now)){this.requestPit(driver,'Telemetry timeout');return false;}
+    }
+    if(driver===this.scanner && now-this.scanStarted>this.safety.scanMs){
+      this.requestPit(driver,'Scan time budget exceeded');return false;
+    }
+    return true;
+  }
   #beginTelemetryGrace(driver, now) {
     const car=driver.car,reference=car.physicalLaneReference;
     if (!this.telemetryGraceMs || !this.track?.closed || this.track.inferredCount || !car.localizer?.located || this.phase==='scanning' || this.forwardBaseline || this.laneCancellationComparison || this.diagnostic ||
@@ -555,21 +587,13 @@ export class Game {
       const pulse=this.diagnostic,{driver,until}=pulse;
       if (now >= until) this.#diagnosticDeadline(pulse);
       else if (!driver.car.connected || driver.car.safetyReason || driver.car.speed === 0) this.stopAll();
-      else if (this.diagnostic.steering) {
-        const car=driver.car, hasTrack=car.lastTrackAt!==undefined && car.lastTrackAt>=car.motionSince;
-        if(now-(hasTrack?car.lastTrackAt:car.motionSince)>(hasTrack?this.safety.trackGapMs:this.safety.firstTrackMs)) this.requestPit(driver,'Telemetry timeout');
-      }
+      else this.#checkMotionDeadlines(driver,now);
       return; // no human, phone, CPU or gameplay commands during the pulse
     }
     for (const d of this.drivers) {
       const c=d.car;if (!c.connected) continue;
       if (c.speed > 0) {
-        if(d.telemetryGrace && now>=d.telemetryGrace.until){this.requestPit(d,'Telemetry timeout: bounded recovery expired');break;}
-        const hasTrack = c.lastTrackAt !== undefined && c.lastTrackAt >= c.motionSince;
-        if (!d.telemetryGrace && now - (hasTrack ? c.lastTrackAt : c.motionSince) > (hasTrack ? this.safety.trackGapMs : this.safety.firstTrackMs)) {
-          if(!hasTrack || !this.#beginTelemetryGrace(d,now)){this.requestPit(d, 'Telemetry timeout');break;}
-        }
-        if (d === this.scanner && now - this.scanStarted > this.safety.scanMs) { this.requestPit(d, 'Scan time budget exceeded'); break; }
+        if(!this.#checkMotionDeadlines(d,now))break;
       } else if (c.stopRequestedAt != null && c.lastTrackAt > c.stopRequestedAt + this.safety.stopGraceMs && c.lastTrackAt > (c.checkedStopTrackAt ?? -Infinity) && now - (c.lastStopRetry ?? -Infinity) >= this.safety.stopGraceMs) {
         c.lastStopRetry = now; c.checkedStopTrackAt = c.lastTrackAt; this.requestPit(d, 'STOP not confirmed: telemetry continues'); c.stop(); break;
       }

@@ -69,7 +69,7 @@ test('controller and relay do not exist unless the server is started with the sl
 test('enabled controller serves only its browser assets, with security headers', async t => {
   const {origin, host} = await start(t);
   for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs', '/slipstream/student-lab.mjs', '/slipstream/camera-director.mjs', '/slipstream/power-zone.mjs',
-    '/slipstream/vehicle-models.mjs', '/slipstream/readiness.mjs', '/slipstream/run-report.mjs', '/slipstream/audio-cues.mjs', '/slipstream/wake-lock.mjs',
+    '/slipstream/vehicle-models.mjs', '/slipstream/readiness.mjs', '/slipstream/run-report.mjs', '/slipstream/audio-cues.mjs', '/slipstream/wake-lock.mjs', '/slipstream/host-timing.mjs',
     '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 200, path);

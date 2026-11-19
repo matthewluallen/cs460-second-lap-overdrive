@@ -39,6 +39,8 @@ Screen-awake support is requested while connected and its current status is disp
 
 **Investigate the system** has four expandable activities: how the car reads the track, a hardware-capability inventory, direct software dependencies, FCC-label research, and security evidence. The dependency inventory is an SBOM starting point, not a complete SBOM; exact hardware components and FCC identity must be established from the specific car's evidence.
 
+For intermittent telemetry, **Advanced → Live car checks** separates optical readings, overdue rejected frames, queued writes, completed API duration and host callback delays. The stopped **Run report** includes these final timing snapshots without treating browser delays as measured radio loss. Default stop limits are unchanged. See [Bluetooth diagnosis and evidence limits](review/BLUETOOTH-TELEMETRY-RELIABILITY.md).
+
 **Advanced** retains simulation, games, diagnostic tools, telemetry and traces. Switching between Student and Advanced requests STOP and clears driving intent. It never starts a car.
 
 ### Week 4 driving options

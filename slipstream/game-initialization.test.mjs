@@ -74,6 +74,10 @@ test('explicit STOP still preempts pending initialization packets and stays latc
 test('watchdog and shared pit still stop an initializing car when another moving car loses telemetry',async()=>{
   const {game,time}=rig(),movingRadio=transport(undefined,false),moving=game.addCar(movingRadio,{control:'none'});
   await finish(moving,movingRadio);moving.car.setSpeed(300);await moving.car.pumpPromise;
+  // Begin the second connection shortly before the first car's watchdog trip.
+  // Its 100 ms held write remains within the ordinary write/init deadlines, so
+  // this test isolates shared-pit STOP rather than an independent link timeout.
+  time(5900);
   const startingRadio=transport(),starting=game.addCar(startingRadio,{control:'none'});await settle();
   assert.equal(starting.car.initializing,true);time(6000);game.tick(.04,6000);await finish(starting,startingRadio);await moving.car.pumpPromise;
   assert.equal(game.halted,true);assert.match(game.pitReason,/Telemetry timeout/);

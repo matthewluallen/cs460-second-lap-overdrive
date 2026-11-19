@@ -1,4 +1,14 @@
-# Latest: Ice Charger and International MXT compatibility
+# Latest: Bluetooth telemetry deadlines and evidence
+
+Branch **`week-4-student-driving`**, reviewed base **`10f1760`**. Runtime **`2026-11-18-bluetooth-reliability`**. Do not merge main.
+
+- Delayed optical callbacks and queued motion now check existing deadlines before refreshing position or entering transport. Coalesced overdue samples cannot revive calibration after STOP. Default 5-second initial/2-second gap limits and optional fixed 3-second recovery remain unchanged.
+- Late initialization replies/write completions cannot outrun overdue timers. Known-fulfilled late writes retain trace evidence and permit a serialized STOP attempt; unsettled timeouts never overlap another write.
+- Connection setup cancellation/disconnect cleanup is repaired. Complete safety frames survive malformed notification tails; unsupported compact MXT telemetry is still not accepted.
+- Advanced checks and run reports distinguish queue waiting, API duration, host scheduling and host-received optical gaps. No radio-loss/RSSI or hardware-success claim is inferred.
+- **994/994 Node tests, 38 Python tests, CWE/dependency checks pass; audit zero vulnerabilities.** No physical cars moved. [Evidence, regressions and remaining hardware work](slipstream/review/BLUETOOTH-TELEMETRY-RELIABILITY.md).
+
+# Previous: Ice Charger and International MXT compatibility
 
 Branch **`week-4-student-driving`**, base **`5236343`**. Runtime **`2026-11-18-ff-compatibility`**. Do not merge main.
 

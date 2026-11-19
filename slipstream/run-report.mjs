@@ -21,6 +21,21 @@ function packetFrames(value){
   for(let at=0;at<bytes.length;){const end=at+bytes[at]+1;if(bytes[at]<1||end>bytes.length)return null;frames.push(bytes.subarray(at,end));at=end;}
   return frames;
 }
+function transportSnapshot(value){
+  if(!value||typeof value!=='object'||Array.isArray(value))return null;
+  const out={source:'final per-car lifetime snapshot; not limited to the recording',
+    writeMode:['with-response','without-response','simulator','unknown'].includes(value.writeMode)?value.writeMode:'unknown'};
+  for(const key of ['completed','lateCompletions','failed','timeouts','suppressed','coalesced','pendingCount'])out[key]=integer(value[key]);
+  for(const key of ['pendingAgeMs','inFlightAgeMs','lastQueueWaitMs','maxQueueWaitMs','lastCompletedApiMs','maxCompletedApiMs'])out[key]=nonnegative(value[key]);
+  return out;
+}
+function hostTimingSnapshot(value){
+  if(!value||typeof value!=='object'||Array.isArray(value))return null;
+  const out={source:'final host-page lifetime snapshot; may include parked or background periods'};
+  for(const key of ['expectedIntervalMs','lastGapMs','maxGapMs'])out[key]=nonnegative(value[key]);
+  for(const key of ['samples','over100Ms','over500Ms','over1000Ms','clockResets'])out[key]=integer(value[key]);
+  return out;
+}
 function makeCar(info,index,diagnostic={}){
   const id=integer(info.driverId)??integer(diagnostic.carId);
   return {recordingIndex:index,driverId:id,name:text(diagnostic.name||info.name,80)||'Unidentified car',nameAtRecording:text(info.name,80)||null,
@@ -31,6 +46,7 @@ function makeCar(info,index,diagnostic={}){
     commandedWindows:{count:0,closedByStop:0,openAtEnd:0,splitByClock:0,withoutPosition:0,observedDurationMs:0,maximumFirstPositionDelayMs:null,maximumTailSilenceMs:null},
     stop:{zeroSpeedWrites:0,lastZeroSpeedWriteMs:null,finalReason:text(diagnostic.safetyReason)||null,physicalStopVerified:false},
     finalSnapshot:Object.keys(diagnostic).length?{requestedSpeed:nonnegative(diagnostic.requestedSpeed),reportedSpeed:number(diagnostic.reportedSpeed),reportedSpeedAgeMs:nonnegative(diagnostic.reportedSpeedAgeMs),batteryMv:nonnegative(diagnostic.millivolts),batteryAgeMs:nonnegative(diagnostic.batteryAgeMs),connected:typeof diagnostic.connected==='boolean'?diagnostic.connected:null}:null,
+    transportHealth:transportSnapshot(diagnostic.transportHealth),
     controllerLaps:integer(diagnostic.forwardBaseline?.laps)!==null?{count:integer(diagnostic.forwardBaseline.laps),source:'final forward-check snapshot; controller-reported, not independent physical verification'}:null};
 }
 
@@ -103,6 +119,7 @@ export function buildRunReport(input){
   const report={schema:RUN_REPORT_SCHEMA,recordedAt:text(trace.recorded,40)||null,exportedAt:text(diagnostics.exported,40)||null,build:text(diagnostics.build,80)||null,
     controller:{phase:text(diagnostics.phase,40)||null,halted:typeof diagnostics.halted==='boolean'?diagnostics.halted:null,pitReason:text(diagnostics.pitReason)||null},
     source:cars.length&&cars.every(c=>c.source==='simulator')?'simulator':cars.some(c=>c.source==='hardware')?(cars.some(c=>c.source==='simulator')?'mixed':'hardware'):'unknown',coverage,
+    hostTiming:hostTimingSnapshot(diagnostics.hostTiming),
     policies:{source:'final controller snapshot; may differ from earlier commands',maximumSpeed:nonnegative(settings.maximumSpeed),rampMs:nonnegative(settings.rampMs),telemetryGraceMs:nonnegative(settings.telemetryGraceMs),powerZoneMode:['off','shield','boost'].includes(settings.powerZoneMode)?settings.powerZoneMode:null,
       firstTrackMs:nonnegative(safety.firstTrackMs),trackGapMs:nonnegative(safety.trackGapMs),scanMs:nonnegative(safety.scanMs),scanLaps:integer(safety.scanLaps)},
     track:{source:'final controller map/checks; not reconstructed from this report',pieceCount:map.length||integer(checks.pieceCount),lengthMm:map.length&&lengths.every(x=>x!==null)?Math.round(lengths.reduce((a,b)=>a+b,0)):null,
@@ -110,8 +127,11 @@ export function buildRunReport(input){
       issues:list(checks.issues).slice(0,24).map(s=>text(s,160)),specialPieceIds:[...new Set([...map.filter(p=>p?.unverified||[53,54,57].includes(p?.id)).map(p=>integer(p.id)),...list(checks.special).map(p=>integer(p?.id))].filter(x=>x!==null))],physicalValidation:false},
     cars,annotations:[],operatorObservations:text(diagnostics.operatorNotes,2000),warnings,
     limitations:[
-      'A recorded TX is a completed transport write, not proof the firmware accepted it or the physical car moved/stopped.',
-      'Position gaps are intervals between decoded position notifications inside positive SPEED-command windows. Paused periods are excluded; transitions are counted separately. Startup delay and trailing silence are separate.',
+      'A recorded TX is logged after the browser transport API completes, not when the packet enters the radio. It is not proof the firmware accepted it or the physical car moved/stopped.',
+      'Command windows use recorded write-completion times. Notifications can arrive before a command completion is logged, so readings outside these windows and windows without a reading do not establish optical silence.',
+      'Position gaps measure host receipt of decoded optical notifications inside those windows, not sensor timestamps or radio packet loss. Paused periods are excluded by the recorded writes; transitions, first-reading delay and trailing silence are separate.',
+      'Host scheduling, browser delivery, transport operations and missing optical codes can all affect observed timing. This recording does not measure RSSI, retransmissions or radio loss rate.',
+      'Transport and host-timing summaries are final lifetime snapshots, not a chronology correlated with this recording. Completed API times cover fulfilled calls, including known late completions; they exclude rejections and unresolved timeouts. A late completion is counted in both completed calls and timeout breaches, so those totals must not be added. Other timeouts do not establish that the underlying operation settled. Coalesced or suppressed commands are not radio packet loss.',
       'Speed averages are sample averages, not time-weighted speeds; position speed and speed-update replies are separate evidence sources.',
       'Only recorded events are analyzed. Missing or malformed events can hide commands, stops or readings; final diagnostics may cover a different time span.',
       'Lap counts, maps and notes are controller/operator claims. This report does not independently verify physical completion, track shape, collision or stopping.',
@@ -137,6 +157,7 @@ export function buildRunReport(input){
 
 const show=(value,suffix='')=>value===null||value===undefined?'not recorded':String(value)+suffix;
 const seconds=value=>value===null||value===undefined?'not recorded':(value/1000).toFixed(2)+' s';
+const milliseconds=value=>value===null||value===undefined?'not recorded':Number(value.toFixed(2))+' ms';
 const speedLine=s=>s.samples?`${s.samples} samples; min ${s.min}, max ${s.max}, sample mean ${s.mean} mm/s`:'no recorded samples';
 export function renderRunReportText(report){
   if(report?.schema!==RUN_REPORT_SCHEMA)throw new Error('Expected a Slipstream run report');
@@ -152,19 +173,32 @@ export function renderRunReportText(report){
     '', 'MAP (final controller snapshot)',`${show(t.pieceCount)} sections · ${show(t.lengthMm,' mm')} · geometric closure: ${t.geometricClosure===null?'not recorded':t.geometricClosure?'reported closed':'reported open'}.`,
     `Piece IDs: ${t.pieceIds.length?t.pieceIds.map(id=>show(id)).join(', '):'not recorded'}. Special pieces: ${t.specialPieceIds.length?t.specialPieceIds.join(', '):'none reported'}.`,
     `Map issues: ${t.issues.length?t.issues.join('; '):'none reported; not physical validation'}.`];
-  for(const car of r.cars){const w=car.commandedWindows,g=car.positionGaps,s=car.finalSnapshot;
+  const h=r.hostTiming;
+  lines.push('', 'HOST TIMING (final page-lifetime snapshot, not recording-only evidence)');
+  if(h)lines.push(`Expected callback interval ${milliseconds(h.expectedIntervalMs)}; ${show(h.samples)} measured gaps; latest ${milliseconds(h.lastGapMs)}, maximum ${milliseconds(h.maxGapMs)}.`,
+    `Callback gaps over 100 / 500 / 1000 ms: ${show(h.over100Ms)} / ${show(h.over500Ms)} / ${show(h.over1000Ms)}. Clock resets: ${show(h.clockResets)}.`,
+    'Includes any recorded parked/background periods; a callback gap does not identify its cause or prove a radio fault.');
+  else lines.push('Not recorded. Host scheduling delay cannot be separated from transport timing in this snapshot.');
+  for(const car of r.cars){const w=car.commandedWindows,g=car.positionGaps,s=car.finalSnapshot,a=car.transportHealth;
     lines.push('',`CAR ${show(car.driverId)} · ${car.name}${car.snapshotOnly?' (snapshot only)':''}`,`Model ID ${show(car.modelId)} · firmware ${show(car.firmware)} · profile ${car.profile} · ${car.source}.`,
       `${car.events.tx} TX / ${car.events.rx} RX; ${car.events.positions} positions; ${car.events.transitions} transitions; ${car.events.malformedPackets} malformed frames/packets.`,
       `Written speed requests: ${speedLine(car.requestedSpeed)}.`,`Reported position speeds: ${speedLine(car.reportedPositionSpeed)}.`,`Reported speed-update values: ${speedLine(car.reportedSpeedUpdates)}.`,
-      `Positive-command windows: ${w.count}; ${w.closedByStop} closed by a recorded STOP; ${w.openAtEnd} open at recording end; ${w.splitByClock} split by clock.`,
-      `Observed commanded-window duration ${seconds(w.observedDurationMs)}; ${w.withoutPosition} windows without a decoded position.`,
-      `First position delay: max ${seconds(w.maximumFirstPositionDelayMs)}. Tail silence to STOP/end: max ${seconds(w.maximumTailSilenceMs)}.`,
-      `Between-position gaps while commanded: ${g.samples}; maximum ${seconds(g.maxMs)}.`,g.buckets.map(b=>`${b.label}: ${b.count}`).join(' | '),
-      `${car.events.positionsOutsideCommands} position notifications outside recorded positive-command windows.`,
+      `Positive-speed write-completion windows: ${w.count}; ${w.closedByStop} closed by a recorded STOP completion; ${w.openAtEnd} open at recording end; ${w.splitByClock} split by clock.`,
+      `Time within recorded completion windows ${seconds(w.observedDurationMs)}; ${w.withoutPosition} windows contain no decoded position (not proof of optical silence).`,
+      `First host-received position after logged write completion: max ${seconds(w.maximumFirstPositionDelayMs)}. Tail receipt gap to STOP completion/end: max ${seconds(w.maximumTailSilenceMs)}.`,
+      `Host-received optical gaps within those windows: ${g.samples}; maximum ${seconds(g.maxMs)}.`,g.buckets.map(b=>`${b.label}: ${b.count}`).join(' | '),
+      `${car.events.positionsOutsideCommands} position notifications outside recorded completion windows; API completion may follow a notification.`,
       `STOP writes: ${car.stop.zeroSpeedWrites}. Final controller reason: ${show(car.stop.finalReason)}. Physical stop: unverified.`,
       `Laps: ${car.controllerLaps?car.controllerLaps.count+' ('+car.controllerLaps.source+')':'not recorded; not inferred from repeated piece IDs'}.`);
     if(s)lines.push(`Final snapshot requested ${show(s.requestedSpeed,' mm/s')}, reported ${show(s.reportedSpeed,' mm/s')} (report age ${seconds(s.reportedSpeedAgeMs)}).`,
       `Battery ${show(s.batteryMv,' mV')} (sample age ${seconds(s.batteryAgeMs)}). Final connection: ${s.connected===null?'unknown':s.connected?'connected':'disconnected'}.`);
+    if(a)lines.push(`Transport health (final car-lifetime snapshot): ${a.writeMode}; API completions ${show(a.completed)}, settled rejections ${show(a.failed)}, timeout breaches ${show(a.timeouts)}.`,
+      `Known late completions: ${show(a.lateCompletions)} (included in both completions and timeout breaches; do not add these totals).`,
+      `Suppressed before transport: ${show(a.suppressed)}; coalesced queued requests: ${show(a.coalesced)}. These are not radio loss counts.`,
+      `Queued requests ${show(a.pendingCount)}; oldest pending age ${milliseconds(a.pendingAgeMs)}; current API operation age ${milliseconds(a.inFlightAgeMs)}.`,
+      `Queue waiting: latest ${milliseconds(a.lastQueueWaitMs)}, maximum ${milliseconds(a.maxQueueWaitMs)}. Fulfilled API duration (including known late completions): latest ${milliseconds(a.lastCompletedApiMs)}, maximum ${milliseconds(a.maxCompletedApiMs)}.`,
+      'API timing includes host/browser scheduling and does not measure over-the-air latency or firmware acknowledgment.');
+    else lines.push('Transport queue/API timing: not recorded.');
   }
   lines.push('', 'RECORDED CONTROLLER ANNOTATIONS (not physical observations)');
   lines.push(...(r.annotations.length?r.annotations.map(a=>`${seconds(a.timeMs)} · ${a.text}`):['None captured.']));

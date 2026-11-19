@@ -6,7 +6,8 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 function rig(){
   let now=0;const sent=[];
   const radio={onNotify(){return()=>{};},close(){},async write(packet){await radio.block?.(packet);sent.push({at:now,packet:[...packet]});}};
-  const car=new Car(radio,{clock:()=>now});
+  // Simulator-only long write budget isolates queue/grace policy from the production1s write deadline.
+  const car=new Car(radio,{clock:()=>now,writeTimeoutMs:10000});
   return{car,radio,sent,time:t=>{now=t;}};
 }
 const speeds=sent=>sent.filter(e=>e.packet[1]===0x24).map(e=>e.packet[2]+256*e.packet[3]);

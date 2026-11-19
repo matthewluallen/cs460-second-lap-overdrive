@@ -18,6 +18,9 @@ export class Car {
     this.pieces = pieces; this.simulated = simulated; this.clock = clock;
     this.writeTimeoutMs = writeTimeoutMs; this.closing = false; this.faulted = false; this.safetyReason = null;
     this.connected = true; this.pending = new Map(); this.pumping = false;
+    this.queuedAt=new WeakMap();
+    this.transportHealth={completed:0,failed:0,timeouts:0,lateCompletions:0,suppressed:0,coalesced:0,
+      lastQueueWaitMs:null,maxQueueWaitMs:0,lastCompletedApiMs:null,maxCompletedApiMs:null};
     this.listeners = new Set(); this.localizer = null;
     this.speed = 0; this.reportedSpeed = 0; this.targetLateral = 0; this.lateral = 0; this.forceLane = true;
     this.offsetSign = -1;               // car offset = sign * lateral(left +); learned below
@@ -75,12 +78,13 @@ export class Car {
   async #initializationPhase(phase) {
     // Install the listener before queueing the request; some transports reply immediately.
     await new Promise((resolve, reject) => {
-      let timer;
+      let timer,finished=false;
+      const until=this.clock()+(this.transport.initializationTimeoutMs??3000);
       const request=phase.reply==='ping'?encode.ping():phase.reply==='version'?phase.packets.find(packet=>packet[1]===0x18):null;
       if(phase.reply==='version' && !request) { reject(new Error('Firmware version phase has no request')); return; }
       const replyGate=request?{request,entered:false}:null;
       if (replyGate) this.initializationReplyGate=replyGate;
-      const finish = error => { clearTimeout(timer); off(); if(this.initializationReplyGate===replyGate)this.initializationReplyGate=null; error ? reject(error) : resolve(); };
+      const finish = error => { if(finished)return;finished=true; if(!error && this.clock()>=until)error=new Error(phase.name+' response timed out'); clearTimeout(timer); off(); if(this.initializationReplyGate===replyGate)this.initializationReplyGate=null; error ? reject(error) : resolve(); };
       const off = this.on(message => {
         if (message.type === phase.reply && (!replyGate || replyGate.entered)) finish();
         else if (message.type === 'closed') finish(new Error(message.reason));
@@ -99,6 +103,9 @@ export class Car {
     if (key==='lane-offset') this.maneuverPackets.add(bytes);
     if (this.maneuversLocked && this.#isManeuver(bytes)) return;
     if (offsetCommand(bytes)) this.lastPair=null;
+    const queueKey=bytes[1]===0x24 && !bytes[2] && !bytes[3]?'stop':key;
+    if(this.pending.has(queueKey))this.transportHealth.coalesced++;
+    this.queuedAt.set(bytes,this.clock());
     if (bytes[1]===0x24 && !bytes[2] && !bytes[3]) {
       // A restart is a later intention, never a replacement for an undelivered
       // STOP. Keep the barrier first, independent of the coalesced speed key.
@@ -123,8 +130,8 @@ export class Car {
     const maneuver=this.#isManeuver(bytes), maneuverVersion=this.maneuverLockVersion;
     const positiveSpeed=bytes[1]===0x24 && (bytes[2] || bytes[3]);
     const telemetryVersion=this.telemetryGuardVersion,telemetryDeadline=positiveSpeed?this.telemetryGraceUntil:undefined;
-    this.activeWrite=bytes;
-    let suppressed=false;
+    this.activeWrite=bytes;this.activeWriteAt=null;
+    let suppressed=false,apiStarted=null;
     const trialMotion = (bytes[1] === 0x24 && (bytes[2] || bytes[3])) || (this.diagnosticSteering && [0x25,0x2c].includes(bytes[1]));
     const deadline = this.diagnosticMotion && trialMotion ? this.diagnosticUntil : undefined;
     const baselineDeadline = bytes[1]===0x24 && (bytes[2] || bytes[3]) ? this.forwardBaselineUntil : undefined;
@@ -135,6 +142,7 @@ export class Car {
       await Promise.race([Promise.resolve().then(() => {
         // Dequeueing is not entry into the radio. STOP may run before this
         // microtask; an explicit restart must not revive that older command.
+        if (driveCommand(bytes) && this.beforeMotionWrite?.(this.clock())===false) { suppressed=true; return; }
         if (driveCommand(bytes) && (driveEpoch!==this.driveEpoch || this.closing || this.faulted || !this.connected || this.safetyReason)) { suppressed=true; return; }
         if (lateral && (this.steeringLocked || lockVersion!==this.steeringLockVersion)) { suppressed=true; return; }
         if (maneuver && (this.maneuversLocked || maneuverVersion!==this.maneuverLockVersion)) { suppressed=true; return; }
@@ -157,21 +165,36 @@ export class Car {
         // A premature pong/version cannot confirm a phase before its own
         // request enters the serialized radio. Replies have no correlation ID:
         // a later pong remains a sequence barrier, not semantic acceptance.
+        if(this.clock()-writeStarted>=this.writeTimeoutMs)throw Object.assign(new Error('Car write timed out before transport entry'),{writeTimedOut:true});
         if (this.initializationReplyGate?.request===bytes) this.initializationReplyGate.entered=true;
+        apiStarted=this.clock();this.activeWriteAt=apiStarted;
+        const wait=Math.max(0,apiStarted-(this.queuedAt.get(bytes)??writeStarted));
+        this.transportHealth.lastQueueWaitMs=wait;this.transportHealth.maxQueueWaitMs=Math.max(this.transportHealth.maxQueueWaitMs,wait);
         return this.transport.write(bytes);
       }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);
       })]);
-      if (suppressed) { this.telemetry.lastWriteAttempt.status='suppressed'; return; }
+      if (suppressed) { this.transportHealth.suppressed++; this.telemetry.lastWriteAttempt.status='suppressed'; return; }
+      // Promise continuations can run before an overdue timeout task after a
+      // browser stall. Settlement is not timely success just because it won.
+      const duration=Math.max(0,this.clock()-apiStarted);
+      this.transportHealth.completed++;this.transportHealth.lastCompletedApiMs=duration;
+      this.transportHealth.maxCompletedApiMs=Math.max(this.transportHealth.maxCompletedApiMs,duration);
       this.telemetry.lastWriteAttempt.status='completed';
       this.telemetry.lastWriteMs = Math.max(0,this.clock()-writeStarted);
       this.telemetry.maxWriteMs = Math.max(this.telemetry.maxWriteMs,this.telemetry.lastWriteMs);
       this.tx++; this.tap?.('tx', bytes);
+      if(this.clock()-writeStarted>=this.writeTimeoutMs){
+        this.transportHealth.lateCompletions++;
+        throw Object.assign(new Error('Car write completed after its deadline'),{writeTimedOut:true,writeSettled:true});
+      }
     } catch (error) {
-      this.telemetry.lastWriteAttempt.status='failed';
+      this.telemetry.lastWriteAttempt.status=error.writeTimedOut?'timed-out':'failed';
+      if(error.writeTimedOut)this.transportHealth.timeouts++;else if(apiStarted!==null)this.transportHealth.failed++;
       this.telemetry.lastWriteFailure={at:this.clock(),id:bytes[1],error:String(error.message??error).slice(0,200)};
+      this.telemetry.firstWriteFailure??={...this.telemetry.lastWriteFailure};
       throw error;
-    } finally { clearTimeout(timer); if(this.activeWrite===bytes)this.activeWrite=null; }
+    } finally { clearTimeout(timer); if(this.activeWrite===bytes){this.activeWrite=null;this.activeWriteAt=null;} }
   }
   async #failSafe(error) {
     const wasMoving = this.speed > 0;
@@ -179,7 +202,7 @@ export class Car {
     this.faulted = true; this.safetyReason = 'Connection fault'; this.speed = 0; this.pending.clear();
     // A rejected, settled command may leave a perfectly live radio and a moving
     // car. Try STOP once before releasing the link; never retry motion.
-    if (!error.writeTimedOut) {
+    if (!error.writeTimedOut || error.writeSettled) {
       try {
         await this.#write(encode.speed(0, 2500));
         if (this.scanDelocalizationUsed) await this.#write(encode.maxDelocalizedSpeed(0));
@@ -209,14 +232,36 @@ export class Car {
     const now = this.clock(); this.telemetry.lastNotificationAt = now;
     this.telemetry.lastRaw = [...bytes].slice(0,64).map(b=>b.toString(16).padStart(2,'0')).join(' ');
     let messages;
-    try { messages = decode(bytes); } catch { this.telemetry.malformed++; return; }
+    try { messages = decode(bytes); } catch {
+      this.telemetry.malformed++;
+      // A complete safety frame must survive a malformed concatenated tail.
+      // Never guess offsets or reassemble fragments; no optical/init evidence
+      // is accepted from an otherwise malformed notification.
+      messages=[];
+      for(let at=0;at<bytes.length;){
+        const end=at+1+bytes[at];if(bytes[at]<1 || end>bytes.length)break;
+        try { for(const message of decode(bytes.subarray(at,end))) {
+          if(['delocalized','delocRecoveryEntered','collision'].includes(message.type) ||
+              (message.type==='laneChange' && message.cancelled) ||
+              (message.type==='status' && (!message.onTrack || message.lowBattery || message.onCharger)))messages.push(message);
+        } } catch {break;}
+        at=end;
+      }
+      if(!messages.length)return;
+    }
     this.rx++;
     for (let at=0;at<bytes.length;at+=bytes[at]+1) {
+      if(bytes[at]<1 || at+1+bytes[at]>bytes.length)break;
       const key = '0x'+bytes[at+1].toString(16).padStart(2,'0')+'/'+(bytes[at]+1);
       // Protocol bounds limit possible keys; retain a smaller fixed diagnostic budget.
       if (key in this.telemetry.counts || Object.keys(this.telemetry.counts).length<128) this.telemetry.counts[key]=(this.telemetry.counts[key]??0)+1;
     }
+    let rejectedOpticalBatch=false;
     for (const m of messages) {
+      if ((m.type==='position' || m.type==='transition') && (rejectedOpticalBatch || this.beforeTrackObservation?.(m,now)===false)) {
+        rejectedOpticalBatch=true;
+        this.telemetry.rejectedTrackObservations=(this.telemetry.rejectedTrackObservations??0)+1;continue;
+      }
       if (m.type === 'position') {
         // Every optical observation supersedes the prior calibration basis,
         // including unreadable/special codes and positions during diagnostics.
@@ -333,7 +378,12 @@ export class Car {
   }
   diagnostics(now=this.clock()) {
     const age=at=>at===undefined?null:Math.max(0,Math.round(now-at));
-    return {name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
+    const pendingTimes=[...this.pending.values()].map(bytes=>this.queuedAt.get(bytes)).filter(Number.isFinite);
+    const writeMode=this.simulated?'simulator':typeof this.transport.fast==='boolean'?(this.transport.fast?'without-response':'with-response'):'unknown';
+    const transportHealth={writeMode,...this.transportHealth,pendingCount:this.pending.size,
+      pendingAgeMs:pendingTimes.length?age(Math.min(...pendingTimes)):null,
+      inFlightAgeMs:this.activeWriteAt!==null?age(this.activeWriteAt):null};
+    return {transportHealth,bluetooth:this.transport.diagnostics?.()??null,name:this.name,profile:this.transport.initializationProfile??'simulator/legacy',firmware:this.version,
       startupNotifications:{buffered:this.transport.earlyDelivered??0,dropped:this.transport.earlyDropped??0,timestampBasis:'buffered packets timestamped on drain'},
       connected:this.connected,initialization:this.initializationStatus,sdkPlasticTrack:{...this.sdkPlasticTrack},safetyReason:this.safetyReason,steeringLocked:this.steeringLocked,maneuversLocked:this.maneuversLocked,forwardBaselineUntil:this.forwardBaselineUntil??null,
       localization:this.localizer?.diagnostics(now)??{state:'unknown',trusted:false,reason:'No map',reference:null},
@@ -480,9 +530,11 @@ export class Car {
     this.pending.delete('scan-delocalization');
     for (const key of ['speed', 'lane', 'lane-offset', 'offset', 'turn']) this.pending.delete(key);
     // STOP is the next command after any already-running write.
+    if(this.pending.has('stop'))this.transportHealth.coalesced++;
     this.pending.delete('stop');
-    this.pending = new Map([['stop', encode.speed(0, 2500)],
-      ...(this.scanDelocalizationUsed ? [['scan-delocalization', encode.maxDelocalizedSpeed(0)]] : []), ...this.pending]);
+    const stop=encode.speed(0,2500),restore=this.scanDelocalizationUsed?encode.maxDelocalizedSpeed(0):null;
+    this.queuedAt.set(stop,this.clock());if(restore)this.queuedAt.set(restore,this.clock());
+    this.pending = new Map([['stop',stop],...(restore?[['scan-delocalization',restore]]:[]),...this.pending]);
     this.speed = 0; this.lastSpeedSent = 0; this.lastAccel = 2500;
     this.telemetry.speedCommand={at:this.clock(),speed:0,accel:2500};
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;

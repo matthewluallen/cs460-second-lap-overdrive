@@ -58,7 +58,9 @@ test('frozen Guardian trial reports low battery before deadline STOP and never a
 });
 
 test('actual Game replay stops immediately on captured low-battery status and later optical traffic cannot send a lane or restart',async()=>{
-  let now=0;const radio=new ReplayCar(trace,1);radio.initializationProfile='sdk';
+  // The selected car appears after another connection in this export. Its
+  // initialization begins here, without an invented minute of waiting at zero.
+  let now=events[0].at;const radio=new ReplayCar(trace,1);radio.initializationProfile='sdk';
   const timers=[],game=makeGame(()=>now,timers),driver=game.addCar(radio,{name:'Guardian',model:12,control:'browser'});
   const writes=[];driver.car.tap=(direction,packet)=>{if(direction==='tx')writes.push({at:now,packet:Uint8Array.from(packet),text:hex(packet)});};
   await settle();

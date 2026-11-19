@@ -16,6 +16,7 @@ import {drivingReadiness} from './readiness.mjs';
 import {buildRunReport, renderRunReportText} from './run-report.mjs';
 import {AudioCues} from './audio-cues.mjs';
 import {ScreenAwake} from './wake-lock.mjs';
+import {HostTiming} from './host-timing.mjs';
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...children) => { const n = Object.assign(document.createElement(tag), props); n.append(...children); return n; };
@@ -33,6 +34,7 @@ const world = new SimWorld(game.pieces, 'Capsule');
 const mapRenderer = new Renderer($('map'));
 let renderer = mapRenderer, studioRenderer = null, studioLoading = false, requestedView = '2d';
 const recorder = new Recorder();
+const hostTiming = new HostTiming();
 const narrator = new DriveNarrator();
 const sound = new AudioCues({document,now:()=>performance.now(),onStatus:state=>{
   $('soundStatus').textContent=state.text; $('soundToggle').textContent=state.state==='on'?'Mute sound':'Enable sound';
@@ -872,12 +874,14 @@ function refresh(snapshot = game.snapshot()) {
       (x.sdkPlasticTrack?.requested?'Plastic-track comparison: requested plastic parser and disabled jump boosts; '+(x.sdkPlasticTrack.sequenceComplete?'initialization sequence complete':'initialization sequence incomplete')+'; firmware application unconfirmed.\n':'')+
       locationDescription(x.localization)+'\n'+
       'Requested '+x.requestedSpeed+' mm/s; car reported '+x.reportedSpeed+' mm/s ('+seconds(x.reportedSpeedAgeMs)+')\n'+
-      'Positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'\n'+
+      'Accepted positions '+x.positions+' ('+seconds(x.positionAgeMs)+'); transitions '+x.transitions+'; other packets '+x.unknown+'; malformed '+x.malformed+'; overdue optical frames rejected '+(x.rejectedTrackObservations??0)+'\n'+
       'Last notification '+seconds(x.notificationAgeMs)+' · battery '+(x.millivolts===null?'unknown':(x.millivolts/1000).toFixed(2)+' V')+' ('+seconds(x.batteryAgeMs)+')\n'+
       'Car status ('+seconds(x.statusAgeMs)+'): '+(x.statusAgeMs===null?'unknown':('on track '+x.status.onTrack+' · charging '+x.status.onCharger+' · low battery '+x.status.lowBattery))+'\n'+
       'Firmware collision notifications: '+(x.collisions??0)+' · last '+seconds(x.collisionAgeMs)+(x.lastCollision?' · side '+x.lastCollision.wasSideOnCollision+' · front/back '+x.lastCollision.wasFrontBackCollision:'')+' · not confirmation of physical impact\n'+
       'Firmware recovery: entered '+(x.recoveryEntered??0)+' · succeeded '+(x.recoverySucceeded??0)+' (diagnostic only)\n'+
-      'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+' · max write '+Math.round(x.maxWriteMs)+' ms'+
+      'Lateral offset: '+offset+(x.laneChange?' ('+seconds(performance.now()-x.laneChange.at)+')':'')+'\nBluetooth writes: '+x.transportHealth.writeMode+' · queue '+x.transportHealth.pendingCount+' · longest wait '+Math.round(x.transportHealth.maxQueueWaitMs)+' ms · longest completed API call '+(x.transportHealth.maxCompletedApiMs===null?'unknown':Math.round(x.transportHealth.maxCompletedApiMs)+' ms')+'\n'+
+      'Write failures '+x.transportHealth.failed+' · timeouts '+x.transportHealth.timeouts+' · superseded queued commands '+x.transportHealth.coalesced+'\n'+
+      'Host scheduling: longest callback gap '+Math.round(hostTiming.snapshot().maxGapMs)+' ms · '+hostTiming.snapshot().over500Ms+' gaps above 500 ms; browser receipt timing, not radio loss'+
       (x.laneCancellationComparison?.active?'\nSUPERVISED COMPARISON · '+(x.laneCancellationComparison.stage==='acquiring-reference'?'ACQUIRING START/FINISH REFERENCE; lane and offset commands locked':x.steeringLocked?'STEERING LOCKED; FORWARD DRIVING CONTINUES':'reference confirmed; cancellation will lock steering and retain forward drive')+' · STOP ends this comparison.':x.laneChange?.cancelled?'\nLane change cancelled · requested target cleared. Moving cancellations require pit recovery.':'')+
       (x.forwardBaseline?'\nFORWARD CHECK · '+x.forwardBaseline.laps+' / '+x.forwardBaseline.targetLaps+' full laps reported · '+(x.forwardBaseline.active?'normal optical calibration active; no maneuvers':x.forwardBaseline.reason+'; confirm physical stop'):'')+
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+
@@ -953,8 +957,10 @@ function refresh(snapshot = game.snapshot()) {
 }
 
 let last = performance.now(), slow = 0;
+hostTiming.observe(last);
 setInterval(() => {
   const frameAt = performance.now(), dt = Math.min(0.1, (frameAt - last) / 1000); last = frameAt;
+  hostTiming.observe(frameAt); // retain the uncapped host gap for diagnosis
   readControls(dt);
   world.step(dt);
   for (const d of game.drivers) d.objectiveInput = session.status === 'running' ? session.guidance(d.id) : null;
@@ -993,7 +999,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-ff-compatibility',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,model:d.car.model,simulated:d.car.simulated,...d.car.diagnostics()})),round:session.view(),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-bluetooth-reliability',hostTiming:hostTiming.snapshot(),exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,model:d.car.model,simulated:d.car.simulated,...d.car.diagnostics()})),round:session.view(),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 function canReport(){return game.halted&&!countdown&&game.phase!=='scanning'&&!game.diagnostic&&!game.forwardBaseline&&!game.laneCancellationComparison&&game.drivers.every(d=>d.car.speed===0)&&(recorder.cars.length>0||game.drivers.length>0);}
 let reportText='';
 function refreshReport() {

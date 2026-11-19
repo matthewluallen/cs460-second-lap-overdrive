@@ -9,6 +9,10 @@ of scope.
 preserved as `course-vulnerable-baseline`. Check that tag or commit out to
 reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
+## Bluetooth deadline and lifecycle enforcement — 18 November 2026
+
+Existing telemetry, initialization and write deadlines are now checked at callback/transport boundaries as well as timer callbacks, preventing delayed browser scheduling from refreshing expired evidence or releasing queued motion. An overdue coalesced optical batch cannot revive localization after STOP. Complete aligned safety frames survive a malformed trailing frame; ordinary/init evidence from that malformed notification stays rejected. GATT setup cancellation, listener cleanup and late disconnect subscription are fail-closed. No timeout, neutral-input rule, authentication or motor limit was relaxed. Known-settled late writes permit serialized STOP; unresolved write timeouts still close without overlapping operations. The live static allowlist adds only `host-timing.mjs`; test/fault modules remain private to the repository. See [regressions and limitations](slipstream/review/BLUETOOTH-TELEMETRY-RELIABILITY.md). Host suspension and broken Bluetooth can still prevent physical STOP delivery.
+
 ## Initialization reply ordering — 18 November 2026
 
 Reproduced early-pong/version regressions showed an initialization phase could advance while its own request was still queued, allowing later keyed commands to collapse a barrier. All SDK and app-mode ping/version phases now open their reply gate only at that request’s serialized transport entry. Native app `0x23` confirmation remains mandatory; unsupported MXT compact telemetry remains diagnostic/unknown. Replies contain no correlation token, so this ordering check is not cryptographic acknowledgment or proof of firmware state. STOP, write serialization, neutral arming and watchdogs remain unchanged. The public allowlist adds only the presentation module `vehicle-models.mjs`; new compatibility and initialization tests remain unavailable through the live server.

@@ -57,7 +57,9 @@ test('forward run has one calibrated speed command and no maneuver, recovery or 
 });
 
 test('actual Game replays startup, scan, stopped gap and three full forward laps with no planner or attack restart',async()=>{
-  let now=0;const radio=new ReplayCar(trace,2);radio.initializationProfile='sdk';
+  // Preserve this car's recorded initialization intervals inside the cumulative
+  // export; constructing it at zero would invent a long pre-reply suspension.
+  let now=events[0].at;const radio=new ReplayCar(trace,2);radio.initializationProfile='sdk';
   const timers=[];
   const game=new Game({pieces:json('./data/pieces.json'),weapons:json('./data/weapons.json'),vehicles:json('./data/vehicles.json'),clock:()=>now,
     schedule:(fn,ms)=>{const timer={fn,at:now+ms,cancelled:false};timers.push(timer);return timer;},unschedule:timer=>{timer.cancelled=true;}});

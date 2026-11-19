@@ -8,6 +8,7 @@ import {drivingReadiness} from './readiness.mjs';
 import {buildRunReport, renderRunReportText} from './run-report.mjs';
 import {AudioCues} from './audio-cues.mjs';
 import {ScreenAwake} from './wake-lock.mjs';
+import {HostTiming} from './host-timing.mjs';
 import {DriveNarrator, cameraCar} from './camera-director.mjs';
 import {FaultTransport, FaultRelay} from './faults.mjs';
 import {trackFromPlan, trackValidation} from './track.mjs';
@@ -47,8 +48,23 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
     addEventListener(name, fn) { (documentEvents[name] ??= []).push(fn); }};
   document.body.dataset.view=view;
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
-  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, trackValidation, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
-    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, DriveNarrator, cameraCar, drivingReadiness, buildRunReport, renderRunReportText, AudioCues, ScreenAwake, mountStudentLab() {},
+  const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, trackValidation, FaultRelay, Game: class extends Game {
+    constructor(options) { super({...options, clock}); }
+    addCar(transport, options={}) {
+      if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); }
+      return super.addCar(transport,{...options,beforeStart:driver=>{
+        // Host-flow fixtures use only SimCar or connectionRadio fakes. They
+        // jump virtual session time by up to 90 s before yielding immediate
+        // write promises; that does not represent 90 s of pending real GATT.
+        // Isolate those UI/countdown assertions with a fixture-only budget.
+        // Production's 1000 ms API deadline and telemetry watchdog are covered
+        // by dedicated transport/core tests and are not changed here.
+        driver.car.writeTimeoutMs=120000;
+        options.beforeStart?.(driver);
+      }});
+    }
+  }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
+    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, DriveNarrator, cameraCar, drivingReadiness, buildRunReport, renderRunReportText, AudioCues, ScreenAwake, HostTiming, mountStudentLab() {},
     performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
     Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => !!bluetoothLink, chooseCar: async () => bluetoothLink,
@@ -518,7 +534,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-ff-compatibility');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-bluetooth-reliability');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
