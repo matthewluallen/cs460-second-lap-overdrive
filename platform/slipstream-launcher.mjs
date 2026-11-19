@@ -85,7 +85,8 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).hr
   try{
     const result=await launch();
     console.log(`Slipstream ${result.alreadyRunning?'already running':'ready'} on port ${result.port}.`);
-    console.log(`Host code: private file ${join(result.stateDir,'host-code')}`);
+    console.log('Student phone QR needs no entered host code. Each car has its own invitation; approve its driver on the laptop.');
+    console.log(`Advanced host code: private file ${join(result.stateDir,'host-code')}`);
     console.log('Public forwarding is separate; verify the Codespaces Ports panel before sharing QR codes.');
   }catch(error){console.error(error.message);process.exitCode=1;}
 }

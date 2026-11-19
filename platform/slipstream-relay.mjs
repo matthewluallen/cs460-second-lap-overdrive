@@ -5,7 +5,8 @@
 // which the server forwards to the host. The host sends back each player's dashboard.
 //
 // Trust model
-//   host code   Printed on the server console. Needed to open a room at all.
+//   host code   Printed on the server console. Opens legacy Advanced rooms.
+//   student    Public, bounded creation of NEW isolated rooms; no global code.
 //   host key    Returned when a room opens. Controls that room.
 //   join key    In the shared QR code. Lets someone ask to join.
 //   seat key    One per car, in that car's QR code. Asks to join for that car.
@@ -19,6 +20,7 @@ import {randomBytes, timingSafeEqual} from 'node:crypto';
 import {WebSocketServer} from 'ws';
 
 export const LIMITS = Object.freeze({rooms: 16, players: 8, drivers: 4, pending: 8, seats: 4, name: 16, stateBytes: 3500,
+  studentRooms: 12, studentCreatesPerMinute: 12, creationAddresses: 4096,
   inputPerSecond: 40, statePerSecond: 12, badCodesPerMinute: 10, idleMs: 30 * 60 * 1000, hostGraceMs: 90 * 1000,
   socketAuthMs: 3000, socketBytes: 4096});
 export const SOCKET_PATH = '/api/slipstream/ws';
@@ -58,12 +60,13 @@ function socketStream(ws) {
     close: () => { try { ws.close(1000); } catch {} }};
 }
 
-export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 15000} = {}) {
+export function createRelay({hostCode, studentRooms = true, now = () => Date.now(), heartbeatMs = 15000} = {}) {
   if (typeof hostCode !== 'string' || hostCode.length < 8) throw new Error('The relay needs a host code of at least 8 characters');
   const rooms = new Map();
   const router = express.Router();
   const fail = (res, status, error) => res.status(status).json({error});
   const badCodes = new Map();
+  const studentCreates = new Map(), studentGlobal = new Bucket(LIMITS.studentCreatesPerMinute/60, now(), LIMITS.studentCreatesPerMinute);
 
   function closeRoom(id) {
     const room = rooms.get(id);
@@ -102,6 +105,7 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     if (!player.approved) return {status: 403, error: 'Waiting for the host to let you in'};
     if (!player.bucket.take(now())) return {status: 429, error: 'Slow down'};
     if (!plain(b)) return {status: 400, error: 'Expected an object'};
+    if(room.student && player.invitedCar!==null && b.car!==undefined && b.car!==player.invitedCar)return {status:403,error:'This invitation belongs to a different car'};
     const message = {type: 'input', player: player.id, throttle: Math.max(0, unit(b.throttle)), steer: unit(b.steer),
       attack: b.attack === true, support: b.support === true, special: b.special === true};
     if (Number.isSafeInteger(b.car) && b.car > 0 && b.car < 1e6) message.car = b.car;
@@ -143,6 +147,38 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     return {room, player};
   };
   const reply = (res, result) => result.error ? fail(res, result.status, result.error) : res.status(result.status).end();
+  function makeRoom(res, student = false) {
+    if (rooms.size >= LIMITS.rooms) return fail(res, 429, 'Too many rooms; try again later');
+    const id = token(4), t = now();
+    const room = {id, student, hostKey: token(24), joinKey: token(12), seats: new Map(), players: new Map(), host: null,
+      hostSeen: t, touched: t, stateBucket: new Bucket(LIMITS.statePerSecond, t), nextPlayer: 1};
+    rooms.set(id, room);
+    res.status(201).json({room: id, hostKey: room.hostKey, joinKey: room.joinKey});
+  }
+
+  // Public creation grants only the capability for this NEW room. It cannot
+  // discover or control another host's cars. Browser-origin checks prevent
+  // cross-site forms; they are not authentication against non-browser clients.
+  router.post('/student/rooms', (req, res) => {
+    if (studentRooms !== true) return fail(res, 403, 'Student phone rooms are disabled by this server');
+    const origin=req.get('origin'), site=req.get('sec-fetch-site');
+    let url; try { url=new URL(origin); } catch {}
+    if (!url || !['http:','https:'].includes(url.protocol) || url.origin!==origin || url.host!==req.get('host') || (site && site!=='same-origin')) return fail(res,403,'Open phone sharing from this server’s page');
+    if (!req.is('application/json') || !plain(req.body)) return fail(res,415,'Expected a JSON object');
+    sweep();
+    const time=now(), address=req.socket.remoteAddress||'unknown';
+    for (const [key,bucket] of studentCreates) if(time-bucket.at>60000)studentCreates.delete(key);
+    let bucket=studentCreates.get(address);
+    if(!bucket) {
+      if(studentCreates.size>=LIMITS.creationAddresses)return fail(res,429,'Phone-room creation is busy; try later');
+      bucket=new Bucket(LIMITS.studentCreatesPerMinute/60,time,LIMITS.studentCreatesPerMinute);studentCreates.set(address,bucket);
+    }
+    // Socket addresses cannot be reset by spoofing forwarded headers. A global
+    // bucket bounds creation even across many addresses; reserve legacy capacity.
+    if(!bucket.take(time)||!studentGlobal.take(time))return fail(res,429,'Too many new phone rooms; wait a minute');
+    if([...rooms.values()].filter(room=>room.student).length>=LIMITS.studentRooms)return fail(res,429,'Student phone rooms are full; close an unused room or try later');
+    return makeRoom(res,true);
+  });
 
   router.post('/rooms', (req, res) => {
     sweep();
@@ -157,13 +193,16 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     if(!bucket.take(time))return fail(res,429,'Too many host-code attempts; wait a minute');
     if (!same(bearer(req), hostCode)) return fail(res,403,'Wrong host code');
     bucket.tokens = Math.min(bucket.size,bucket.tokens+1); // authenticated creation has its own room cap
-    if (rooms.size >= LIMITS.rooms) return fail(res, 429, 'Too many rooms; try again later');
-    const id = token(4), t = now();
-    const room = {id, hostKey: token(24), joinKey: token(12), seats: new Map(), players: new Map(), host: null,
-      hostSeen: t, touched: t, stateBucket: new Bucket(LIMITS.statePerSecond, t), nextPlayer: 1};
-    rooms.set(id, room);
-    res.status(201).json({room: id, hostKey: room.hostKey, joinKey: room.joinKey});
+    return makeRoom(res);
   });
+
+  function removePlayer(room, player) {
+    room.players.delete(player.id);player.stream?.send({type:'kicked'});player.stream?.close();
+    room.host?.send({type:'left',player:player.id});
+  }
+  function removeClaims(room, car, keep = null, approved = true) {
+    for(const p of [...room.players.values()])if(p!==keep && (p.car===car || p.invitedCar===car) && (approved || !p.approved))removePlayer(room,p);
+  }
 
   router.get('/rooms/:room/host', (req, res) => {
     const room = hostOf(req, res);
@@ -178,7 +217,7 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     if (!room) return;
     const car = req.body?.car;
     if (!Number.isSafeInteger(car) || car < 1 || car > 999999) return fail(res, 400, 'Expected a car id');
-    if (req.body.remove === true) { room.seats.delete(car); return res.status(204).end(); }
+    if (req.body.remove === true) { room.seats.delete(car); removeClaims(room,car); return res.status(204).end(); }
     if (!room.seats.has(car)) {
       if (room.seats.size >= LIMITS.seats) return fail(res, 429, 'Too many seats');
       room.seats.set(car, token(12));
@@ -198,7 +237,8 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
       return fail(res, 409, 'Four drivers are already approved; remove a driver before admitting another');
     // Replace an occupied named seat atomically: an old socket loses authority now,
     // before its asynchronous close handshake finishes.
-    for (const old of replaced) { room.players.delete(old.id); old.stream?.send({type: 'kicked'}); old.stream?.close(); }
+    for (const old of replaced) removePlayer(room,old);
+    if(player.car!==null)removeClaims(room,player.car,player);
     player.approved = true;
     if (player.car !== null && room.seats.has(player.car)) room.seats.set(player.car, token(12));
     player.stream?.send({type: 'approved'});
@@ -208,7 +248,11 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     const room = hostOf(req, res);
     if (!room) return;
     const player = room.players.get(Number(req.body?.player));
-    if (player) { player.stream?.send({type: 'kicked'}); player.stream?.close(); room.players.delete(player.id); }
+    if (player) {
+      const car=player.invitedCar??player.car;
+      removePlayer(room,player);
+      if(car!==null) { if(room.seats.has(car))room.seats.set(car,token(12));removeClaims(room,car,null,false); }
+    }
     res.status(204).end();
   });
   router.delete('/rooms/:room', (req, res) => {
@@ -231,7 +275,7 @@ export function createRelay({hostCode, now = () => Date.now(), heartbeatMs = 150
     if (room.players.size >= LIMITS.players) return fail(res, 429, 'Room is full');
     if ([...room.players.values()].filter(p => !p.approved).length >= LIMITS.pending) return fail(res, 429, 'Too many people are waiting to be let in');
     const name = typeof body.name === 'string' ? body.name.replace(/[^\p{L}\p{N} _.-]/gu, '').trim().slice(0, LIMITS.name) : '';
-    const player = {id: room.nextPlayer++, key: token(24), name: name || 'Player', car, approved: false, stream: null,
+    const player = {id: room.nextPlayer++, key: token(24), name: name || 'Player', car, invitedCar:car, approved: false, stream: null,
       bucket: new Bucket(LIMITS.inputPerSecond, now())};
     room.players.set(player.id, player);
     room.host?.send({type: 'joined', ...publicPlayer(player)});

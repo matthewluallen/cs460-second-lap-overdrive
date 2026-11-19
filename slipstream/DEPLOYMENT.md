@@ -16,21 +16,21 @@ latency affects phone inputs; rendering and the control loop share the host brow
 
 ## GitHub Codespaces
 
-1. Open this branch in a Codespace using the supplied `.devcontainer` configuration.
+1. Open **`week-4-student-driving`** in a Codespace using the supplied `.devcontainer` configuration.
    It installs the locked Node dependencies without install scripts.
 2. The configured devcontainer runs `npm run slipstream:up` on start. You can also
    run `PORT=3000 npm run slipstream:up` manually. It starts the live-only server in
-   the background or verifies that the managed server is already running. Retrieve
-   the operator's private host code with `npm run slipstream:code` (it reads
-   `"${SLIPSTREAM_STATE_DIR:-$HOME/.local/state/slipstream-managed}/host-code"`).
-   Keep that code private; it authorizes room creation.
+   the background or verifies that the managed server is already running.
+   **Student phone QR needs no entered host code.** The private host code remains
+   available through `npm run slipstream:code` only for the legacy Advanced flow.
 3. Open the forwarded port 3000 URL, appending `/slipstream/`, on the nearby laptop.
    Use the browser-facing **HTTPS** URL, normally
    `https://CODESPACENAME-3000.app.github.dev/slipstream/`. The upstream server is
    plain HTTP: leave the forwarded port's **protocol** set to HTTP.
-4. Connect cars on that laptop, or choose the two-car simulation first. Enter the
-   saved host code in Remote players and create a room. Approve players before
-   assigning them to cars. Each car's Code button provides its phone join link.
+4. Connect cars on that laptop, or use simulation first. In Student view choose
+   **Phone / QR** on the intended car. The page creates an isolated room and that
+   car's own invitation without asking for a server code. Approve the named player
+   with **Let in**, then choose **Start driving**; fresh neutral input is still required.
 5. Open those links on the phones. Forwarded ports are private by default;
    GitHub's authentication/organization rules still apply before the app loads.
    For a public QR session, explicitly set port **3000** to **Public** in Ports.
@@ -43,6 +43,26 @@ Codespace stop/rebuild or server restart destroys in-memory rooms. Create a fres
 room and rejoin; do not expect continuity. Printed status messages do not guarantee
 Codespace uptime. Verify an approved phone can join, send inputs and reconnect
 through the actual classroom network before operating physical cars.
+
+### Student room access
+
+The public Student endpoint creates only **new isolated rooms**. Its room host key
+never appears in a phone QR; each per-car invitation requires host approval and
+cannot select another car. Unused invitations remain stable; approval, controller
+changes and revocation retire prior access. The laptop remains the only browser
+holding Bluetooth links, including when its controller is an iPad.
+
+Resource bounds are 12 Student rooms within the existing 16-room total, reserving
+four slots for authenticated Advanced hosts. Public creation has global and
+socket-address budgets of 12 per minute; abandoned hosts expire after 90 seconds
+and idle rooms after 30 minutes. Same-origin JSON checks deter browser cross-site
+creation; they are not authentication against arbitrary clients. A public visitor
+can consume the bounded Student pool, so availability under abuse is not guaranteed.
+
+An administrator can set **`SLIPSTREAM_STUDENT_ROOMS=0` before server startup** to
+disable no-code room creation. Advanced room creation continues to require the
+private case-sensitive host code. Changing this environment variable requires a
+deliberate restart between sessions; the managed launcher does not replace a live server.
 
 ## Standalone Docker
 

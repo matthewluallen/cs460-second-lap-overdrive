@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {Game, TEAM_COLORS} from './game.mjs';
 import {rgb} from './protocol.mjs';
+import {DriveNarrator, cameraCar} from './camera-director.mjs';
 import {FaultTransport, FaultRelay} from './faults.mjs';
 import {trackFromPlan, trackValidation} from './track.mjs';
 import {SimWorld, LAYOUTS} from './sim.mjs';
@@ -43,7 +44,7 @@ function host({injectFaults = false, advancingClock = false, bluetoothLink = nul
   document.body.dataset.view=view;
   const fixtures = Object.fromEntries(['pieces', 'vehicles', 'weapons'].map(n => [n, JSON.parse(readFileSync(new URL('./data/' + n + '.json', import.meta.url)))]));
   const context = vm.createContext({console, Date, URL, Blob, trackFromPlan, trackValidation, FaultRelay, Game: class extends Game { constructor(options) { super({...options, clock}); } addCar(transport, options) { if (injectFaults) { transport = new FaultTransport(transport); transports.push(transport); } return super.addCar(transport, options); } }, SimWorld, LAYOUTS, Recorder, WEAPON_LABEL, RoundSession, ROUND_MODES, STORY_MISSIONS,
-    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, mountStudentLab() {},
+    fixtures, document, window: {}, navigator: {}, sessionStorage: storage, localStorage: storage, TEAM_COLORS, rgb, DriveNarrator, cameraCar, mountStudentLab() {},
     performance: {now: clock}, location: {origin: 'http://localhost', host: 'localhost'},
     Option: function(text, value) { return {textContent: text, value}; },
     Renderer: class {draw() {} addEffect() {}}, bluetoothAvailable: () => !!bluetoothLink, chooseCar: async () => bluetoothLink,
@@ -513,7 +514,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-student-drive');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-week4-drive');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
@@ -717,7 +718,7 @@ test('student LED changes validate color and stopped state and preserve distinct
 });
 
 test('student Phone QR keeps approval and neutral-input arming and Drive here revokes the previous seat',async()=>{
-  const requests=[];const h=host({view:'student',apiCall:async(path,options)=>{requests.push({path,options});return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:path.endsWith('/seats')?{seatKey:'one-car'}:{};}});
+  const requests=[];const h=host({view:'student',apiCall:async(path,options)=>{requests.push({path,options});return path==='/student/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:path.endsWith('/seats')?{seatKey:'one-car'}:{};}});
   h.node('addSim').click();await settle();h.node('hostCode').value='CLASS';
   h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d);game.useTrack(world.track);');
   await h.run('ui.phone.click()');
@@ -736,18 +737,18 @@ test('student Phone QR keeps approval and neutral-input arming and Drive here re
   assert.equal(h.run('d.control'),'browser');assert.equal(h.run('d.pad'),null);assert.equal(h.run('ui.screen.blurred'),true);
 });
 
-test('student Phone QR shows missing class code and can retry after the code is supplied',async()=>{
-  let requests=0;const h=host({view:'student',apiCall:async path=>{requests++;return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'};}});
-  h.node('addSim').click();await settle();h.run('drawQr=async()=>{};const ui=cards.get(game.drivers[0]);');
+test('Advanced Phone QR shows a missing host code and can retry after the code is supplied',async()=>{
+  let requests=0;const h=host({view:'advanced',apiCall:async path=>{requests++;return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'};}});
+  h.node('addSim').click();await settle();h.run('drawQr=async()=>{};game.stopAll();const ui=cards.get(game.drivers[0]);');
   await h.run('ui.phone.click()');assert.equal(requests,0);assert.match(h.node('roomNote').textContent,/enter the host code/);assert.equal(h.node('hostCode').focused,true);
   assert.equal(h.run('game.halted'),true);h.node('hostCode').value='CLASS';await h.run('ui.phone.click()');
   assert.equal(requests,2);assert.equal(h.run('ui.seatBox.hidden'),false);assert.equal(h.run('game.drivers[0].car.speed'),0);
 });
 
-test('phone room preserves a mixed-case host code in the request and session storage',async()=>{
+test('Advanced phone room preserves a mixed-case host code in the request and session storage',async()=>{
   const requests=[],stored={};
-  const h=host({view:'student',stored,apiCall:async(path,options)=>{requests.push({path,options});return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'};}});
-  h.node('addSim').click();await settle();h.run('drawQr=async()=>{}');
+  const h=host({view:'advanced',stored,apiCall:async(path,options)=>{requests.push({path,options});return path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'};}});
+  h.node('addSim').click();await settle();h.run('drawQr=async()=>{};game.stopAll()');
   h.node('hostCode').value='  aB9_xY-zQ2LmN7pR  ';
   await h.run('cards.get(game.drivers[0]).phone.click()');
   assert.equal(requests.find(r=>r.path==='/rooms').options.key,'aB9_xY-zQ2LmN7pR');
@@ -760,7 +761,7 @@ test('changing workspace stops active driving and entering student mode parks ex
   const h=host();h.node('demo').click();h.node('battle').click();h.tick(3001);h.tick(3041);await settle();
   assert.equal(h.run('session.status'),'running');assert.ok(h.run('game.drivers.some(d=>d.car.speed>0)'));
   h.node('studentView').click();h.tick(3081);await settle();assert.equal(h.document.body.dataset.view,'student');assert.equal(h.run('session.status'),'idle');
-  assert.equal(h.run('game.drivers.every(d=>d.car.speed===0&&d.control==="browser")'),true);assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.topSpeed'),300);
+  assert.equal(h.run('game.drivers.every(d=>d.car.speed===0&&d.control==="browser")'),true);assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.topSpeed'),400,'workspace changes preserve the selected maximum');
   h.node('advancedView').click();assert.equal(h.document.body.dataset.view,'advanced');assert.equal(h.run('game.halted'),true);assert.equal(h.run('countdown'),null);
 });
 
@@ -776,7 +777,7 @@ test('student scan maps at the default pace, stays stopped and needs explicit St
 
 test('late student phone-code responses cannot replace Drive here and workspace changes update shared URLs',async()=>{
   let release;const seatPending=new Promise(resolve=>{release=resolve;});
-  const h=host({view:'student',apiCall:async path=>path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:seatPending});
+  const h=host({view:'student',apiCall:async path=>path==='/student/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:seatPending});
   h.node('addSim').click();await settle();h.node('hostCode').value='CLASS';h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d)');
   const pending=h.run('ui.phone.click()');await settle();h.run('ui.screen.click()');release({seatKey:'late'});await pending;
   assert.equal(h.run('d.control'),'browser');assert.equal(h.run('ui.seatBox.hidden'),true);assert.match(h.run('ui.phoneStatus.textContent'),/On-screen controls selected/);
@@ -786,10 +787,10 @@ test('late student phone-code responses cannot replace Drive here and workspace 
 });
 
 test('student phone-code service failures stay visible and do not arm a car',async()=>{
-  const h=host({view:'student',apiCall:async()=>{throw new Error('Class host code was rejected');}});
+  const h=host({view:'student',apiCall:async()=>{throw new Error('Student phone rooms are full');}});
   h.node('addSim').click();await settle();h.node('hostCode').value='WRONG';h.run('const d=game.drivers[0],ui=cards.get(d)');
   await h.run('ui.phone.click()');
-  assert.match(h.node('roomNote').textContent,/Class host code was rejected/);assert.match(h.run('ui.phoneStatus.textContent'),/Class host code was rejected/);
+  assert.match(h.node('roomNote').textContent,/Student phone rooms are full/);assert.match(h.run('ui.phoneStatus.textContent'),/Student phone rooms are full/);
   assert.equal(h.run('ui.seatBox.hidden'),true);assert.equal(h.run('game.halted'),true);assert.equal(h.run('d.car.speed'),0);assert.equal(h.run('d.armed'),false);
 });
 
@@ -809,9 +810,83 @@ test('student status copy stays concise while advanced retains scan evidence and
 });
 
 test('approved student phone status replaces invitation instructions and room close clears the old QR',async()=>{
-  const h=host({view:'student',apiCall:async path=>path==='/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'}});
+  const h=host({view:'student',apiCall:async path=>path==='/student/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:{seatKey:'seat'}});
   h.node('addSim').click();await settle();h.node('hostCode').value='CLASS';h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d)');
   await h.run('ui.phone.click()');h.run("onRelay({type:'joined',id:9,name:'Avery',car:d.id})");await h.run('approve(players.get(9))');h.run('refresh()');
   assert.equal(h.run('ui.phoneStatus.textContent'),'Avery paired to this car. Choose Start driving on the laptop; then hold to drive on the phone.');
   await h.node('closeRoom').click();assert.equal(h.run('ui.phoneStatus.textContent'),'');assert.equal(h.run('ui.seatLink.value'),'');assert.equal(h.run('ui.seatBox.hidden'),true);assert.equal(h.run('game.halted'),true);
+});
+
+test('student QR creation needs no entered or stored host code and makes four distinct stable car invitations',async()=>{
+  const requests=[],tokens=new Map();let generation=0;
+  const stored={'slipstream.hostCode':'PrivateLegacyCode'};
+  const h=host({view:'student',stored,apiCall:async(path,options)=>{
+    requests.push({path,options});if(path==='/student/rooms')return {room:'classroom',hostKey:'new-room-secret',joinKey:'join'};
+    if(path.endsWith('/seats')){const car=options.body.car;if(options.body.remove){tokens.delete(car);return null;}if(!tokens.has(car))tokens.set(car,'seat-'+car+'-'+(++generation));return {car,seatKey:tokens.get(car)};}
+    return {};
+  }});
+  for(let i=0;i<4;i++)h.node('addSim').click();await settle();h.node('hostCode').value='';h.run('drawQr=async()=>{}');
+  for(let i=0;i<4;i++)await h.run('cards.get(game.drivers['+i+']).phone.click()');
+  const creates=requests.filter(r=>r.path==='/student/rooms');assert.equal(creates.length,1);
+  assert.equal(creates[0].options.key,undefined);assert.deepEqual(JSON.parse(JSON.stringify(creates[0].options.body)),{});
+  assert.equal(requests.some(r=>r.path==='/rooms'),false);assert.equal(stored['slipstream.hostCode'],'PrivateLegacyCode');
+  assert.equal(h.node('hostCode').focused,undefined);
+  assert.equal(h.run('new Set([...cards.values()].map(ui=>ui.seatLink.value)).size'),4);
+  const first=h.run('cards.get(game.drivers[0]).seatLink.value');const mutations=requests.filter(r=>r.options.body?.remove).length;
+  await h.run('cards.get(game.drivers[0]).phone.click()');
+  assert.equal(h.run('cards.get(game.drivers[0]).seatLink.value'),first,'showing the same unused QR does not rotate it');
+  assert.equal(requests.filter(r=>r.options.body?.remove).length,mutations);
+  assert.equal(h.run('game.halted&&game.drivers.every(d=>d.car.speed===0&&!d.armed)'),true);
+});
+
+test('student controller changes revoke old claims and wait for server removal before a new invitation',async()=>{
+  const requests=[];let delayRemoval=false,releaseRemoval;const removal=new Promise(resolve=>{releaseRemoval=resolve;});let sequence=0;
+  const h=host({view:'student',apiCall:async(path,options)=>{
+    requests.push({path,options});if(path==='/student/rooms')return {room:'classroom',hostKey:'host',joinKey:'join'};
+    if(options.body?.remove){if(delayRemoval)await removal;return null;}
+    if(path.endsWith('/seats'))return {seatKey:'seat-'+(++sequence)};return {};
+  }});
+  h.node('addSim').click();await settle();h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d)');await h.run('ui.phone.click()');
+  h.run("onRelay({type:'joined',id:1,name:'Previous driver',car:d.id});onRelay({type:'joined',id:2,name:'Waiting',car:d.id})");
+  await h.run('approve(players.get(1))');delayRemoval=true;h.run('ui.screen.click()');
+  assert.equal(h.run('players.size'),0);assert.equal(h.run('d.pad'),null);assert.equal(h.run('d.car.speed'),0);
+  const replacement=h.run('ui.phone.click()');await settle();assert.equal(sequence,1,'new QR waits for server-side revocation');
+  assert.equal(h.run('ui.seatBox.hidden'),true);releaseRemoval();await replacement;
+  assert.equal(sequence,2);assert.match(h.run('ui.seatLink.value'),/seat-2$/);
+  assert.ok(requests.filter(r=>r.options.body?.remove&&r.options.body.car===1).length>=1);
+  h.run("onRelay({type:'input',player:1,car:d.id,throttle:1})");assert.equal(h.run('d.pad'),null);assert.equal(h.run('d.armed'),false);
+});
+
+test('an approval response arriving after controller revocation cannot reseat its former player',async()=>{
+  let resolveApproval;const approval=new Promise(resolve=>{resolveApproval=resolve;});
+  const h=host({view:'student',apiCall:async(path,options)=>path==='/student/rooms'?{room:'classroom',hostKey:'host',joinKey:'join'}:path.endsWith('/approve')?approval:options.body?.remove?null:{seatKey:'seat'}});
+  h.node('addSim').click();await settle();h.run('drawQr=async()=>{};const d=game.drivers[0],ui=cards.get(d)');await h.run('ui.phone.click()');
+  h.run("onRelay({type:'joined',id:8,name:'Pending',car:d.id})");const pending=h.run('approve(players.get(8))');
+  h.run('ui.screen.click()');resolveApproval(null);await pending;
+  assert.equal(h.run('d.control'),'browser');assert.equal(h.run('!!d.pad'),false);assert.equal(h.run('players.size'),0);assert.equal(h.run('game.halted'),true);
+});
+
+
+test('Week 4 driving choices expose full maximum, preserve it across workspaces and refuse live policy changes',async()=>{
+  const h=host({view:'student'});
+  h.node('studentMaxSpeed').value='1200';h.node('accelerationMode').value='2000';h.node('telemetryMode').value='1000';
+  h.node('studentMaxSpeed').onchange();
+  assert.deepEqual(JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.driving)')),{maximumSpeed:1200,rampMs:2000,telemetryGraceMs:1000,powerZoneMode:'off'});
+  h.node('advancedView').click();h.node('studentView').click();assert.equal(h.run('game.topSpeed'),1200);
+  h.run('game.halted=false;refresh()');assert.equal(h.node('studentMaxSpeed').disabled,true);
+  h.node('studentMaxSpeed').value='600';h.node('studentMaxSpeed').onchange();assert.equal(h.run('game.topSpeed'),1200);
+  assert.match(h.node('drivingSettingsNote').textContent,/STOP/);
+  h.node('stop').click();h.node('powerZoneMode').value='boost';h.node('powerZoneMode').onchange();
+  assert.equal(h.run('game.powerZoneMode'),'boost');assert.match(h.node('powerZoneRuleNote').textContent,/ordinary straight/);
+});
+
+test('camera choices and captions never arm or change car control, and missing speech remains usable',async()=>{
+  const h=host({view:'student'});h.node('addSim').click();await settle();
+  h.run('game.useTrack(world.track);game.stopAll();refresh()');
+  h.node('cameraMode').value='chase';h.node('cameraMode').onchange();
+  h.node('cameraCar').value='1';h.node('cameraCar').onchange();
+  h.node('commentaryMode').value='voice';h.node('commentaryMode').onchange();
+  assert.equal(h.node('commentaryMode').value,'captions');assert.match(h.node('sceneNote').textContent,/unavailable/);
+  assert.equal(h.run('game.halted'),true);assert.equal(h.run('game.drivers[0].car.speed'),0);
+  assert.equal(h.run('countdown'),null);
 });

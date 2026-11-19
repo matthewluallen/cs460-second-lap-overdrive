@@ -8,18 +8,31 @@ Story missions. Simulated practice works without owning any hardware.
 
 ## Student view (default)
 
-1. Open `/slipstream/` on the Bluetooth laptop in Chrome or Edge. The default is **Student** view with **Classic SDK** for new installations and a300 mm/s ceiling. A previously saved connection choice is respected; expand **Connection settings** to check it. Keep this laptop awake and its controller tab visible.
+1. Use branch **`week-4-student-driving`** and open `/slipstream/` on the Bluetooth laptop in Chrome or Edge. The default is **Student** view with **Classic SDK** for new installations and a 300 mm/s ceiling. A previously saved connection choice is respected; expand **Connection settings** to check it. Keep this laptop awake and its controller tab visible. The [Canvas quickstart](CANVAS-STUDENT-QUICKSTART.md) has the classroom setup steps.
 2. Switch on one charged car normally, off its charger. Choose **Connect car**, then select it in the browser's Bluetooth picker and finish Connect/Pair. The Bluetooth device name can repeat across physical models; use the card's **Car model** selector to match the physical car. Do not infer the model from a name such as “Z. Drive.”
 3. Match the card's LED color to the car. Choose a custom color while stopped if wanted. Its card and map marker use that color too. A color command is not an independent identity check: look at the physical light.
 4. Place the car on a printed lane. Confirm the printed-lane/hands-clear checkbox, then **Scan track**. The three-second countdown leads into discovery. At completion, confirm the car is physically stopped and the map matches your circuit. Use **STOP ALL** whenever needed; it addresses this page's connected cars.
 5. Choose **Drive here**, then **Start driving**. Use the throttle and left/right controls. Start driving enables controls; it does not itself apply human throttle. Return the throttle to zero after any stop before driving again.
-6. To use a phone or iPad instead, enter the **Class host code** from the instructor exactly as given (case matters), then choose **Phone / QR** on the car. Scan the displayed QR code with the phone camera, open the link, enter a driver name, and join. On the laptop, choose **Let in** for that name, then **Start driving**. The phone uses **Hold to drive**, left/right steering and **STOP**. Release the drive button to stop; tilt and feedback options are optional. The phone does not need its own Bluetooth connection to the car.
+6. To use a phone or iPad instead, choose **Phone / QR** on that car. **Student view needs no entered host code.** Each car gets its own invitation. Scan it, open the link, enter a driver name, and join. On the laptop, choose **Let in** for that name, then **Start driving**. The phone uses **Hold to drive**, left/right steering and **STOP**. Release the drive button to request a stop; tilt and feedback options are optional. The phone or iPad does not need Web Bluetooth: the laptop keeps the car's Bluetooth connection.
 
-Phones must be able to reach the same HTTPS address as the host page. Localhost QR links work only on the host machine; for class use the already-public Codespaces forwarded address described in [DEPLOYMENT.md](DEPLOYMENT.md). Never place a host code or host key in a shared QR. Invitations contain only the existing per-seat/join capability; approval remains required.
+Phones must be able to reach the same HTTPS address as the host page. Localhost QR links work only on the host machine; for class use the public Codespaces forwarded address described in [DEPLOYMENT.md](DEPLOYMENT.md). The QR stays stable while unused. Approval replaces it; changing controllers, removing the car or revoking the invitation retires the old claims. Show **Phone / QR** again when another driver needs a fresh invitation. QR links never include the server's Advanced host code or a room's host key; approval remains required.
 
 **Investigate the system** has four expandable activities: how the car reads the track, a hardware-capability inventory, direct software dependencies, FCC-label research, and security evidence. The dependency inventory is an SBOM starting point, not a complete SBOM; exact hardware components and FCC identity must be established from the specific car's evidence.
 
 **Advanced** retains simulation, games, diagnostic tools, telemetry and traces. Switching between Student and Advanced requests STOP and clears driving intent. It never starts a car.
+
+### Week 4 driving options
+
+Press **STOP ALL** before changing these settings. Their availability is a software capability, not physical acceptance of a higher speed or longer gap policy.
+
+| Setting | Behavior |
+| --- | --- |
+| **Maximum driving speed** | Choose 300, 450, 600, 900 or 1200 mm/s. Start at 300; that is the accepted Guardian test pace. Scan speed stays at or below 300 regardless of this setting. |
+| **Acceleration** | Direct throttle, or a 1-, 2- or 4-second ramp toward the current requested speed. Reductions and STOP are not delayed by the ramp. A ramp does not start the car. |
+| **Telemetry gaps** | **Strict** remains the default: request STOP after a 2-second gap once readings have begun. Optional **Brief-gap recovery** allows at most one extra second during eligible mapped driving, caps speed at 300 or the lower current request, hides uncertain position, and locks steering/attacks. Two consistent ordinary track readings must return before the 3-second deadline. Scans, diagnostics and forward-baseline tests retain strict timing. |
+| **Power Zone rule** | Default **Off**. Optional **Charge shield** gives a 3-second virtual shield after an observed checkpoint crossing and ordinary exit. **Boost after exit** requests up to +75 mm/s for at most 1 second after a qualifying ordinary-straight exit, within the selected maximum and current throttle. Zero throttle and STOP cancel effects. |
+
+The Power Zone options are original Slipstream rules using readable lanes across piece 57; they do not reproduce the original app's special marked-lane attack. A car already at its selected maximum has no boost headroom. Scored rounds remain blocked on special pieces. Higher speeds, ramps, brief-gap recovery and these rewards still need supervised physical acceptance; see [the Power Zone evidence](review/WEEK4-POWER-ZONE.md).
 
 
 ## Start it
@@ -40,7 +53,13 @@ the simulator does not prove agreement with physical hardware.
 
 ## 3D studio and remote hosting
 
-Select **3D studio** above the map for an orbitable, zoomable circuit view. The
+Select **3D studio** above the map, then choose **Circuit overview**, **Chase cam**,
+**Driver view**, **Trackside** or **Auto director**. Select a particular car or
+**Active car**. Captions are on by default; **Captions + voice** is optional when
+the browser supports speech, and **Off** silences commentary. These are virtual
+cameras, not video from the car. Uncertain position returns the view to the
+circuit overview; switching to 2D or hiding the tab cancels speech. Camera and
+commentary choices never command a car. The
 original procedural cars, lighting and track use Three.js; no Unity install or
 app artwork is required. **2D map** remains available, including when WebGL fails.
 The 3D view includes energy bars, shields, numbered mission gates, and attack/
@@ -92,22 +111,24 @@ computer drivers; only phone players drop out, and their cars stop.
 
 ### Phones
 
-1. Run the server in a Codespace and open the forwarded HTTPS address on the host
-   laptop. Tilt sensors and Bluetooth both need HTTPS. The server prints a **host
-   code** when it starts.
-2. Start with `PORT=3000 npm run slipstream:live`. In the Ports panel set port 3000 to **Public**, or each phone must be signed in to
-   an account permitted to access the forwarded port. Keep the host code private.
+1. Run `npm run slipstream:up` in the Codespace, then open the forwarded HTTPS
+   address on the host laptop. Tilt sensors and Bluetooth need a secure context.
+2. In the Ports panel set port 3000 to **Public**, or each phone must be signed in to
+   an account permitted to access the forwarded port.
    Configure the Codespace idle timeout explicitly; periodic server output is not
    a guarantee that the environment stays awake.
-3. On the host page type the host code, then press **Code** on a car's card. That
-   car gets its own QR code and link.
+3. In **Student** view, press **Phone / QR** on a car's card. There is no host-code
+   step. That car gets its own QR code and link; the nearby laptop retains Bluetooth.
 4. A participant scans it and types a name. They appear under **Remote players** as
    "wants <car>". Press **Let in**. Only then do they get the car, and their screen
    takes its colour and name.
-5. The car's code is replaced the moment someone is let in, so a photo of an old
-   code is useless. Press **Code** again for a fresh one.
-6. **Show shared code** gives one code for "any free car"; those players are also
-   let in by the host, then take a car whose driver is set to **Phone or link**.
+5. Approval replaces the invitation and retires other claims made with it.
+   Changing controllers or removing the car also revokes its old invitation.
+   Press **Phone / QR** again for a fresh one. A Student per-car invitation cannot
+   select another car.
+6. **Advanced** retains the manual host-code room flow and **Show shared code**.
+   Retrieve that private code with `npm run slipstream:code` and preserve its case.
+   Shared-code players still require host approval.
 
 The same link works on a laptop with no sensors: open it in a browser and drive with
 W S (speed), A D (lane), F G R (fire, support, special), Q E (switch weapon) and
@@ -144,7 +165,8 @@ need measurement; this is not a verified maximum physical stopping time.
 | U-turn | X | M |
 
 Gamepad: right trigger throttle, left stick lane, A fire, B support, Y special.
-**Esc** or **STOP ALL** always stops and latches the cars; STOP never becomes a
+**Esc** or **STOP ALL** requests a stop and latches the controls; confirm the physical
+result because radio loss can prevent delivery. STOP never becomes a
 resume button. **Free drive** is a separate explicit action. Starting a new round
 uses its own countdown. An off-track report requests a stop for **every car** and pauses the round. Confirm all cars are physically still before recovery, press each affected car’s **Recover** button, then use **Track clear · Continue round**. Battle timers pause too; charged weapons are cancelled. A connection fault needs
 a fresh connection. Hiding the host tab halts real cars even if they were stopped
@@ -156,8 +178,8 @@ silently reclaim it.
 
 ## Track mapping
 
-**Scan track** drives one car at up to 300 mm/s with the Fast & Furious profile
-(450 mm/s for other profiles), capped further by the chosen speed limit.
+**Scan track** drives one car at up to 300 mm/s on every profile, capped further
+by the chosen speed limit. Other connected cars stay stopped.
 The F&F profile temporarily allows 300 mm/s before localization, restoring zero
 on the first position or a stop. A lost connection can prevent that reset; remain
 beside the car during this still-unverified hardware procedure. Each track piece has printed codes that the
@@ -171,8 +193,11 @@ Supported pieces are all 21 modular piece ids in the app's data: straights
 (36, 39, 40, 48, 51), curves (17, 18, 20, 23, 24, 27), start and finish (34, 33),
 intersection (10), jump and landing (43, 46), and the Fast & Furious pieces
 (58, 63). Fast & Furious pieces 53, 54 and 57 are **special and unverified**;
-any map containing them is blocked from scored rounds. Their displayed geometry
-is provisional, not a supported physical classification. The older one-piece printed mats are not supported.
+any map containing them is blocked from scored rounds. Piece 57 is labeled
+**Power Zone** with app-derived straight geometry; its original marked-lane effect
+remains unverified. The custom Week 4 rule does not change that classification or
+enable automatic calibration on it. Pieces 53 and 54 remain unsupported special
+sections. The older one-piece printed mats are not supported.
 
 Once mapped, every car is placed by matching the pieces it reports against the map,
 in either direction of travel. The exact lane comes from the location code. A real
@@ -209,14 +234,14 @@ suite prints "NO HARDWARE TRACES YET".
 
 ## First run with real cars
 
-1. One charged car on a closed loop, someone beside the track, **Speed ceiling** at300.
+1. One charged car on a closed loop, someone beside the track, **Maximum driving speed** at 300, **Direct throttle**, **Strict** telemetry and Power Zone **Off**.
 2. **Connect car**, pick it in the browser's chooser. Its engine light should turn
    to its team colour. If nothing changes, stop and check the log.
-3. Set the driver to keyboard, explicitly choose **Free drive** if stopped, then
-   tap W. Check braking with S and STOP with Esc. STOP must remain latched.
-4. Tap A and D. The code assumes a positive lane offset means right, then corrects
-   itself from the track codes if a car answers the other way. Watch that left is left.
-5. **Scan track** and compare the drawn map with the table.
+3. **Scan track**, confirm the physical stop and compare the drawn map with the track.
+4. Choose **Drive here**, then **Start driving**. Leave throttle at zero until the
+   control is ready, then raise it. Check Brake and **STOP ALL**; confirm the actual stop.
+5. Test one left/right request on a readable ordinary straight. Observe the
+   physical movement rather than treating a reply or map marker as completion.
 6. Test off-track recovery, hiding the host, a phone disconnect and an explicit
    control handoff. Keep someone able to stop the car physically. Add a second
    car only after these checks; four simultaneous cars need a separate trial.
@@ -320,7 +345,9 @@ and wait for the three-second countdown.
 Choose the scan car and confirm it is on a printed lane, hands are clear and you
 are watching before scanning. Scans and shared-pit resume use the same three-second countdown. Scan
 completion or cancellation latches STOP. Moving cars request a shared pit after
-5 seconds without a first position/transition or a 2-second gap thereafter.
+5 seconds without a first position/transition or, by default, a 2-second gap thereafter.
+The optional Week 4 brief-gap policy is restricted to eligible mapped driving and
+ends at a 3-second gap unless two consistent ordinary readings restore localization.
 Scans are bounded to 45 seconds and three anchor returns. Continued track telemetry
 more than a second after a stop triggers another STOP and a visible pit alarm.
 These are software defaults requiring physical validation, not proven stop times.

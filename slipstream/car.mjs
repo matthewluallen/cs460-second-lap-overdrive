@@ -24,6 +24,7 @@ export class Car {
     this.laneCommandId = 0;
     this.steeringLocked = false; this.steeringLockVersion = 0; this.driveEpoch = 0;
     this.maneuversLocked = false; this.maneuverLockVersion = 0; this.maneuverPackets = new WeakSet();
+    this.telemetryGuardVersion = 0; this.telemetryGraceUntil = undefined; this.telemetrySpeedCeiling = undefined;
     this.physicalLaneReference = null; this.physicalLanePackets = new WeakMap();
     this.opticalCalibrationReference = null; this.opticalCalibrationPackets = new WeakMap();
     this.signVotes = 0; this.lastPair = null; this.lastCalibration = -1e9;
@@ -118,6 +119,8 @@ export class Car {
     let timer; const writeStarted = this.clock();
     const lateral=lateralCommand(bytes), lockVersion=this.steeringLockVersion, driveEpoch=this.driveEpoch;
     const maneuver=this.#isManeuver(bytes), maneuverVersion=this.maneuverLockVersion;
+    const positiveSpeed=bytes[1]===0x24 && (bytes[2] || bytes[3]);
+    const telemetryVersion=this.telemetryGuardVersion,telemetryDeadline=positiveSpeed?this.telemetryGraceUntil:undefined;
     this.activeWrite=bytes;
     let suppressed=false;
     const trialMotion = (bytes[1] === 0x24 && (bytes[2] || bytes[3])) || (this.diagnosticSteering && [0x25,0x2c].includes(bytes[1]));
@@ -133,10 +136,13 @@ export class Car {
         if (driveCommand(bytes) && (driveEpoch!==this.driveEpoch || this.closing || this.faulted || !this.connected || this.safetyReason)) { suppressed=true; return; }
         if (lateral && (this.steeringLocked || lockVersion!==this.steeringLockVersion)) { suppressed=true; return; }
         if (maneuver && (this.maneuversLocked || maneuverVersion!==this.maneuverLockVersion)) { suppressed=true; return; }
+        if (positiveSpeed && (telemetryVersion!==this.telemetryGuardVersion ||
+            (this.telemetrySpeedCeiling!==undefined && bytes[2]+256*bytes[3]>this.telemetrySpeedCeiling))) { suppressed=true; return; }
         // A ready GATT promise can run before an overdue timer callback.
         // Check the captured deadline at the last host boundary before motion.
         if (deadline !== undefined && this.clock() >= deadline) throw new Error('Diagnostic motion expired before write');
         if (baselineDeadline !== undefined && this.clock() >= baselineDeadline) throw new Error('Forward-only baseline expired before write');
+        if (telemetryDeadline !== undefined && this.clock() >= telemetryDeadline) throw new Error('Telemetry recovery window expired before write');
         const reference=this.physicalLanePackets.get(bytes);
         if (reference && !this.#laneReferenceReady(reference)) { this.forceLane=true; suppressed=true; return; }
         const calibration=this.opticalCalibrationPackets.get(bytes), now=this.clock();
@@ -182,6 +188,7 @@ export class Car {
     this.sdkPlasticTrack.sequenceComplete=false;
     this.scanDelocalizationAllowance = false;
     this.forwardBaselineUntil=undefined; this.unlockManeuvers();
+    this.endTelemetryGrace();
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     const wasConnected = this.connected;
     this.connected = false; this.localizer?.invalidate('Disconnected'); this.pending.clear(); this.unsubscribe?.();
@@ -348,7 +355,8 @@ export class Car {
     this.send('scan-delocalization', encode.maxDelocalizedSpeed(0));
   }
   setSpeed(mmPerSec, accel = 1000) {
-    const speed = this.initializing || this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, Math.round(mmPerSec)));
+    const graceCap=this.telemetrySpeedCeiling===undefined?Infinity:Math.min(this.speed,this.telemetrySpeedCeiling);
+    const speed = this.initializing || this.safetyReason || this.closing || this.faulted ? 0 : Math.max(0, Math.min(MAX_SPEED, graceCap, Math.round(mmPerSec)));
     if (speed === 0) { this.#invalidateDriveCommands(); this.endScanDelocalization(); }
     if (speed > 0 && this.speed === 0) { this.motionSince = this.clock(); this.stopRequestedAt = null; }
     if (speed === 0 && this.speed > 0) this.stopRequestedAt = this.clock();
@@ -433,6 +441,18 @@ export class Car {
     this.maneuversLocked=false; this.forceLane=true;
     if (this.telemetry.maneuverLock?.active) Object.assign(this.telemetry.maneuverLock,{active:false,ended:this.clock()});
   }
+  beginTelemetryGrace(until, ceiling) {
+    if (!Number.isFinite(until) || until<=this.clock() || !Number.isFinite(ceiling) || ceiling<=0 || this.speed<=0) return false;
+    this.telemetryGuardVersion++; this.pending.delete('speed');
+    this.telemetryGraceUntil=until; this.telemetrySpeedCeiling=Math.min(300,ceiling,this.speed);
+    this.lockManeuvers('Optical telemetry delayed: maneuvers disabled during bounded recovery');
+    this.setSpeed(this.telemetrySpeedCeiling); return true;
+  }
+  endTelemetryGrace() {
+    if (this.telemetryGraceUntil===undefined) return;
+    this.telemetryGuardVersion++; this.pending.delete('speed');
+    this.telemetryGraceUntil=undefined; this.telemetrySpeedCeiling=undefined; this.unlockManeuvers();
+  }
   lockSteering(reason) {
     this.steeringLocked=true; this.steeringLockVersion++;
     for (const key of ['lane','lane-offset','offset','turn']) this.pending.delete(key);
@@ -452,6 +472,7 @@ export class Car {
     if (this.speed > 0) this.stopRequestedAt = this.clock();
     this.#invalidateDriveCommands(); this.forceLane = true;
     this.forwardBaselineUntil=undefined; this.unlockManeuvers();
+    this.endTelemetryGrace();
     this.scanDelocalizationAllowance = false;
     this.pending.delete('scan-delocalization');
     for (const key of ['speed', 'lane', 'lane-offset', 'offset', 'turn']) this.pending.delete(key);
@@ -485,6 +506,7 @@ export class Car {
     if (this.closePromise) return this.closePromise;
     this.#invalidateDriveCommands();
     this.forwardBaselineUntil=undefined; this.unlockManeuvers();
+    this.endTelemetryGrace();
     this.closing = true; this.scanDelocalizationAllowance = false; this.pending.clear(); this.speed = 0;
     this.diagnosticMotion = false; this.diagnosticSteering = false; this.diagnosticLaneSent = false;
     return this.closePromise = (async () => {

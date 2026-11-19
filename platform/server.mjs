@@ -13,7 +13,7 @@ const slipstreamDirectory=fileURLToPath(new URL('../slipstream/',import.meta.url
 const threeDirectory=dirname(require.resolve('three'));
 const qrModule=require.resolve('qrcode-generator').replace(/qrcode\.js$/,'qrcode.mjs');
 // Browser assets of the Slipstream controller. Tests and tools are never served.
-const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|student-lab|render|render3d|net|game|car|ble|initialization|sim|battle|track|protocol|trace|session)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
+const SLIPSTREAM_FILE=/^\/(?:|index\.html|pad\.html|style\.css|(?:app|pad|student-lab|camera-director|power-zone|render|render3d|net|game|car|ble|initialization|sim|battle|track|protocol|trace|session)\.mjs|data\/(?:pieces|vehicles|weapons)\.json)$/;
 export const MAX_BODY_BYTES=4096;
 
 // Sent on every response. Pages use one inline <style> block and same-origin
@@ -60,7 +60,7 @@ function route(action){
   };
 }
 
-export function createApp({instructorLiveDrive=false,slipstream=false,slipstreamOnly=false,hostCode=newHostCode(),bootId=null}={}){
+export function createApp({instructorLiveDrive=false,slipstream=false,slipstreamOnly=false,studentRooms=true,hostCode=newHostCode(),bootId=null}={}){
   const app=express();
   const book=new Records(); // Shared by this app's clients; disposable on restart.
   // Flat key=value queries only; nested/bracket parsing is never needed here.
@@ -93,7 +93,7 @@ export function createApp({instructorLiveDrive=false,slipstream=false,slipstream
   // The live-car controller and its multiplayer relay exist only with --slipstream.
   // The relay forwards phone inputs to the host browser; it never addresses a car.
   if(slipstream===true){
-    const relay=createRelay({hostCode});
+    const relay=createRelay({hostCode,studentRooms});
     app.locals.slipstreamRelay=relay;app.locals.slipstreamHostCode=hostCode;
     app.use('/api/slipstream',relay);
   }
@@ -197,10 +197,12 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
     const instructorLiveDrive=instructorDriveEnabled(process.env.CS460_INSTRUCTOR_LIVE_DRIVE);
     const slipstreamOnly=process.argv.includes('--slipstream-only');
     const slipstream=slipstreamOnly||process.argv.includes('--slipstream');
-    // The host code gates room creation. Set SLIPSTREAM_HOST_CODE to choose it.
+    // Advanced room creation retains its host code. Student QR creates a new,
+    // isolated room without code entry; administrators can opt out explicitly.
     const hostCode=process.env.SLIPSTREAM_HOST_CODE||newHostCode();
     if(slipstream&&hostCode.length<8)throw new Error('SLIPSTREAM_HOST_CODE must be at least 8 characters');
-    const app=createApp({instructorLiveDrive,slipstream,slipstreamOnly,hostCode,bootId:process.env.SLIPSTREAM_BOOT_ID??null});
+    const studentRooms=process.env.SLIPSTREAM_STUDENT_ROOMS!=='0';
+    const app=createApp({instructorLiveDrive,slipstream,slipstreamOnly,studentRooms,hostCode,bootId:process.env.SLIPSTREAM_BOOT_ID??null});
     const bindAddress=serverBindAddress({slipstream,container:process.argv.includes('--container')});
     const server=app.listen(port,bindAddress,()=>{
       // Bound slow or stalled clients on this single-process teaching server.
@@ -209,7 +211,8 @@ if(process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).
       if(slipstream){
         app.locals.slipstreamRelay.attach(server);
         console.log(`Slipstream controller: http://127.0.0.1:${port}/slipstream/ (real cars move; supervise the track)`);
-        console.log(`Host code (needed to invite players): ${hostCode}`);
+        console.log(`Student phone QR: ${studentRooms?'ready without code entry':'disabled by SLIPSTREAM_STUDENT_ROOMS=0'}`);
+        console.log(`Advanced host code: ${hostCode}`);
         // Status output does not guarantee that a Codespace stays awake.
         setInterval(()=>console.log(`[slipstream] ${new Date().toISOString()} rooms ${app.locals.slipstreamRelay.rooms.size}`),5*60*1000).unref();
       }

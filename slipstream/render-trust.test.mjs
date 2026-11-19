@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import * as THREE from 'three';
 import {Renderer, trustedCarPose} from './render.mjs';
+import {CameraDirector,cameraCar} from './camera-director.mjs';
 import {Pieces, Track, Localizer, pointOn, layout, traversal} from './track.mjs';
 import {buildTrack, LAYOUTS} from './sim.mjs';
 
@@ -62,7 +63,7 @@ test('3D hides an existing car mesh and its effects after stale, ambiguous or in
     setPixelRatio(){}setClearColor(){}setSize(){}render(){}dispose(){}
     getContext(){return {isContextLost:()=>false};}
   }
-  const context=vm.createContext({THREE:{...THREE,WebGLRenderer:WebGLSurface},pointOn,layout,trustedCarPose,
+  const context=vm.createContext({THREE:{...THREE,WebGLRenderer:WebGLSurface},pointOn,layout,trustedCarPose,CameraDirector,cameraCar,
     devicePixelRatio:1,matchMedia:()=>({matches:false}),document:{createElement:()=>canvas()},performance:{now:()=>0}});
   const source=readFileSync(new URL('./render3d.mjs',import.meta.url),'utf8')
     .replace(/^import .*;$/gm,'').replace('export class Renderer3D','class Renderer3D');
@@ -84,6 +85,18 @@ test('3D hides an existing car mesh and its effects after stale, ambiguous or in
   const mesh=renderer.carMeshes.get(1),expected=new THREE.Color(1,0,0.5);
   assert.equal(mesh.shell.color.getHex(),expected.getHex(),'body follows the current identification color');
   assert.equal(mesh.ring.material.color.getHex(),expected.getHex(),'existing ring follows the same color after customization');
+  now+=100;
+  for(const mode of ['chase','driver','trackside','director']) {
+    renderer.setView(mode,1);renderer.draw({track,cars:[car()],now:now+=40});
+    assert.equal(renderer.camera.isPerspectiveCamera,true,mode);
+    assert.equal(renderer.camera.aspect,800/500,mode);
+    assert.ok(renderer.camera.position.toArray().every(Number.isFinite),mode);
+    assert.equal(mesh.label.visible,false,mode+' keeps the selected-car identity in the camera HUD');
+    assert.equal(mesh.group.visible,mode!=='driver',mode+' hides the own-car body only in driver view');
+    renderer.draw({track,cars:[{...car(),located:false}],now:now+=40});
+    assert.equal(renderer.camera.isOrthographicCamera,true,mode+' falls back on untrusted pose');
+    assert.equal(renderer.cameraInfo.view,'orbit');
+  }
   renderer.dispose();
 });
 

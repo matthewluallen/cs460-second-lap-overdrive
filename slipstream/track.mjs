@@ -13,7 +13,7 @@ const norm = a => { a %= TAU; if (a > Math.PI) a -= TAU; if (a < -Math.PI) a += 
 
 export class Pieces {
   constructor(table) { this.table = table; }
-  get(id) { const piece=this.table[String(id)]; return piece && SPECIAL_UNVERIFIED.includes(Number(id)) ? {...piece,kind:'special',unverified:true} : piece ?? null; }
+  get(id) { const piece=this.table[String(id)]; return piece && SPECIAL_UNVERIFIED.includes(Number(id)) ? {...piece,kind:'special',unverified:true,...(Number(id)===57?{powerZone:true,label:'Power Zone'}:{})} : piece ?? null; }
   kind(id) { return this.get(id)?.kind ?? 'unknown'; }
   // Location code -> {progress 0..1 in the direction of travel, lateral mm (left +)}.
   locate(pieceId, locationId, reverse) {
@@ -32,7 +32,7 @@ export function traversal(pieces, id, reverse, hint = {}) {
     const turn = hint.turn ?? (reverse ? -1 : 1);
     return {id, kind, reverse, turn, length: def?.length ?? CURVE_RADIUS * Math.PI / 2, radius: def?.radius ?? CURVE_RADIUS};
   }
-  return {id, kind, reverse, turn: 0, length: def?.length ?? hint.length ?? 560, ...(!def ? {inferred: true} : {}), ...(def?.unverified ? {unverified:true} : {})};
+  return {id, kind, reverse, turn: 0, length: def?.length ?? hint.length ?? 560, ...(!def ? {inferred: true} : {}), ...(def?.unverified ? {unverified:true} : {}), ...(def?.powerZone ? {powerZone:true,label:'Power Zone'} : {})};
 }
 
 // Lay pieces end to end. Returns poses and whether the loop closes on itself.

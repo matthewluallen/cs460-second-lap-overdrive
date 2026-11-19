@@ -33,7 +33,7 @@ class Fighter {
     this.energy = maxEnergy; this.held = {attack: false, support: false, special: false};
     this.was = {attack: false, support: false, special: false};
     this.ready = {}; this.charge = {}; this.kills = 0; this.deaths = 0; this.disabledUntil = 0;
-    this.shield = 0; this.slow = new Map(); this.boostUntil = 0; this.boost = 0; this.rageUntil = 0;
+    this.shield = 0; this.customShieldUntil = 0; this.slow = new Map(); this.boostUntil = 0; this.boost = 0; this.rageUntil = 0;
     this.wiggleUntil = 0; this.wiggleNext = 0; this.hitUntil = 0; this.firingUntil = 0; this.braking = false;
   }
   item(bay) { const ids = this.bays[bay] ?? []; return ids.length ? ids[this.selected[bay] % ids.length] : null; }
@@ -118,7 +118,8 @@ export class Battle {
   damage(target, amount, source, now, kind = 'hit') {
     if (this.pausedAt !== null) return;
     if (!target.participating || !target.car.connected || (source && (!source.participating || !source.car.connected || this.allies(source, target))) || target.disabledUntil > now || amount <= 0) return;
-    if (target.shield > 0) { amount *= 1 - target.shield; this.#event({type: 'blocked', car: target.car}); }
+    const shield=Math.max(target.shield,target.customShieldUntil>this.time(now)?1:0);
+    if (shield > 0) { amount *= 1 - shield; this.#event({type: 'blocked', car: target.car}); }
     if (amount <= 0) return;
     if (source && source !== target) target.contributors.set(source, now);
     target.energy -= amount; target.hitUntil = now + 350;
@@ -335,7 +336,7 @@ export class Battle {
     const car = f.car, [r, g, b] = car.color;
     if (f.disabledUntil > now) car.setLights(1, 0, 0, EFFECT.FLASH, 40);
     else if (f.hitUntil > now) car.setLights(1, 0, 0, EFFECT.THROB, 60);
-    else if (f.shield > 0) car.setLights(0, 0.3, 1, EFFECT.THROB, 30);
+    else if (f.shield > 0 || f.customShieldUntil>now) car.setLights(0, 0.3, 1, EFFECT.THROB, 30);
     else if (f.rageUntil > now) car.setLights(1, 0, 1, EFFECT.FLASH, 60);
     else if (f.firingUntil > now) car.setLights(1, 1, 1, EFFECT.FLASH, 80);
     else if (f.boostUntil > now) car.setLights(1, 0.6, 0);
@@ -354,7 +355,7 @@ export class Battle {
     for (const f of this.fighters.values()) {
       f.held = {attack: false, support: false, special: false};
       f.was = {attack: false, support: false, special: false}; f.charge = {};
-      f.shield = 0; f.braking = false;
+      f.shield = 0; f.customShieldUntil = 0; f.braking = false;
     }
   }
   resume(now = this.clock()) {
@@ -375,13 +376,13 @@ export class Battle {
     this.active = true; this.pausedAt = null; this.mines = []; this.events = [];
     for (const f of this.fighters.values()) {
       f.energy = this.config.max_energy; f.kills = f.deaths = f.assists = 0; f.contributors.clear(); f.slow.clear(); f.ready = {}; f.charge = {};
-      f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.shield = 0; f.braking = false;
+      f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.shield = 0; f.customShieldUntil = 0; f.braking = false;
       for (const key of ['disabledUntil', 'boostUntil', 'rageUntil', 'wiggleUntil', 'wiggleNext', 'hitUntil', 'firingUntil']) f[key] = 0;
     }
   }
   stop() {
     this.active = false; this.pausedAt = null; this.mines = []; this.events = [];
-    for (const f of this.fighters.values()) { f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.charge = {}; f.car.setLights(...f.car.color); }
+    for (const f of this.fighters.values()) { f.held = {attack: false, support: false, special: false}; f.was = {...f.held}; f.charge = {}; f.customShieldUntil = 0; f.car.setLights(...f.car.color); }
   }
   scores() { return [...this.fighters.values()].map(f => ({name: f.car.name, kills: f.kills, deaths: f.deaths, laps: f.car.localizer?.laps ?? 0})).sort((a, b) => b.kills - a.kills || a.deaths - b.deaths); }
 }

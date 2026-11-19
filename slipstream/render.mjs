@@ -44,7 +44,7 @@ export class Renderer {
     const c = this.ctx, s = this.view.scale;
     for (const piece of pieces) {
       this.#ribbon(piece, 0, 1, ROAD_HALF, -ROAD_HALF);
-      c.fillStyle = ghost ? 'rgba(60,72,88,.55)' : piece.inferred ? '#2a2f3a' : '#1b2029'; c.fill();
+      c.fillStyle = ghost ? 'rgba(60,72,88,.55)' : piece.id===57 ? '#664821' : piece.inferred ? '#2a2f3a' : '#1b2029'; c.fill();
       c.lineWidth = Math.max(1, 3 * s); c.strokeStyle = ghost ? 'rgba(120,200,255,.7)' : '#0d1117'; c.stroke();
     }
     for (const piece of pieces) {
@@ -57,6 +57,8 @@ export class Renderer {
           this.#ribbon(piece, 0.42 + j * 0.09, 0.51 + j * 0.09, -ROAD_HALF + 12 + i * 15.5, -ROAD_HALF + 12 + (i + 1) * 15.5);
           c.fillStyle = (i + j) % 2 ? '#f4f6f8' : '#111'; c.fill();
         }
+      } else if (piece.id === 57) {
+        for (const t of [.32,.42,.52,.62]) { this.#ribbon(piece,t,t+.018,80,-80);c.fillStyle='#ffd275';c.fill(); }
       } else if (piece.kind === 'intersection') {
         this.#ribbon(piece, 0.3, 0.7, ROAD_HALF + 60, -ROAD_HALF - 60); c.fillStyle = '#1b2029'; c.fill();
         c.strokeStyle = '#ffd34d'; c.lineWidth = Math.max(1, 3 * s); this.#line(piece, 0, 0.42, 0.58);

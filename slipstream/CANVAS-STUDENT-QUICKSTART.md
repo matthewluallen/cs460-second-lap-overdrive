@@ -1,91 +1,101 @@
-# Slipstream Lab — Quick Start
+# Week 4 — Map, drive and explore
 
-**Goal tonight:** get a car driving on the track — a real car, or a pretend one on
-screen.
+**Goal:** connect a car, discover the track, and drive from your laptop or phone.
+You can also practice entirely in simulation. Coordinate use of the shared track
+with the instructor; each host laptop controls only its own connected cars.
 
-**Always:** keep a hand near the car, and know where **STOP** is before you start.
+## 1. Open your copy
 
-You each run your **own** copy. You all share **one** real track, so you take turns
-on it.
+1. Open **matthewluallen/cs460-second-lap-overdrive** on GitHub and select branch
+   **`week-4-student-driving`**. Choose **Code → Codespaces → Create codespace**.
+2. Wait for setup. The supplied Codespace starts Slipstream automatically. If
+   needed, run `npm run slipstream:up` in its terminal; running it again checks the
+   existing server instead of replacing it.
+3. Open forwarded **port 3000**, add **`/slipstream/`** to the address, and use that
+   HTTPS page in **Chrome or Edge on the laptop beside the track**.
+4. For phone/iPad access, use **Ports → port 3000 → Port Visibility → Public**.
+   Leave the forwarded port protocol set to HTTP; its public browser address is HTTPS.
 
----
+**Student mode needs no typed host code.** The Codespace hosts the website; the
+nearby laptop supplies Bluetooth. Phones and iPads use their browsers and do not
+need Bluetooth access to the car. Keep the laptop awake and its host tab visible.
 
-## Part 1 — Start your own copy (about 5 minutes)
+## 2. Identify your car
 
-1. Go to the project on GitHub: **matthewluallen/cs460-second-lap-overdrive**.
-2. Switch to the branch **`slipstream-and-security-hardening`** (or **`main`**).
-   Then click the green **Code** button → **Codespaces** → **Create codespace**.
-   Wait for it to finish loading.
-3. In the terminal at the bottom, type these two lines (press Enter after each):
-   ```
-   npm run slipstream:up
-   npm run slipstream:code
-   ```
-   The second line prints your **host code**. Write it down — your phone needs it
-   later. Keep it to yourself.
-4. A message says a port is ready. Open it and add **`/slipstream/`** to the end of
-   the address. That's your page. Open it in **Chrome or Edge** on the laptop next
-   to the track.
-5. **Only if you'll use a phone:** open the **Ports** tab, right-click **port
-   3000** → **Port Visibility** → **Public**.
+1. Switch on a charged car normally and take it off its charger.
+2. Choose **Connect car**, select the device and finish Connect/Pair.
+3. Match **Car model** to the name printed on the car. A Bluetooth name such as
+   “Z. Drive” does not establish its physical model.
+4. Choose an LED color while stopped. Check the real light against the card and
+   map color. Each car in this host uses a distinct available color.
 
-*No car or no track yet? Skip to **Practice with no car** at the bottom — you can
-still do the whole thing.*
+Use the instructor's accepted car. Guardian has limited supervised acceptance;
+the Groundshock that spun in independent testing is excluded.
 
-## Part 2 — Set up your car (on the laptop)
+## 3. Discover the track
 
-1. Turn your car on and take it off the charger.
-2. On your page, click **Connect car** and pick your car in the pop-up.
-3. Set **Car model** to the name printed on your car. (The Bluetooth name is **not**
-   the model.)
-4. Pick a **color**. It shows on the car's light, on screen, and on the phone.
-   Check that the real light matches.
+1. Place the car on a printed lane; keep hands clear and watch the track.
+2. Check the confirmation box and choose **Scan track**.
+3. After the three-second countdown, the car requests a scan at no more than
+   **300 mm/s**. Discovery may need more than one circuit.
+4. Confirm that it physically stopped and that the displayed map matches the track.
 
-## Part 3 — Map the track
+If scanning fails, read the visible reason. Confirm the car is stopped on track,
+use its **Recover** button when required, then **Clear pit · keep stopped**.
+A new **Scan track** action starts a separate countdown.
 
-1. Put the car on a printed lane.
-2. Check the box that says the track is clear and you're watching.
-3. Click **Scan track**. The car drives one slow lap, reads the track, and stops.
-4. Make sure it stopped, and the map on screen looks like your track.
+## 4. Choose your controller
 
-## Part 4 — Drive
+**Laptop:** choose **Drive here → Start driving**. Keep throttle at zero until
+ready, then raise it. Use the left/right buttons on a readable straight; **Brake**
+returns throttle to zero. Start driving enables control without applying throttle.
 
-**From the laptop:**
-1. Click **Drive here**, then **Start driving**.
-2. Use the throttle and the left/right buttons. (Start driving only turns the
-   controls on — it does not move the car by itself.)
+**Phone or iPad:**
 
-**From a phone:**
-1. Type your **host code** (from Part 1) into the box. Type it **exactly** — capital
-   letters matter.
-2. On the car, click **Phone / QR**. Scan the code with your phone and open the link.
-3. Enter your name and join. On the laptop, click **Let in**, then **Start driving**.
-4. On the phone: **hold** the big button to drive, **let go** to stop, arrows to
-   steer, **STOP** to stop.
+1. Choose **Phone / QR on your car's card**. Each car has its own invitation.
+2. Scan it, open the link, enter your name and join.
+3. On the laptop, choose **Let in** for your name, then **Start driving**.
+4. On the phone, **hold** the drive button to drive and **release** it to request
+   a stop. Use arrows for steering and **STOP** when needed. Tilt is optional.
 
-**To stop any time:** press **STOP ALL** on the laptop (or the **Esc** key), or
-**STOP** on the phone. Driving from a phone to a real car is still being tested, so
-keep watching the car.
+An unused QR stays stable. Approval replaces it; changing controller, removing the
+car or revoking its invitation invalidates the old access. Choose **Phone / QR**
+again for a new driver. Keep watching the car: phone-controlled physical driving
+still needs acceptance on the actual classroom network.
 
-## How many of us can drive at once?
+## 5. Try the Week 4 options
 
-- **On the real track: a few at a time.** One laptop drives up to **4 cars**, and the
-  track only fits a handful. Take turns in small groups — start with one or two cars.
-- **Everyone at once: the practice simulator** (next section). It needs no car and no
-  track, so nobody has to wait.
+Press **STOP ALL** before changing driving settings. Start with the defaults.
 
-## Practice with no car
+| Option | What to try |
+| --- | --- |
+| Maximum driving speed | Default **300 mm/s**. Higher settings up to **1200** are software options, not accepted physical speeds; use simulation or an instructor-supervised trial. Scans remain capped at 300. |
+| Acceleration | Direct throttle or a **1-, 2- or 4-second ramp** toward your requested speed. Reducing throttle or pressing STOP does not wait for the ramp. |
+| Telemetry gaps | Keep **Strict · stop after 2 seconds** initially. Optional brief-gap recovery gives eligible mapped driving at most one extra second at limited speed, with steering and attacks locked. It needs two consistent readings to recover; otherwise STOP is requested at the 3-second gap. Scans and diagnostic tests stay strict. |
+| Power Zone rule | Default **Off**. On a mapped piece 57, **Charge shield** earns a virtual shield after a confirmed crossing and ordinary exit. **Boost after exit** can add up to 75 mm/s for up to one second after a suitable straight exit, within your maximum and throttle. At the maximum there is no extra boost. These are custom Slipstream rules, not the original app's lane attack, and remain physically unverified. |
 
-Click **Advanced** → **Add simulated car**. Pick drivers, click **Scan track**,
-choose a game, then **Start round**. Same controls — no hardware needed.
+Open **3D studio** to choose **Circuit overview**, **Chase cam**, **Driver view**,
+**Trackside** or **Auto director**, and select a car. These are rendered views of
+track readings, not live video. Uncertain position returns to overview. Captions
+are the default; **Captions + voice** is optional, and **Off** disables commentary.
+Camera and voice controls do not drive the car.
 
-## Want to dig deeper? (optional)
+## Practice and investigate
 
-On your page, open **Investigate the system** to explore how the car reads the track,
-what parts and software it uses, its FCC radio label, and some security questions.
+For practice without hardware, choose **Advanced → Add simulated car**, then
+return to **Student** for the same scan, on-screen and phone steps. Up to four
+simulated cars can share a host. Advanced also contains computer drivers and games;
+selecting Computer does not start it—use the explicit start and countdown.
 
-## Safety — every time
+Open **Investigate the system** to examine track sensing, hardware and software
+inventories, radio labels and security questions. Record a prediction, an observed
+result and what the evidence cannot prove.
 
-- Someone stands by the track, ready to grab a car.
-- **STOP ALL** and **Esc** always stop the cars.
-- Keep the laptop awake and the page tab open.
+## Keep control of the physical test
+
+- Stay beside the track, with hands clear and the means to stop a car physically.
+- **STOP ALL / Esc** requests a stop for this laptop's cars; it does not stop cars
+  connected to other laptops. A lost connection can prevent delivery.
+- Confirm the physical stop before touching or repositioning a car.
+- Keep the host laptop awake and its tab open. The map and replies are evidence,
+  not proof that a maneuver completed.

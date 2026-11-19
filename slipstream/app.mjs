@@ -11,6 +11,7 @@ import {Recorder} from './trace.mjs';
 import {RoundSession, ROUND_MODES, STORY_MISSIONS} from './session.mjs';
 import {mountStudentLab} from './student-lab.mjs';
 import {rgb} from './protocol.mjs';
+import {DriveNarrator, cameraCar} from './camera-director.mjs';
 
 const $ = id => document.getElementById(id);
 const el = (tag, props = {}, ...children) => { const n = Object.assign(document.createElement(tag), props); n.append(...children); return n; };
@@ -28,6 +29,8 @@ const world = new SimWorld(game.pieces, 'Capsule');
 const mapRenderer = new Renderer($('map'));
 let renderer = mapRenderer, studioRenderer = null, studioLoading = false, requestedView = '2d';
 const recorder = new Recorder();
+const narrator = new DriveNarrator();
+$('cameraMode').value='orbit'; $('cameraCar').value='0'; $('commentaryMode').value='captions';
 const session = new RoundSession();
 let countdown = null, sessionResultShown = false;
 let scanAttempt = null, scanNotice = '';
@@ -178,6 +181,8 @@ function addCard(driver) {
       phoneStatus.textContent = 'Opening this car’s phone code…';
       await openRoom();
       if (!current()) return;
+      if (driver.inviteRevocationRoom === room.room && driver.inviteRevocation && !await driver.inviteRevocation) throw new Error('The previous invitation could not be retired. Choose Phone / QR to retry.');
+      if (!current()) return;
       const seat = await api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id}});
       if (!current()) return;
       const url = phoneUrl('r=' + room.room + '&s=' + seat.seatKey);
@@ -187,7 +192,7 @@ function addCard(driver) {
       if (!current()) return;
       const message = 'Phone code unavailable: ' + error.message;
       phoneStatus.textContent = message; $('roomNote').textContent = message;
-      if (!$('hostCode').value.trim()) { $('codeField').hidden = false; $('hostCode').focus(); $('remotePlayers').scrollIntoView?.({block:'nearest'}); }
+      if (!isStudent() && !$('hostCode').value.trim()) { $('codeField').hidden = false; $('hostCode').focus(); $('remotePlayers').scrollIntoView?.({block:'nearest'}); }
       log(message);
     } finally { makingSeat = false; }
   };
@@ -195,9 +200,9 @@ function addCard(driver) {
   seatLink.onfocus = () => seatLink.select();
   card.style.setProperty('--c', `rgb(${driver.car.color.map(v => Math.round(v * 255)).join()})`);
   model.onchange = () => { if (isStudent() || session.status === 'running' || session.status === 'paused' || countdown) halt('Car changed'); game.setModel(driver, Number(model.value)); driver.car.name = game.modelName(driver.car.model); name.textContent = driver.id + ' · ' + driver.car.name; modelNote.textContent = 'Model selected by you: ' + driver.car.name; color.setAttribute('aria-label', driver.car.name + ' LED color'); throttle.setAttribute('aria-label', driver.car.name + ' throttle'); refresh(); };
-  control.onchange = () => { control.blur?.(); cancelSeat(); if (isStudent() || session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
+  control.onchange = () => { control.blur?.(); cancelSeat(); if(control.value!==driver.control)revokeCarInvite(driver); if (isStudent() || session.status === 'running' || session.status === 'paused' || countdown) halt('Driver changed'); releasePad(driver, true); driver.level = 0; game.setControl(driver, control.value); driver.car.stop(); refresh(); };
   screen.onclick = () => { screen.blur(); control.value = 'browser'; control.onchange(); seatBox.hidden = true; phoneStatus.textContent = 'On-screen controls selected. Choose Start driving, then apply throttle.'; };
-  phone.onclick = async () => { phone.blur(); control.value = 'phone'; control.onchange(); await showSeat(); };
+  phone.onclick = async () => { phone.blur(); if(driver.control!=='phone'){control.value = 'phone';control.onchange();}else if(isStudent())halt('Preparing phone controls');if(driver.inviteRevocationFailed)await revokeCarInvite(driver);await showSeat(); };
   color.onchange = () => {
     const next = color.value.toLowerCase();
     const valid = /^#[0-9a-f]{6}$/.test(next), channels = valid ? [1,3,5].map(i => parseInt(next.slice(i,i+2),16) / 255) : null;
@@ -208,7 +213,7 @@ function addCard(driver) {
     card.style.setProperty('--c', next); colorStatus.textContent = 'LED color ' + next.toUpperCase() + ' requested · check the light on your car.';
     recorder.mark('car-color-request',{carId:driver.id,color:next});
   };
-  remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); releasePad(driver, true); if (room) api('/rooms/' + room.room + '/seats', {method: 'POST', key: room.hostKey, body: {car: driver.id, remove: true}}).catch(() => {}); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
+  remove.onclick = async () => { if (session.status === 'running' || session.status === 'paused' || countdown) halt('Car disconnected'); revokeCarInvite(driver);releasePad(driver, true); if (driver.sim) world.removeCar(driver.sim); await game.removeCar(driver); card.remove(); cards.delete(driver); refresh(); };
   recorder.add(driver);
   $('cars').append(card); cards.set(driver, {card, model, modelNote, pairing, color, colorStatus, screen, phone, phoneStatus, energy, speed, left, right, locationReference, weaponsBox, control, name, connection, seatBox, seatLink, cancelSeat, recover, browserControls, throttle, leftButton, rightButton, fireRow, task, cancellationComparison, forwardBaseline});
   refresh();
@@ -328,7 +333,36 @@ $('scan').onclick = () => {
 $('battle').onclick = () => beginRound();
 $('stop').onclick = () => halt('Host stopped');
 $('resume').onclick = () => { if (countdown || game.pitReason) return; try { requireVisible(); if(isStudent() && !studentDriveReady())throw new Error('Scan the track and connect a driver before starting.'); session.reset(); activeMission = null; if (game.drivers.some(d => d.control === 'bot')) { game.stopAll(); countdown = {kind:'free', until:performance.now()+3000, ids:game.drivers.filter(d=>d.control!=='none').map(d=>d.id)}; renderRound(); return; } game.resume(); $('results').hidden = true; log('Free drive ready. Apply throttle to move.'); refresh(); } catch (error) { log(error.message); } };
-$('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s'; };
+$('top').oninput = () => { if (session.status === 'running') recordEligible = false; game.topSpeed = Number($('top').value); syncDrivingSettings(); };
+function syncDrivingSettings() {
+  const speed=String(game.topSpeed);
+  if(![...$('studentMaxSpeed').children].some(n=>String(n.value)===speed)) $('studentMaxSpeed').append(new Option(speed+' mm/s',speed));
+  $('studentMaxSpeed').value=speed; $('top').value=speed;
+  $('topLabel').textContent='Speed ceiling '+speed+' mm/s';
+  $('accelerationMode').value=String(game.rampMs); $('telemetryMode').value=String(game.telemetryGraceMs);
+  $('powerZoneMode').value=game.powerZoneMode??'off';
+}
+function drivingSettingsStopped() {
+  return game.halted && !countdown && !game.diagnostic && !game.forwardBaseline && !game.laneCancellationComparison && game.phase!=='scanning' && game.drivers.every(d=>d.car.speed===0);
+}
+for(const id of ['studentMaxSpeed','accelerationMode','telemetryMode']) $(id).onchange=()=>{
+  try {
+    if(!drivingSettingsStopped()) throw new Error('Choose STOP before changing driving settings.');
+    const settings=game.setDrivingOptions({maximumSpeed:Number($('studentMaxSpeed').value),rampMs:Number($('accelerationMode').value),telemetryGraceMs:Number($('telemetryMode').value)});
+    recorder.mark('driving-settings',settings);
+    $('drivingSettingsNote').textContent='Maximum '+settings.maximumSpeed+' mm/s · '+(settings.rampMs?settings.rampMs/1000+' s acceleration ramp':'direct throttle')+' · '+(settings.telemetryGraceMs?'brief-gap recovery, hard stop at 3 s':'strict 2 s telemetry stop')+'. Scans stay at or below 300 mm/s.';
+  } catch(error) { $('drivingSettingsNote').textContent=error.message; }
+  syncDrivingSettings(); $(id).blur();
+};
+$('powerZoneMode').onchange=()=>{
+  try {
+    if(!drivingSettingsStopped()) throw new Error('Choose STOP before changing the Power Zone rule.');
+    game.setPowerZoneMode($('powerZoneMode').value);
+    recorder.mark('power-zone-rule',{mode:game.powerZoneMode});
+  } catch(error) { log(error.message); }
+  syncDrivingSettings(); $('powerZoneMode').blur(); refresh();
+};
+
 game.onTrack = track => {
   if(scanAttempt?.stage==='scanning'){sampleScanCounts();scanAttempt.stage='complete';scanAttempt.pieces=track.count;}
   if (!game.drivers.every(d => d.car.simulated)) try { localStorage.setItem(SAVED, JSON.stringify(track.toJSON())); } catch {}
@@ -588,6 +622,19 @@ function readControls(dt) {
 // --- phone players -------------------------------------------------------------------
 let room = null;                   // {room, hostKey, joinKey, stop}
 const players = new Map();         // id -> {name, online, driver}
+function revokeCarInvite(driver) {
+  const target=room, ui=cards.get(driver);
+  ui?.cancelSeat();
+  for(const p of [...players.values()])if(p.car===driver.id || p.driver===driver){if(p.driver)releasePad(p.driver,true);players.delete(p.id);}
+  renderPlayers();
+  if(!target)return Promise.resolve(true);
+  driver.inviteRevocationRoom=target.room;
+  driver.inviteRevocation=Promise.resolve(driver.inviteRevocation).then(async()=>{
+    try{await api('/rooms/'+target.room+'/seats',{method:'POST',key:target.hostKey,body:{car:driver.id,remove:true}});driver.inviteRevocationFailed=false;return true;}
+    catch(error){driver.inviteRevocationFailed=true;if(ui)ui.phoneStatus.textContent='Could not retire the previous phone invitation. Choose Phone / QR to retry.';log('Phone invitation revocation failed: '+error.message);return false;}
+  });
+  return driver.inviteRevocation;
+}
 function releasePad(driver, revoke = false) { if (driver.pad) { const player = driver.pad.player; player.driver = null; if (revoke) { player.car = undefined; player.manual = true; } driver.pad = null; driver.input.throttle = 0; driver.car.stop(); } }
 function seat(player, wantedId = player.car) {
   if (player.driver || !player.approved) return;
@@ -631,6 +678,7 @@ async function approve(p) {
   try {
     if (session.status === 'running' || session.status === 'paused' || countdown) throw new Error('Finish the round before changing drivers.');
     await api('/rooms/' + room.room + '/approve', {method: 'POST', key: room.hostKey, body: {player: p.id}});
+    if(players.get(p.id)!==p)return; // a driver/controller change revoked this pending approval
     p.approved = true;
     const taken = p.car && game.drivers.find(d => d.id === p.car);
     if (taken?.pad && taken.pad.player !== p) {
@@ -648,6 +696,7 @@ function renderPlayers() {
     remove.onclick = async () => {
       if (p.driver) releasePad(p.driver);
       players.delete(p.id); renderPlayers();
+      const target=p.car&&game.drivers.find(d=>d.id===p.car);if(target)cards.get(target)?.cancelSeat();
       try { await api('/rooms/' + room.room + '/kick', {method: 'POST', key: room.hostKey, body: {player: p.id}}); } catch {}
     };
     const wants = p.car && game.drivers.find(d => d.id === p.car);
@@ -677,12 +726,12 @@ function openRoom() {
   if (room) return Promise.resolve(room);
   // Validate before assigning the in-flight promise: a synchronous rejection
   // inside the initializer would otherwise leave a permanently failed retry.
-  const code = $('hostCode').value.trim();
-  if (!code) return Promise.reject(new Error('enter the host code first'));
+  const student=isStudent(), code=student?'':$('hostCode').value.trim();
+  if (!student && !code) return Promise.reject(new Error('enter the host code first'));
   return opening ??= (async () => {
     try {
-      const made = await api('/rooms', {method: 'POST', key: code});
-      try { sessionStorage.setItem('slipstream.hostCode', code); } catch {}
+      const made = await api(student?'/student/rooms':'/rooms', student?{method:'POST',body:{}}:{method:'POST',key:code});
+      if(!student)try { sessionStorage.setItem('slipstream.hostCode', code); } catch {}
       $('codeField').hidden = true;
       room = {...made, link: channel({room: made.room, key: made.hostKey, role: 'host', onMessage: onRelay, onStatus: relayStatus})};
       const url = phoneUrl('r=' + made.room + '&j=' + made.joinKey);
@@ -733,7 +782,24 @@ function locationDescription(location) {
 function refresh(snapshot = game.snapshot()) {
   const hasPowerZone = game.track?.pieces.some(p=>p.id===57);
   $('powerZoneStatus').hidden = !hasPowerZone;
-  $('powerZoneStatus').textContent = 'Power Zone detected · brown track section. Attack activation is unverified and disabled. Scored rounds remain blocked on this circuit.';
+  const powerMode=game.powerZoneMode??'off';
+  const powerRule=powerMode==='boost'?'Cross the checkpoint in any lane, then exit onto an ordinary straight for up to +75 mm/s for 1 second, within your selected maximum. Zero throttle cancels it.':powerMode==='shield'?'Cross the checkpoint in any lane and leave onto a readable ordinary piece to charge a 3-second virtual shield.':'Effects are off. Choose a rule while stopped.';
+  $('powerZoneRuleNote').textContent=powerRule+' This is our programmable Slipstream rule; it does not reproduce the original app’s special lane.';
+  $('powerZoneStatus').textContent='Power Zone detected · '+powerRule+' Scored rounds remain blocked on special pieces.';
+  const settingsLocked=!drivingSettingsStopped();
+  for(const id of ['studentMaxSpeed','accelerationMode','telemetryMode','powerZoneMode']) $(id).disabled=settingsLocked;
+  syncDrivingSettings();
+  const degraded=snapshot.filter(s=>s.telemetryHealth?.state==='degraded');
+  $('drivingHealth').hidden=!degraded.length;
+  $('drivingHealth').textContent=degraded.map(s=>s.name+': track readings interrupted. Speed limited; steering and attacks locked. STOP follows at 3 seconds unless two consistent readings return.').join(' ');
+  const cameraKey=game.drivers.map(d=>d.id+':'+d.car.name).join('|');
+  if($('cameraCar').dataset.key!==cameraKey) {
+    const selected=$('cameraCar').value;
+    $('cameraCar').replaceChildren(new Option('Active car','0'),...game.drivers.map(d=>new Option(d.id+' · '+d.car.name,String(d.id))));
+    $('cameraCar').value=game.drivers.some(d=>String(d.id)===selected)?selected:'0';
+    $('cameraCar').dataset.key=cameraKey;
+    studioRenderer?.setView($('cameraMode').value,Number($('cameraCar').value));
+  }
   const unlocated=snapshot.filter(s=>!s.located).map(s=>s.name);
   $('mapPositionStatus').hidden=!game.drivers.length;
   $('mapPositionStatus').textContent=isStudent()
@@ -764,7 +830,7 @@ function refresh(snapshot = game.snapshot()) {
       (x.calibrationBlocked?'\nAutomatic calibration withheld on unverified piece '+x.calibrationBlocked.pieceId+'.':'')+
       (x.laneRequest?'\nSteering request #'+x.laneRequest.id+': target '+x.laneRequest.offset.toFixed(1)+' mm, sideways '+x.laneRequest.horizontalSpeed+' mm/s':'')+
       (x.laneAcknowledgment?'\nSDK-layout ACK (firmware semantics unverified): received #'+x.laneAcknowledgment.received+', executed #'+x.laneAcknowledgment.executed+', requested sideways '+x.laneAcknowledgment.desiredLaneSpeed+' mm/s ('+seconds(performance.now()-x.laneAcknowledgment.at)+'); not proof of lane completion':'')+
-      '\nPower Zone signals: '+(x.zoneCodes??0)+' · other special codes: '+(x.supercodes??0)+' · effects disabled'+
+      '\nPower Zone signals: '+(x.zoneCodes??0)+' · other special codes: '+(x.supercodes??0)+' · native special-lane effects disabled'+
       (x.lastSpecialCode?' · last code 0x'+x.lastSpecialCode.code.toString(16)+' ('+seconds(performance.now()-x.lastSpecialCode.at)+')':'');
   }).join('\n\n') || 'Connect a car to see telemetry health.';
   $('saveTrace').disabled=recorder.cars.length===0;
@@ -804,6 +870,7 @@ function refresh(snapshot = game.snapshot()) {
     ui.energy.style.width = Math.round(s.energy * 100) + '%'; ui.energy.className = s.energy < 0.33 ? 'low' : s.energy < 0.66 ? 'mid' : '';
     ui.speed.style.width = Math.min(100, Math.round(s.speed / 12)) + '%';
     ui.left.textContent = driver.car.initializing ? 'Initializing: ' + driver.car.initializationStatus : !s.connected ? 'Disconnected · reconnect to recover' : s.safetyReason === 'Off track' ? 'OFF TRACK · stopped' : driver.control === 'gamepad' && !driver.gamepadArmed ? driver.gamepadWarning || 'Release gamepad controls to arm' : s.disabled ? 'DISABLED' : Math.round(s.speed) + ' mm/s' + (driver.pad ? ' · ' + driver.pad.player.name : driver.control === 'bot' ? ' · CPU' : '');
+    if(s.powerZone?.effect) ui.left.textContent+=' · '+(s.powerZone.effect.type==='shield'?'POWER ZONE SHIELD':'POWER ZONE BOOST');
     const objective = session.view().rows.find(row => row.id === driver.id)?.task;
     ui.task.hidden = !objective; ui.task.textContent = objective?.cue ?? '';
     ui.recover.hidden = !s.connected || !s.safetyReason || s.safetyReason === 'Host stopped';
@@ -859,6 +926,7 @@ function frame() {
     : !game.track && game.drivers.length ? 'Press “Scan track” to map the layout' : '';
   try { renderer.draw({track: game.track, partial: game.phase === 'scanning' ? game.mapper.sequence : null, cars, mines: game.battle?.mines ?? [], now, banner, objectives: session.view().rows.filter(r => r.task && Number.isFinite(r.task.gateProgress)).map(r => ({progress: r.task.gateProgress, label: String(r.id)}))}); }
   catch (error) { if (renderer !== mapRenderer) { requestedView='2d'; useMap('3D interrupted · 2D map active'); log('3D view interrupted: '+error.message); } }
+  updateDrivingView(cars,now);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -872,7 +940,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-student-drive',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-week4-drive',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,...d.car.diagnostics()})),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 $('saveTrace').onclick = () => {
   const link = el('a', {href: URL.createObjectURL(new Blob([JSON.stringify(sessionTrace())], {type: 'application/json'})), download: 'slipstream-trace-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json'});
   link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
@@ -882,8 +950,7 @@ function chooseWorkspace(view) {
   halt('Workspace changed'); session.reset(); activeMission = null;
   document.body.dataset.view = view;
   if (isStudent()) {
-    game.topSpeed = Math.min(300,game.topSpeed); $('top').value = game.topSpeed;
-    $('topLabel').textContent = 'Speed ceiling ' + game.topSpeed + ' mm/s';
+    syncDrivingSettings();
     for (const driver of game.drivers) if (driver.control !== 'phone' && driver.control !== 'browser') game.setControl(driver,'browser');
   }
   for (const ui of cards.values()) ui.cancelSeat();
@@ -929,10 +996,27 @@ $('planUse').onclick = () => {
 $('planBuilder').ontoggle = drawPlan;
 
 // Visualization is optional and never issues motion commands.
+function cancelCommentary() { globalThis.speechSynthesis?.cancel(); }
+function updateDrivingView(cars,now) {
+  if(renderer!==studioRenderer || !studioRenderer || document.hidden)return;
+  const shot=studioRenderer.cameraInfo;
+  const car=cameraCar(cars,Number($('cameraCar').value));
+  $('cameraBadge').textContent=shot.reason??(shot.label+(shot.frame&&car?' · '+car.name:''));
+  const message=narrator.update({car,track:game.track,now,halted:game.halted});
+  if(!message || $('commentaryMode').value==='off')return;
+  $('driveNarration').textContent=message.text;
+  if(message.urgent)cancelCommentary();
+  if($('commentaryMode').value==='voice' && globalThis.speechSynthesis && globalThis.SpeechSynthesisUtterance) {
+    cancelCommentary();
+    const utterance=new globalThis.SpeechSynthesisUtterance(message.text);
+    utterance.rate=1.05; globalThis.speechSynthesis.speak(utterance);
+  }
+}
 function useMap(note = '2D telemetry map') {
   renderer = mapRenderer; $('map').hidden = false; $('map3d').hidden = true;
   $('view2d').setAttribute('aria-pressed','true'); $('view3d').setAttribute('aria-pressed','false');
   $('sceneNote').textContent = note;
+  $('cinemaControls').hidden=$('cameraBadge').hidden=$('driveNarration').hidden=true; cancelCommentary();
   for (const id of ['cameraOut','cameraIn','cameraReset']) $(id).disabled = true;
 }
 async function useStudio() {
@@ -948,11 +1032,27 @@ async function useStudio() {
     if (!studioRenderer.available) throw new Error('Graphics context has not recovered');
     renderer = studioRenderer; $('map').hidden = true; $('map3d').hidden = false;
     $('view2d').setAttribute('aria-pressed','false'); $('view3d').setAttribute('aria-pressed','true');
-    $('sceneNote').textContent = 'Drag to orbit · Visual model, not measured elevation';
-    for (const id of ['cameraOut','cameraIn','cameraReset']) $(id).disabled = false;
+    $('cinemaControls').hidden=$('cameraBadge').hidden=false;
+    $('driveNarration').hidden=$('commentaryMode').value==='off';
+    setCameraView();
+
   } catch (error) { requestedView='2d'; useMap('3D unavailable on this browser · 2D map active'); log('3D view unavailable: '+error.message); }
   finally { studioLoading=false; }
 }
+function setCameraView() {
+  studioRenderer?.setView($('cameraMode').value,Number($('cameraCar').value));
+  $('sceneNote').textContent=$('cameraMode').value==='orbit'?'Drag to orbit · Visual model, not measured elevation':'Camera follows recent track readings · returns to overview when position is uncertain';
+  for(const id of ['cameraOut','cameraIn','cameraReset']) $(id).disabled=$('cameraMode').value!=='orbit';
+}
+$('cameraMode').onchange=$('cameraCar').onchange=setCameraView;
+$('commentaryMode').onchange=()=>{
+  cancelCommentary(); narrator.key=''; narrator.lastAt=-Infinity;
+  $('driveNarration').hidden=$('commentaryMode').value==='off'||renderer!==studioRenderer;
+  if($('commentaryMode').value==='voice' && (!globalThis.speechSynthesis||!globalThis.SpeechSynthesisUtterance)) {
+    $('commentaryMode').value='captions'; $('sceneNote').textContent='Voice is unavailable in this browser. Captions remain available.';
+  }
+};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelCommentary();});
 $('view3d').onclick = useStudio;
 $('view2d').onclick = () => { requestedView='2d'; useMap(); };
 $('cameraIn').onclick = () => studioRenderer?.setZoom(.15);

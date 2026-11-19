@@ -9,6 +9,16 @@ of scope.
 preserved as `course-vulnerable-baseline`. Check that tag or commit out to
 reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
+## Week 4 capability rooms and bounded telemetry recovery — 18 November 2026
+
+Student QR setup no longer needs a shared code. `POST /api/slipstream/student/rooms` creates only a new isolated room with fresh host and join capabilities; it grants no authority over another room or car. Per-car invitations remain bound to a car, require host approval, and are revoked with pending/approved claims when the controller changes or the car is removed. A Student player cannot select a different car using the approved invitation. Delayed responses cannot resurrect a revoked invitation. Host credentials are never placed in QR links.
+
+Room creation requires JSON, requires a same-origin Origin and checks supplied fetch metadata, and has socket/global rate limits and bounded bucket storage. The Student room pool is 12 within the existing 16-room cap, reserving 4 slots for the legacy host-code path. This is intentionally anonymous creation: a deliberate caller can exhaust public capacity within those bounds. It is not DoS-proof authentication. `SLIPSTREAM_STUDENT_ROOMS=0` opts out; Advanced rooms retain their case-sensitive host code. No port visibility or access setting was changed in this pass.
+
+Physical control keeps the default 2-second telemetry stop. Optional 1-second recovery caps speed at 300, invalidates location, disables steering/attacks and needs two fresh consistent ordinary readings. An independent host timer and BLE write-boundary checks enforce the original 3-second total deadline; late transitions do not renew it. STOP clears queued speed/lane/calibration work and the optional boost. Scan/diagnostic policies, neutral-input arming, low-battery/off-track/recovery/link-fault stops are retained. This cannot guarantee a delivered STOP through a suspended host or lost Bluetooth connection.
+
+Regression coverage: `platform/slipstream-relay.test.mjs`, `slipstream/host.test.mjs`, `slipstream/driving-policy.test.mjs`, `slipstream/telemetry-grace-queue.test.mjs`, `slipstream/power-zone-game.test.mjs`. Fault-injection and queue tests are software evidence, not hardware timing validation.
+
 ## Unidentified-car identity hardening — 18 November 2026
 
 Review of the Student controller reproduced a latent identity defect: `Game.addCar`

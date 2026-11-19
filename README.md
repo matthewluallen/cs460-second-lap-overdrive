@@ -146,13 +146,19 @@ Create a branch or fork for your changes; see [contribution guidance](CONTRIBUTI
 
 ## Slipstream: drive, map and battle from the browser
 
-[`slipstream/`](slipstream/README.md) is a separate controller for real cars: several
-cars over Web Bluetooth, automatic track mapping drawn on the page, the original
-game's weapons and car models, computer opponents, and phone or laptop controllers
-that join by a per-car QR code. It is served only by `npm run slipstream`; `npm start`
-is unchanged. It is tested against simulated cars and has not yet been run against
-a physical car. [slipstream/ANALYSIS.md](slipstream/ANALYSIS.md) records the app
-analysis it is built on.
+[`slipstream/`](slipstream/README.md) is a separate controller for one to four cars:
+Web Bluetooth, automatic track mapping, human/computer drivers and per-car phone
+QR invitations. On **`week-4-student-driving`**, Student view needs no entered host
+code; the nearby laptop keeps Bluetooth while phones and iPads send approved
+controller inputs. Start the managed live-only server with `npm run slipstream:up`;
+ordinary `npm start` remains the stationary course bench. Follow the
+[Week 4 Canvas quickstart](slipstream/CANVAS-STUDENT-QUICKSTART.md).
+
+Guardian has limited supervised scan, lane-change and three-lap hardware acceptance.
+Other models, multiple physical cars, attacks, phone driving and the new higher-speed,
+ramp, gap-recovery and Power Zone options remain unverified on hardware. The map and
+optional 3D cameras visualize reported data. [The analysis](slipstream/ANALYSIS.md)
+records the static app/SDK review; complete original-app parity is not claimed.
 
 ## Instructor-only motion research preview
 

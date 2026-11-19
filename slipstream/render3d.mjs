@@ -2,6 +2,7 @@
 import * as THREE from './vendor/three.module.js';
 import {pointOn, layout} from './track.mjs';
 import {trustedCarPose} from './render.mjs';
+import {CameraDirector, cameraCar} from './camera-director.mjs';
 
 const color = rgb => new THREE.Color(...rgb);
 export class Renderer3D {
@@ -19,6 +20,9 @@ export class Renderer3D {
     key.shadow.bias = -.0005; this.scene.add(key);
     const rim = new THREE.DirectionalLight(0x69cfff, 1.8); rim.position.set(-4, 3, -4); this.scene.add(rim);
     this.camera = new THREE.OrthographicCamera(-3,3,3,-3,.01,60);
+    this.overviewCamera=this.camera;this.followCamera=new THREE.PerspectiveCamera(57,1,.008,100);
+    this.director=new CameraDirector();this.viewMode='orbit';this.followCarId=0;
+    this.cameraInfo={label:'Circuit overview',view:'orbit',reason:null};this.cameraAt=null;this.aim=new THREE.Vector3();this.wasFollowing=false;
     this.trackRoot = new THREE.Group(); this.scene.add(this.trackRoot);
     this.carRoot = new THREE.Group(); this.scene.add(this.carRoot); this.carMeshes = new Map();
     this.objectiveRoot = new THREE.Group(); this.scene.add(this.objectiveRoot); this.objectiveKey = null;
@@ -33,6 +37,7 @@ export class Renderer3D {
     canvas.addEventListener('keydown', e => { const moves={ArrowLeft:[-.1,0],ArrowRight:[.1,0],ArrowUp:[0,.1],ArrowDown:[0,-.1]}; if (moves[e.key]) { e.preventDefault(); e.stopPropagation(); this.azimuth+=moves[e.key][0]; this.pitch=THREE.MathUtils.clamp(this.pitch+moves[e.key][1],.3,1.5); } });
   }
   get available() { return !this.renderer.getContext().isContextLost(); }
+  setView(mode,carId=0) { this.viewMode=mode;this.followCarId=Number(carId)||0; }
   resetView() { this.azimuth=.25; this.pitch=.95; this.zoom=1; }
   setZoom(delta) { this.zoom=THREE.MathUtils.clamp(this.zoom+delta,.6,2.2); }
   #clear(group) { for (const child of [...group.children]) { child.traverse(o => { o.geometry?.dispose(); if (Array.isArray(o.material)) o.material.forEach(m=>m.dispose()); else { o.material?.map?.dispose(); o.material?.dispose(); } }); group.remove(child); } }
@@ -61,6 +66,11 @@ export class Renderer3D {
       for(const side of [-1,1]) this.#ribbon(p,side*96-1.7,side*96+1.7,0,1,0xb9d1d9,.026);
       for(const lane of [-45,0,45]) this.#ribbon(p,lane-.4,lane+.4,0,1,0x465868,.027);
       if(p.kind==='finish') for(let i=0;i<10;i++) for(let j=0;j<2;j++) this.#ribbon(p,-95+i*19,-76+i*19,.44+j*.07,.51+j*.07,(i+j)%2?0xdde6e5:0x101923,.029);
+      if(p.id===57) {
+        this.#ribbon(p,-90,90,.3,.7,0x9b642a,.028);
+        for(const t of [.32,.42,.52,.62])this.#ribbon(p,-80,80,t,t+.018,0xffd275,.03);
+        const q=pointOn(p,.5,0),label=this.#label('POWER ZONE','#ffd18c');label.scale.multiplyScalar(1.25);label.position.set(q.x/1000,.23,-q.y/1000);this.trackRoot.add(label);
+      }
       if(p.kind==='intersection') this.#ribbon(p,-94,94,.44,.56,0xc89839,.029);
       if(p.kind==='jump'||p.kind==='landing') for(const t of [.35,.5,.65]) this.#ribbon(p,-75,75,t,t+.016,p.kind==='jump'?0xf7994a:0x66d9bf,.029);
     }
@@ -86,7 +96,7 @@ export class Renderer3D {
     shield.scale.y=.65;shield.position.y=.023;shield.visible=false;
     const energyBack=new THREE.Sprite(new THREE.SpriteMaterial({color:0x101a26,depthTest:false}));energyBack.scale.set(.105,.015,1);energyBack.position.y=.112;energyBack.renderOrder=2;group.add(energyBack);
     const energy=new THREE.Sprite(new THREE.SpriteMaterial({color:0x5dff9b,depthTest:false}));energy.position.set(0,.112,.001);energy.renderOrder=3;group.add(energy);
-    this.carRoot.add(group); return {group, shell, ring, shield, energy, model:row.model};
+    this.carRoot.add(group); return {group, shell, ring, shield, energy, energyBack, label:sprite, model:row.model};
   }
   #label(text, tint='#eff8ff') {
     const label=document.createElement('canvas');label.width=Math.max(96,String(text).length*26+24);label.height=64;
@@ -112,6 +122,7 @@ export class Renderer3D {
     if(key!==this.shapeKey){this.shapeKey=key;this.#build(shape);}
     const bounds=this.canvas.getBoundingClientRect();if(bounds.width<1||bounds.height<1)return;
     if(this.width!==bounds.width||this.height!==bounds.height){this.width=bounds.width;this.height=bounds.height;this.renderer.setSize(bounds.width,bounds.height,false);}
+    this.camera=this.overviewCamera;
     const aspect=bounds.width/bounds.height, distance=this.span*1.7;
     this.camera.position.copy(this.center).add(new THREE.Vector3(Math.sin(this.azimuth)*Math.cos(this.pitch)*distance,Math.sin(this.pitch)*distance,Math.cos(this.azimuth)*Math.cos(this.pitch)*distance));this.camera.lookAt(this.center);this.camera.updateMatrixWorld();
     let halfWidth=this.span*.4, halfHeight=this.span*.3;
@@ -119,6 +130,19 @@ export class Renderer3D {
     const half=Math.max(halfHeight+.09,(halfWidth+.09)/aspect)*1.12/this.zoom;
     this.camera.left=-half*aspect;this.camera.right=half*aspect;this.camera.top=half;this.camera.bottom=-half;this.camera.far=distance*3+20;this.camera.updateProjectionMatrix();
     this.scene.fog.near=distance+this.span*2;this.scene.fog.far=distance+this.span*5;
+    const selected=cameraCar(cars,this.followCarId);
+    this.cameraInfo=this.director.update({mode:this.viewMode,car:selected,track,now,reducedMotion:this.reducedMotion});
+    const shot=this.cameraInfo.frame;
+    if(shot){
+      const dt=this.cameraAt===null?1:Math.max(0,Math.min(.25,(now-this.cameraAt)/1000));
+      // A driver view is mounted on the car; chase-style lag would put it behind the rear bumper.
+      const blend=this.wasFollowing&&this.cameraInfo.view!=='driver'?1-Math.exp(-dt*7):1;
+      this.followCamera.position.lerp(new THREE.Vector3(...shot.position),blend);
+      this.aim.lerp(new THREE.Vector3(...shot.target),blend);this.followCamera.lookAt(this.aim);
+      this.followCamera.aspect=aspect;this.followCamera.fov=shot.fov;this.followCamera.updateProjectionMatrix();
+      this.camera=this.followCamera;
+    }
+    this.wasFollowing=!!shot;this.cameraAt=now;
     const ids=new Set(cars.map(c=>c.id)), positions=new Map(), headings=new Map();
     for(const [id,entry] of this.carMeshes) if(!ids.has(id)){this.#clear(entry.group);this.carRoot.remove(entry.group);this.carMeshes.delete(id);}
     for(const row of cars){
@@ -127,9 +151,13 @@ export class Renderer3D {
       if(!pose)continue;
       m.group.position.set(pose.x/1000,.03,-pose.y/1000);m.group.rotation.y=pose.heading;
       m.shell.color.copy(row.disabled?new THREE.Color(0x614052):color(row.color));m.ring.material.color.copy(color(row.color));m.ring.material.opacity=.75;
-      m.shield.visible=!!row.shield;
+      const inCab=shot&&this.cameraInfo.view==='driver'&&selected?.id===row.id;
+      m.group.visible=!inCab;
+      const cameraSubject=!!shot&&selected?.id===row.id;
+      m.label.visible=!cameraSubject;m.energyBack.visible=!cameraSubject;
+      m.shield.visible=!!row.shield&&!inCab;
       const energy=Number.isFinite(row.energy)?Math.max(0,Math.min(1,row.energy)):0;
-      m.energy.scale.set(.1*energy,.009,1);m.energy.visible=energy>0;
+      m.energy.scale.set(.1*energy,.009,1);m.energy.visible=energy>0&&!cameraSubject;
       m.energy.material.color.set(energy<.33?0xff4d6d:energy<.66?0xffb84d:0x5dff9b);
       positions.set(row.id,m.group.position.clone());headings.set(row.id,pose.heading);
     }

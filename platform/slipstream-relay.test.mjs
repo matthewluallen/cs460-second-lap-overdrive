@@ -13,8 +13,8 @@ async function start(t, options = {slipstream: true, hostCode: CODE}) {
   const host = '127.0.0.1:' + server.address().port, origin = 'http://' + host;
   const aborts = [], socketsOpen = [];
   t.after(() => { for (const a of aborts) a.abort(); for (const s of socketsOpen) s.terminate(); app.locals.slipstreamRelay?.stop(); server.closeAllConnections(); return new Promise(r => server.close(r)); });
-  const call = async (path, {method = 'GET', key, body, raw} = {}) => {
-    const headers = {};
+  const call = async (path, {method = 'GET', key, body, raw, headers:extraHeaders = {}} = {}) => {
+    const headers = {...extraHeaders};
     if (key) headers.Authorization = 'Bearer ' + key;
     if (body !== undefined || raw !== undefined) headers['Content-Type'] = 'application/json';
     const response = await fetch(origin + path, {method, headers, body: raw ?? (body === undefined ? undefined : JSON.stringify(body))});
@@ -57,7 +57,7 @@ async function start(t, options = {slipstream: true, hostCode: CODE}) {
 
 test('controller and relay do not exist unless the server is started with the slipstream option', async t => {
   const {call} = await start(t, {});
-  for (const path of ['/slipstream/', '/slipstream/app.mjs', '/slipstream/student-lab.mjs', '/slipstream/pad.html', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js'])
+  for (const path of ['/slipstream/', '/slipstream/app.mjs', '/slipstream/student-lab.mjs', '/slipstream/camera-director.mjs', '/slipstream/power-zone.mjs', '/slipstream/pad.html', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js'])
     assert.equal((await call(path)).status, 404, path);
   assert.equal((await call('/api/slipstream/rooms', {method: 'POST', key: CODE})).status, 404);
   for (const value of ['true', 1, 'yes']) {
@@ -68,7 +68,7 @@ test('controller and relay do not exist unless the server is started with the sl
 
 test('enabled controller serves only its browser assets, with security headers', async t => {
   const {origin, host} = await start(t);
-  for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs', '/slipstream/student-lab.mjs',
+  for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs', '/slipstream/student-lab.mjs', '/slipstream/camera-director.mjs', '/slipstream/power-zone.mjs',
     '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 200, path);
@@ -77,7 +77,7 @@ test('enabled controller serves only its browser assets, with security headers',
     assert.ok(!/connect-src[^;]*\*/.test(csp)); assert.match(csp, /script-src 'self';/);
     assert.equal(response.headers.get('cache-control'), 'no-store', path);
   }
-  for (const path of ['/slipstream/core.test.mjs', '/slipstream/student-lab.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
+  for (const path of ['/slipstream/core.test.mjs', '/slipstream/student-lab.test.mjs', '/slipstream/camera-director.test.mjs', '/slipstream/power-zone.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
     '/slipstream/../package.json', '/slipstream/data/../core.test.mjs', '/slipstream/vendor/qrcode.js', '/slipstream/vendor/three.cjs', '/slipstream/vendor/../package.json', '/slipstream/.git/config']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 404, path);
@@ -173,6 +173,7 @@ test('per-car codes name one car, need approval, and are replaced once used', as
   const eve = await join(red, 'Eve'); assert.equal(eve.status, 201, 'a second request can queue while nobody has been approved');
   await host.next();
   await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: ana.player}});
+  assert.deepEqual(await host.next(),{type:'left',player:eve.json.player},'approval retires other claims made with that invitation');
   const fresh = (await seat(1)).json.seatKey;
   assert.notEqual(fresh, red, 'approval replaces the code');
   assert.equal((await join(red, 'Photo')).status, 403, 'a photographed code is dead after first use');
@@ -281,8 +282,9 @@ test('same-seat replacement is atomic at four approved drivers', async t => {
   const r = await room();
   const seat = (await call(r.base + '/seats', {method: 'POST', key: r.hostKey, body: {car: 1}})).json;
   const old = await join(r, 'Old', seat.seatKey, false);
-  const replacement = await join(r, 'New', seat.seatKey, false);
   await call(r.base + '/approve', {method: 'POST', key: r.hostKey, body: {player: old.player}});
+  const nextSeat = (await call(r.base + '/seats', {method:'POST',key:r.hostKey,body:{car:1}})).json;
+  const replacement = await join(r, 'New', nextSeat.seatKey, false);
   const oldSocket = socket({room: r.room, key: old.playerKey});
   assert.equal((await oldSocket.next()).type, 'approved');
   for (let i = 0; i < 3; i++) await join(r, 'Other ' + i);
@@ -309,4 +311,64 @@ test('public live session exposes only Slipstream pages and authenticated relay'
  assert.equal((await fetch(origin+'/',{redirect:'manual'})).status,302);
  assert.equal((await call('/api/slipstream/rooms',{method:'POST'})).status,403);
  assert.ok((await room()).hostKey);
+});
+
+test('student rooms need no global code, but require same-origin JSON and isolate every new host',async t=>{
+  const {call,origin,open}=await start(t);
+  const student=(extra={})=>call('/api/slipstream/student/rooms',{method:'POST',body:{},headers:{Origin:origin,'Sec-Fetch-Site':'same-origin'},...extra});
+  assert.equal((await student({headers:{}})).status,403);
+  assert.equal((await student({headers:{Origin:'https://attacker.example','Sec-Fetch-Site':'cross-site'}})).status,403);
+  assert.equal((await student({headers:{Origin:origin,'Sec-Fetch-Site':'same-site'}})).status,403);
+  assert.equal((await student({headers:{Origin:origin+'/extra'}})).status,403);
+  assert.equal((await student({body:undefined})).status,415);
+  const a=await student(),b=await student();assert.equal(a.status,201);assert.equal(b.status,201);
+  assert.match(a.json.hostKey,/^[0-9a-f]{48}$/);assert.notEqual(a.json.hostKey,b.json.hostKey);assert.notEqual(a.json.room,b.json.room);
+  assert.ok(!JSON.stringify(a.json).includes(CODE));assert.equal(a.headers.get('cache-control'),'no-store');
+  const base='/api/slipstream/rooms/'+a.json.room;
+  assert.equal((await open(base+'/host',b.json.hostKey)).status,403);
+  assert.equal((await call(base+'/seats',{method:'POST',key:b.json.hostKey,body:{car:1}})).status,403);
+  const seat=(await call(base+'/seats',{method:'POST',key:a.json.hostKey,body:{car:1}})).json;
+  const p=(await call(base+'/join',{method:'POST',body:{joinKey:seat.seatKey,name:'Student'}})).json;
+  assert.equal(p.car,1);assert.equal((await call(base+'/input',{method:'POST',key:p.playerKey,body:{throttle:1}})).status,403);
+  assert.equal((await call(base+'/approve',{method:'POST',key:p.playerKey,body:{player:p.player}})).status,403);
+  assert.equal((await call(base+'/approve',{method:'POST',key:a.json.hostKey,body:{player:p.player}})).status,204);
+  assert.equal((await call(base+'/input',{method:'POST',key:p.playerKey,body:{car:2,throttle:1}})).status,403,'a per-car student QR cannot select another car');
+  assert.equal((await call(base+'/input',{method:'POST',key:p.playerKey,body:{car:1,throttle:0}})).status,202);
+  assert.equal((await call('/api/slipstream/rooms',{method:'POST'})).status,403,'legacy Advanced creation still needs its code');
+});
+
+test('student creation is bounded, ignores forwarded-address spoofing and reserves legacy room capacity',async t=>{
+  const {call,origin,app}=await start(t);
+  const student=i=>call('/api/slipstream/student/rooms',{method:'POST',body:{},headers:{Origin:origin,'X-Forwarded-For':'192.0.2.'+i}});
+  const made=[];for(let i=0;i<LIMITS.studentRooms;i++){const r=await student(i);assert.equal(r.status,201);made.push(r.json);}
+  assert.equal((await student(200)).status,429);
+  for(let i=LIMITS.studentRooms;i<LIMITS.rooms;i++)assert.equal((await call('/api/slipstream/rooms',{method:'POST',key:CODE})).status,201);
+  assert.equal(app.locals.slipstreamRelay.rooms.size,LIMITS.rooms);
+  for(const room of made)assert.equal((await call('/api/slipstream/rooms/'+room.room,{method:'DELETE',key:room.hostKey})).status,204);
+  assert.equal((await student(201)).status,429,'closing rooms cannot reset the creation-rate budget');
+});
+
+test('student rooms can be disabled and abandoned creation expires before a replacement is made',async t=>{
+  const disabled=await start(t,{slipstream:true,hostCode:CODE,studentRooms:false});
+  assert.equal((await disabled.call('/api/slipstream/student/rooms',{method:'POST',body:{},headers:{Origin:disabled.origin}})).status,403);
+  assert.equal((await disabled.call('/api/slipstream/rooms',{method:'POST',key:CODE})).status,201);
+  const {call,origin,app}=await start(t);
+  const student=()=>call('/api/slipstream/student/rooms',{method:'POST',body:{},headers:{Origin:origin}});
+  const old=(await student()).json;app.locals.slipstreamRelay.rooms.get(old.room).hostSeen=Date.now()-LIMITS.hostGraceMs-1;
+  assert.equal((await student()).status,201);assert.equal(app.locals.slipstreamRelay.rooms.has(old.room),false);
+  assert.equal((await call('/api/slipstream/rooms/'+old.room+'/seats',{method:'POST',key:old.hostKey,body:{car:1}})).status,404);
+});
+
+test('car invite revocation retires stable QR codes and all prior claims, including a released driver',async t=>{
+  const {call,room,join}=await start(t);const r=await room();
+  const seat=car=>call(r.base+'/seats',{method:'POST',key:r.hostKey,body:{car}});
+  const a=(await seat(1)).json,b=(await seat(2)).json;assert.notEqual(a.seatKey,b.seatKey);assert.equal((await seat(1)).json.seatKey,a.seatKey);
+  const approved=await join(r,'Old driver',a.seatKey);
+  await call(r.base+'/input',{method:'POST',key:approved.playerKey,body:{release:true}});
+  const fresh=(await seat(1)).json;const pending=await join(r,'Waiting',fresh.seatKey,false);
+  assert.equal((await call(r.base+'/seats',{method:'POST',key:r.hostKey,body:{car:1,remove:true}})).status,204);
+  for(const p of [approved,pending])assert.equal((await call(r.base+'/input',{method:'POST',key:p.playerKey,body:{car:1,throttle:1}})).status,403);
+  assert.equal((await call(r.base+'/approve',{method:'POST',key:r.hostKey,body:{player:pending.player}})).status,404);
+  assert.equal((await call(r.base+'/join',{method:'POST',body:{joinKey:fresh.seatKey,name:'Old photo'}})).status,403);
+  const next=(await seat(1)).json;assert.notEqual(next.seatKey,fresh.seatKey);assert.equal((await seat(2)).json.seatKey,b.seatKey,'another car’s QR remains stable');
 });

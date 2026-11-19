@@ -2,6 +2,7 @@
 import {Car, LANE_STEP} from './car.mjs';
 import {Pieces, Track, TrackMapper, traversal, trackFromPlan, LANE_LIMIT, POSITION_MAX_AGE_MS} from './track.mjs';
 import {Battle, Bot, loadout} from './battle.mjs';
+import {PowerZoneController} from './power-zone.mjs';
 
 export const MAX_CARS = 4;
 export const TEAM_COLORS = [[0, 1, 0], [0, 0.4, 1], [1, 0.5, 0], [1, 0, 1], [0, 1, 1], [1, 1, 0], [1, 1, 1], [1, 0, 0.3]];
@@ -16,7 +17,24 @@ export class Game {
     for (const value of Object.values(this.safety)) if (!Number.isFinite(value) || value <= 0) throw new Error("Invalid safety limit");
     this.drivers = []; this.track = null; this.battle = null; this.mapper = null; this.scanner = null;
     this.phase = 'garage'; this.halted = false; this.pitReason = null; this.topSpeed = 700; this.scanSpeed = 450; this.nextId = 1;
+    this.rampMs = 0; this.telemetryGraceMs = 0;
+    this.powerZones = new PowerZoneController({pieces:this.pieces});
   }
+  setDrivingOptions({maximumSpeed=this.topSpeed,rampMs=this.rampMs,telemetryGraceMs=this.telemetryGraceMs}={}) {
+    if (!Number.isFinite(maximumSpeed) || maximumSpeed<=0 || maximumSpeed>1200) throw new Error('Maximum speed must be between 1 and 1200 mm/s');
+    if (!Number.isFinite(rampMs) || rampMs<0 || rampMs>10000) throw new Error('Acceleration duration must be between 0 and 10000 ms');
+    if (![0,1000].includes(telemetryGraceMs)) throw new Error('Choose strict telemetry or the bounded 1000 ms recovery option');
+    if (telemetryGraceMs!==this.telemetryGraceMs && this.drivers.some(d=>d.car.speed>0)) throw new Error('Stop the cars before changing telemetry policy');
+    this.topSpeed=maximumSpeed;this.rampMs=rampMs;this.telemetryGraceMs=telemetryGraceMs;
+    return {maximumSpeed:this.topSpeed,rampMs:this.rampMs,telemetryGraceMs:this.telemetryGraceMs};
+  }
+  setPowerZoneMode(mode) {
+    if(this.drivers.some(d=>d.car.speed>0) || this.phase==='scanning' || this.diagnostic || this.forwardBaseline || this.laneCancellationComparison)throw new Error('Stop the cars before changing the Power Zone rule');
+    this.powerZones.setMode(mode);
+    for(const driver of this.drivers)this.#clearPowerZone(driver);
+    return mode;
+  }
+  get powerZoneMode() { return this.powerZones.mode; }
   modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
   addCar(transport, {name, model = 0, simulated = false, control = 'none', beforeStart} = {}) {
     // Missing model information stays unidentified (model 0, "Unknown"). It must
@@ -27,7 +45,7 @@ export class Game {
     if (typeof transport.id === 'string' && this.drivers.some(d => d.car.connected && d.car.transport.id === transport.id)) throw new Error('This car is already in the garage');
     const color = TEAM_COLORS.find(color => !this.drivers.some(d => d.car.color === color));
     const car = new Car(transport, {name: name || this.modelName(model), model, color, pieces: this.pieces, simulated, clock: this.clock});
-    const driver = {id: this.nextId++, car, input: emptyInput(), control, bot: null, previous: emptyInput()};
+    const driver = {id: this.nextId++, car, input: emptyInput(), control, bot: null, previous: emptyInput(),telemetryGrace:null,speedRamp:null};
     car.on((message, _car, observedAt) => this.#message(driver, message, observedAt));
     this.drivers.push(driver);
     if (this.track) car.useTrack(this.track);
@@ -68,9 +86,21 @@ export class Game {
       driver.input.lane=null;driver.laneNudge=null;
     }
     if (message.type==='hostStopped') {
+      this.#clearPowerZone(driver,true);
+      driver.speedRamp=null;this.#endTelemetryGrace(driver,'stopped');
+      driver.speedPlan={requested:0,commanded:0,rampMs:this.rampMs,telemetryLimited:false};driver.car.telemetry.speedPlan={...driver.speedPlan};
       if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll();
       return;
     }
+    if (driver.telemetryGrace) {
+      if (this.clock()>=driver.telemetryGrace.until) {this.requestPit(driver,'Telemetry timeout: bounded recovery expired');return;}
+      if (message.type==='delocRecoveryEntered' || (message.type==='status' && (!message.onTrack || message.lowBattery || message.onCharger))) {
+        this.requestPit(driver,'Telemetry recovery interrupted by '+(message.type==='status'?'car health or off-track status':'firmware recovery'));return;
+      }
+      if (message.type==='position')this.#reacquireTelemetry(driver,message,observedAt);
+    }
+    if(['closed','delocalized','delocRecoveryEntered'].includes(message.type) ||
+        (message.type==='status' && (!message.onTrack || message.lowBattery || message.onCharger)))this.#clearPowerZone(driver,true);
     if (this.forwardBaseline?.driver===driver) {
       const now=this.clock();
       if (now>=this.forwardBaseline.until) { this.requestPit(driver,'Forward baseline time budget exceeded'); return; }
@@ -104,6 +134,7 @@ export class Game {
       if (driver.car.speed > 0) { this.requestPit(driver, 'Lane change cancelled by car'); return; }
     }
     if (message.type === 'closed') { if(message.wasMoving) this.requestPit(driver, 'Connection lost while moving: ' + message.reason); else if(this.laneCancellationComparison?.driver===driver || this.forwardBaseline?.driver===driver)this.stopAll(); this.log(driver.car.name + ' disconnected: ' + message.reason); return; }
+    this.#observePowerZone(driver,message,observedAt);
     const trial=this.diagnostic;
     if (trial?.steering && trial.driver===driver && message.type==='position' && !trial.laneRequested) {
       const now=this.clock(), car=driver.car, definition=this.pieces.get(message.pieceId);
@@ -210,7 +241,7 @@ export class Game {
     // Keep simulated placement on a readable strip; it is not hardware parity.
     if (startingLateral !== null) driver.car.calibrateScanStart(startingLateral);
     driver.car.beginScanDelocalization();
-    const ceiling = driver.car.transport.initializationProfile === 'fast-furious' ? 300 : this.scanSpeed;
+    const ceiling = 300;
     if (driver.car.simulated) driver.car.steerTo(LANE_STEP);
     driver.car.setSpeed(Math.min(this.topSpeed, this.scanSpeed, ceiling));
     this.log('Scanning with ' + driver.car.name + ': drive one or two laps');
@@ -228,7 +259,7 @@ export class Game {
     if (this.laneCancellationComparison || this.forwardBaseline) this.stopAll();
     this.track = track; this.phase = 'ready';
     this.battle = new Battle({weapons: this.weapons, vehicles: this.vehicles, track, clock: this.clock});
-    for (const d of this.drivers) { d.car.useTrack(track); this.battle.add(d.car).crew = d.crew ?? ''; if (d.control === 'bot') d.bot = new Bot(d.car, this.battle); }
+    for (const d of this.drivers) { this.#clearPowerZone(d,true);d.car.useTrack(track); this.battle.add(d.car).crew = d.crew ?? ''; if (d.control === 'bot') d.bot = new Bot(d.car, this.battle); }
     this.onTrack?.(track);
   }
   loadTrack(saved) {
@@ -423,6 +454,88 @@ export class Game {
     this.stopAll();
     this.log('Diagnostic deadline: '+outcome+'. STOP requested; confirm physical stop');
   }
+  #beginTelemetryGrace(driver, now) {
+    const car=driver.car,reference=car.physicalLaneReference;
+    if (!this.telemetryGraceMs || !this.track?.closed || this.track.inferredCount || !car.localizer?.located || this.phase==='scanning' || this.forwardBaseline || this.laneCancellationComparison || this.diagnostic ||
+        car.maneuversLocked || car.steeringLocked || car.safetyReason || !reference || reference.epoch!==car.driveEpoch || reference.at<car.motionSince) return false;
+    const until=car.lastTrackAt+this.safety.trackGapMs+this.telemetryGraceMs;
+    if(now>=until)return false;
+    const grace={started:now,until,candidate:null,timer:null};
+    driver.telemetryGrace=grace;driver.speedRamp=null;driver.input.lane=null;driver.laneNudge=null;
+    this.#clearPowerZone(driver,true);
+    const fighter=this.battle?.get?.(car);
+    if(fighter){fighter.held={attack:false,support:false,special:false};fighter.was={...fighter.held};fighter.charge={};}
+    car.localizer?.invalidate('Optical telemetry delayed; location unknown');
+    if(!car.beginTelemetryGrace(until,Math.min(car.speed,300))){driver.telemetryGrace=null;return false;}
+    car.telemetry.telemetryHealth={state:'degraded',since:now,until,maximumSpeed:car.speed,reason:'Waiting for two consistent ordinary optical readings; steering and attacks disabled'};
+    grace.timer=this.schedule(()=>{if(driver.telemetryGrace===grace)this.requestPit(driver,'Telemetry timeout: bounded recovery expired');},until-now);
+    this.log(car.name+': optical telemetry delayed; slowing without steering for at most one extra second');
+    return true;
+  }
+  #endTelemetryGrace(driver, state) {
+    const grace=driver.telemetryGrace;if(!grace)return;
+    driver.telemetryGrace=null;driver.speedRamp=null;driver.input.lane=null;driver.laneNudge=null;
+    if(grace.timer!==null)this.unschedule(grace.timer);
+    driver.car.endTelemetryGrace();
+    driver.car.telemetry.telemetryHealth={...driver.car.telemetry.telemetryHealth,state,ended:this.clock(),reason:state==='reacquired'?'Two consistent ordinary optical readings received':'Recovery ended with STOP'};
+  }
+  #reacquireTelemetry(driver, message, observedAt) {
+    const grace=driver.telemetryGrace,car=driver.car,now=this.clock(),definition=this.pieces.get(message.pieceId);
+    const spot=definition && !definition.unverified && ['straight','curve','start','finish'].includes(definition.kind)
+      ?this.pieces.locate(message.pieceId,message.locationId,message.reverse):null;
+    if(!spot || message.speed<=0 || !Number.isFinite(observedAt) || observedAt<grace.started || now<observedAt || now-observedAt>POSITION_MAX_AGE_MS ||
+        car.physicalLaneReference?.epoch!==car.driveEpoch || car.physicalLaneReference.at!==observedAt)return;
+    const candidate=grace.candidate;
+    const location=car.localizer?.diagnostics(now);
+    const samePiece=candidate && candidate.pieceId===message.pieceId && candidate.reverse===message.reverse && spot.progress>candidate.progress;
+    const nextPiece=candidate && location?.trusted && this.track?.pieces.some((piece,index)=>{
+      const direction=piece.reverse===candidate.reverse?1:-1;
+      return piece.id===candidate.pieceId && location.reference.direction===direction && location.reference.index===(index+direction+this.track.count)%this.track.count;
+    });
+    if(candidate && observedAt>candidate.at && location?.trusted && (samePiece || nextPiece)) {
+      this.#endTelemetryGrace(driver,'reacquired');this.log(car.name+': optical reference reacquired; normal control available');return;
+    }
+    grace.candidate={pieceId:message.pieceId,reverse:message.reverse,progress:spot.progress,at:observedAt};
+  }
+  #pacedSpeed(driver, target, now, dt) {
+    const car=driver.car;
+    if(driver.telemetryGrace){driver.speedRamp=null;return Math.min(target,car.speed,300);}
+    if(!this.rampMs || target<=car.speed || this.laneCancellationComparison){driver.speedRamp=null;return target;}
+    if(!driver.speedRamp || driver.speedRamp.target!==target || driver.speedRamp.duration!==this.rampMs) {
+      driver.speedRamp={from:car.speed,target,started:now-Math.max(0,Math.min(.1,dt))*1000,duration:this.rampMs};
+    }
+    const ramp=driver.speedRamp,portion=Math.max(0,Math.min(1,(now-ramp.started)/ramp.duration));
+    return Math.min(target,ramp.from+(target-ramp.from)*portion);
+  }
+  #clearPowerZone(driver, reset=false) {
+    if(reset)this.powerZones.reset(driver.id);
+    driver.powerZoneEffect=null;
+    const fighter=this.battle?.get?.(driver.car);if(fighter)fighter.customShieldUntil=0;
+    driver.car.telemetry.powerZone={mode:this.powerZones.mode,effect:null};
+  }
+  #observePowerZone(driver,message,observedAt) {
+    const car=driver.car,now=this.clock();
+    const active=!this.halted && !this.pitReason && this.phase!=='scanning' && !this.diagnostic && !this.forwardBaseline && !this.laneCancellationComparison &&
+      !driver.telemetryGrace && !car.safetyReason && !car.initializing && car.connected;
+    const effect=this.powerZones.observe({carId:driver.id,message,observedAt,now,track:this.track,runId:car.driveEpoch,lap:car.localizer?.laps??0,
+      localization:car.localizer?.diagnostics(now),active,moving:car.speed>0});
+    if(!active){this.#clearPowerZone(driver);return;}
+    if(!effect)return;
+    driver.powerZoneEffect=effect;car.telemetry.powerZone={mode:this.powerZones.mode,effect:{...effect}};
+    if(effect.type==='shield'){
+      const fighter=this.battle?.get?.(car);if(fighter)fighter.customShieldUntil=this.battle.time(now)+(effect.expiresAt-effect.at);
+    }
+    this.log(car.name+': Slipstream Power Zone '+effect.type+' activated');
+  }
+  #powerZoneBoost(driver,now) {
+    const effect=driver.powerZoneEffect,car=driver.car;
+    if(!effect)return 0;
+    if(now>=effect.expiresAt || driver.telemetryGrace || car.speed<=0 || !car.localizer?.diagnostics(now).trusted){this.#clearPowerZone(driver);return 0;}
+    if(effect.type!=='boost')return 0;
+    const estimate=car.localizer.estimate(now),piece=this.track?.pieces[estimate?.index];
+    if(!piece || piece.kind!=='straight' || piece.unverified || (1-estimate.progress)*piece.length<250){this.#clearPowerZone(driver);return 0;}
+    return effect.extraSpeed;
+  }
   // --- control loop ------------------------------------------------------------
   tick(dt, now = this.clock()) {
     if (this.forwardBaseline) {
@@ -450,8 +563,11 @@ export class Game {
     for (const d of this.drivers) {
       const c=d.car;if (!c.connected) continue;
       if (c.speed > 0) {
+        if(d.telemetryGrace && now>=d.telemetryGrace.until){this.requestPit(d,'Telemetry timeout: bounded recovery expired');break;}
         const hasTrack = c.lastTrackAt !== undefined && c.lastTrackAt >= c.motionSince;
-        if (now - (hasTrack ? c.lastTrackAt : c.motionSince) > (hasTrack ? this.safety.trackGapMs : this.safety.firstTrackMs)) { this.requestPit(d, 'Telemetry timeout'); break; }
+        if (!d.telemetryGrace && now - (hasTrack ? c.lastTrackAt : c.motionSince) > (hasTrack ? this.safety.trackGapMs : this.safety.firstTrackMs)) {
+          if(!hasTrack || !this.#beginTelemetryGrace(d,now)){this.requestPit(d, 'Telemetry timeout');break;}
+        }
         if (d === this.scanner && now - this.scanStarted > this.safety.scanMs) { this.requestPit(d, 'Scan time budget exceeded'); break; }
       } else if (c.stopRequestedAt != null && c.lastTrackAt > c.stopRequestedAt + this.safety.stopGraceMs && c.lastTrackAt > (c.checkedStopTrackAt ?? -Infinity) && now - (c.lastStopRetry ?? -Infinity) >= this.safety.stopGraceMs) {
         c.lastStopRetry = now; c.checkedStopTrackAt = c.lastTrackAt; this.requestPit(d, 'STOP not confirmed: telemetry continues'); c.stop(); break;
@@ -486,13 +602,19 @@ export class Game {
       }
       const input = d.input, truck = this.vehicles.models[String(car.model)]?.truck;
       const wanted = Math.max(0, Math.min(1, input.throttle || 0)) * this.topSpeed * (truck ? 0.85 : 1);
-      const limited = this.battle ? this.battle.limit(car, wanted, now) : {speed: wanted, accel: 1000};
+      const boost=this.#powerZoneBoost(d,now),boosted=wanted>0?Math.min(this.topSpeed,wanted+boost):0;
+      const limited = this.battle ? this.battle.limit(car, boosted, now) : {speed: boosted, accel: 1000};
       const finalSpeed=Math.min(this.topSpeed*cpuTrackCeiling, limited.speed,this.laneCancellationComparison?300:Infinity);
       if (this.laneCancellationComparison?.stage==='acquiring-reference') input.lane=null;
       else if (d.bot && this.track) d.bot.confirmTrackLane?.(now,input,finalSpeed,limited.accel);
-      car.setSpeed(finalSpeed, limited.accel);
-      if (input.lane !== null && input.lane !== undefined && Number.isFinite(input.lane)) car.steerTo(input.lane);
-      if (this.battle) for (const bay of ['attack', 'support', 'special']) this.battle.press(car, bay, !!input[bay]);
+      const paced=this.#pacedSpeed(d,finalSpeed,now,dt);
+      d.speedPlan={requested:finalSpeed,commanded:Math.round(paced),rampMs:this.rampMs,telemetryLimited:!!d.telemetryGrace};
+      car.telemetry.speedPlan={...d.speedPlan};
+      // Keep a newly created zero-speed ramp alive until a later tick advances
+      // it; an explicit zero target still takes the ordinary immediate STOP path.
+      if(paced>0 || finalSpeed<=0 || !d.speedRamp)car.setSpeed(paced, limited.accel);
+      if (!d.telemetryGrace && input.lane !== null && input.lane !== undefined && Number.isFinite(input.lane)) car.steerTo(input.lane);
+      if (this.battle) for (const bay of ['attack', 'support', 'special']) this.battle.press(car, bay, !d.telemetryGrace && !!input[bay]);
     }
     this.battle?.update(dt, now);
   }
@@ -527,9 +649,12 @@ export class Game {
       const f = this.battle?.get(d.car), max = this.vehicles.energy.max_energy, battleNow = this.battle?.time?.(now) ?? now;
       const bay = name => { const id = f?.item(name), w = id && this.weapons[id]; return w ? {id, type: w.type, style: w.interaction_style, ready: (f.ready[name] ?? 0) <= battleNow, charge: f.charge[name] ?? 0} : null; };
       return {id: d.id, name: d.car.name, model: d.car.model, color: d.car.color, control: d.control, connected: d.car.connected, safetyReason: d.car.safetyReason,
+        telemetryHealth:d.car.telemetry.telemetryHealth??{state:'normal'},speedPlan:d.speedPlan??{requested:d.car.speed,commanded:d.car.speed,rampMs:this.rampMs,telemetryLimited:false},
+        powerZone:{mode:this.powerZones.mode,effect:d.powerZoneEffect&&now<d.powerZoneEffect.expiresAt?{...d.powerZoneEffect}:null,expiresAt:d.powerZoneEffect?.expiresAt??null},
         speed: d.car.liveSpeed, target: d.car.speed, millivolts: d.car.millivolts, targets: (this.battle?.associations(d.car, now) ?? []).map(car => this.drivers.find(other => other.car === car)?.id).filter(id => id !== undefined), crew: d.crew ?? '', assists: f?.assists ?? 0, located: !!d.car.localizer?.estimate(now)?.located, laps: d.car.localizer?.laps ?? 0,
         energy: f ? f.energy / max : 1, disabled: f ? f.disabledUntil > battleNow : false, kills: f?.kills ?? 0, deaths: f?.deaths ?? 0,
-        shield: f ? f.shield > 0 : false, attack: bay('attack'), support: bay('support'), special: bay('special')};
+        shield: !!(f && (f.shield > 0 || f.customShieldUntil>battleNow)) || (d.powerZoneEffect?.type==='shield' && now<d.powerZoneEffect.expiresAt),
+        attack: bay('attack'), support: bay('support'), special: bay('special')};
     });
   }
 }

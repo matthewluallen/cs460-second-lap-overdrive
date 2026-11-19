@@ -182,3 +182,17 @@ body[data-view="student"] .pit-panel button{margin:4px 0;max-width:100%;white-sp
 .student-lab-challenge{padding:12px 14px;background:#203b35;border-left:2px solid #a8dba2;border-radius:0 8px 8px 0;color:#d7eddd!important}
 @media(max-width:1050px){.student-intro ol{gap:15px}.student-intro{align-items:start}.student-intro h2{max-width:390px}body[data-view="student"] main{grid-template-columns:300px minmax(0,1fr);gap:14px;padding:0 18px 24px}.student-intro{padding:24px 20px}.student-lab{padding:20px}body[data-view="student"] #garage{padding:16px}body[data-view="student"] #circuitViewport{height:380px}}
 @media(max-width:760px){body[data-view="student"] header{gap:9px;padding:12px 16px}body[data-view="student"] header .brand{flex:1}body[data-view="student"] header h1{font-size:13px}body[data-view="student"] header .chip{display:none}body[data-view="student"] header .actions{width:100%;display:flex;margin:0;gap:9px}body[data-view="student"] .actions button{flex:1;min-height:44px}.student-intro{padding:22px 18px;display:block}.student-intro ol{margin-top:22px;justify-content:space-between;gap:10px}.student-intro li{font-size:11px}.student-intro h2{max-width:none;font-size:26px}.student-intro p{font-size:12px}body[data-view="student"] main{display:flex;flex-direction:column;gap:16px;padding:0 12px 20px}body[data-view="student"] #garage,body[data-view="student"] #stage,.student-lab{width:100%;order:0}body[data-view="student"] #stage{height:auto;min-height:0}body[data-view="student"] #circuitViewport{height:340px}body[data-view="student"] .stage-heading{padding:20px 18px 8px}body[data-view="student"] .view-toolbar{padding-inline:14px}body[data-view="student"] .stage-heading .chip{display:block;font-size:8px}.student-lab{padding:20px}body[data-view="student"] .student-driver-actions button{font-size:14px}}
+
+/* Week 4: deliberate driving choices and a camera desk that stays out of the way. */
+.driving-setup{margin-top:22px;border-top:1px solid #304354;padding-top:18px}
+.driving-setup .field{margin:11px 0}.driving-setup .note{font-size:11px}
+.driving-setup select{font-size:12px;min-height:42px}
+#drivingHealth:not([hidden]){padding:10px;border-radius:8px;background:#352b1e;color:#ffe0a8}
+.cinema-controls{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px;padding:0 20px 14px}
+.cinema-controls .field{margin:0;font-size:11px}.cinema-controls select{font-size:12px;min-height:38px}
+#cameraBadge{position:absolute;top:14px;left:16px;max-width:calc(100% - 32px);padding:7px 10px;border-radius:6px;background:#0c1722d9;border:1px solid #94bed14a;color:#e1f4ff;font-size:10px;font-weight:700;letter-spacing:.12em;pointer-events:none}
+.drive-narration{position:absolute;left:18px;right:18px;bottom:30px;max-width:620px;margin:auto;padding:10px 15px;border-radius:9px;background:#0b1524e8;border:1px solid #98b0c132;color:#eaf4ff;font-size:12px;line-height:1.5;text-align:center;pointer-events:none;text-wrap:pretty}
+body[data-view="student"] #circuitViewport:has(#map3d:not([hidden])){height:clamp(380px,47vw,580px)}
+@media(max-width:760px){.cinema-controls{grid-template-columns:1fr 1fr;padding:0 14px 14px}.cinema-controls .field:last-child{grid-column:1/-1}.drive-narration{font-size:11px;left:12px;right:12px;padding:8px 10px}#cameraBadge{font-size:9px}body[data-view="student"] #circuitViewport:has(#map3d:not([hidden])){height:380px}}
+
+#drivingHealth:not([hidden]) { border:1px solid #e7b35b; border-radius:10px; padding:12px; color:#ffe0aa; background:#382b19; }

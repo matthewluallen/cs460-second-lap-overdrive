@@ -39,6 +39,10 @@ test('managed startup is concurrent-safe, private, live-only and idempotent',asy
   assert.deepEqual(await response.json(),{service:'slipstream',mode:'live',bootId});
   for(const path of ['/api/health','/bench/','/instructor-drive/'])assert.equal((await fetch(origin+path)).status,404);
   assert.equal((await fetch(origin+'/slipstream/')).status,200);
+  const studentRoom=await fetch(origin+'/api/slipstream/student/rooms',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:'{}'});
+  assert.equal(studentRoom.status,201,'the default launcher needs no entered host code for a student QR');
+  const room=await studentRoom.json();assert.match(room.hostKey,/^[0-9a-f]{48}$/);
+  assert.ok(!JSON.stringify(room).includes(secret.trim()),'the global Advanced host code is not sent to the browser');
   await assert.rejects(launch({...options,hostCode:'different-host-code'}),/different host code/);
   assert.equal((await launch(options)).pid,pid);
   assert.equal(await readFile(join(options.stateDir,'host-code'),'utf8'),secret);

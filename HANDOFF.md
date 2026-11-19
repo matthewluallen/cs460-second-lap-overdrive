@@ -1,4 +1,19 @@
-# Latest: review hardening — unidentified cars no longer default to Groundshock
+# Latest: Week 4 driving, per-car QR and cinematic views
+
+Branch **`week-4-student-driving`**, based on the latest `slipstream-and-security-hardening` commit **`da2ba34`**. Do not merge main. Browser trace build: **`2026-11-18-week4-drive`**.
+
+- Driving setup exposes maximum speed through 1200 mm/s and optional 1/2/4-second acceleration toward the current throttle request. Reductions and STOP bypass the ramp. Fresh Student sessions remain 300 mm/s/direct throttle. Scans and diagnostics retain their existing ceilings.
+- Strict 2-second telemetry timeout remains the default. The explicit brief-gap option adds at most 1second only after an established ordinary optical reference in normal driving: speed ≤300, unknown map position, steering/attacks locked, and two consistent ordinary optical readings required. Its deadline is tied to the original reading and enforced at the BLE write boundary; transition chatter cannot keep it alive. Off-track/recovery/link-fault/manual stops remain immediate requests. Host suspension/Bluetooth loss can still prevent delivery.
+- Student Phone/QR creates an isolated room without typing a host code. Each car has a stable, distinct invitation; host approval is still required. Controller changes/removal revoke previous claims. Advanced host-code rooms remain available; `SLIPSTREAM_STUDENT_ROOMS=0` disables anonymous Student room creation. See SECURITY.md for the bounded availability tradeoff.
+- Power Zone 57 gets clear amber rendering and optional **custom** any-lane checkpoint rules: 3-second virtual shield or up to +75 mm/s for ≤1 second after a confirmed ordinary-straight exit. Defaults off, honors throttle/max/ramp/faults, no special-lane opcode guessed. Exact OBB re-extraction matched existing geometry; no geometry fault was reproduced. Special-piece scored-round gate remains. [Evidence and rules](slipstream/review/WEEK4-POWER-ZONE.md).
+- 3D adds chase, driver, trackside, overview and automatic director, per-car focus and optional captions/voice. Unknown pose returns to overview; reduced motion stays in overview. This is estimated visualization, never a vehicle camera feed or control path.
+- [Car audio investigation](slipstream/review/CAR-AUDIO-OPTIONS.md): fresh static native analysis confirms Android app playback and 35 audio banks. No onboard speaker/audio command verified for Guardian/Groundshock/MXT; use optional client audio, not invented BLE packets. Engine sounds are a proposed next feature; optional spoken commentary is implemented.
+
+Validation: baseline 842/842 Node tests; final 886/886 Node 22 tests, 38 Python tests, CWE and dependency regression checks pass; npm audit reports 0 vulnerabilities. Browser simulator checks cover unique QR invitations, approval, phone hold/release, maximum speed, camera views and responsive layouts. [Full response](slipstream/review/WEEK4-BUILD-REPORT.md).
+
+**No new physical test took place.** Guardian's previously accepted 300 mm/s scan/forward/left/right/Computer results remain the hardware baseline. Higher speeds, telemetry grace and custom Power Zone effects need supervised acceptance; no new hardware equivalence or formal full-system proof is claimed. Groundshock still independently spins in Drone Mode and is excluded from acceptance.
+
+# Previous: review hardening — unidentified cars no longer default to Groundshock
 
 Independent review of the Student workspace and phone QR work reproduced one latent identity defect and left all accepted hardware evidence and safety behavior unchanged. `Game.addCar` defaulted its `model` parameter to `8` (Groundshock, which is also the excluded car), so any caller that omitted model information silently produced a Groundshock-named car. The student connect path was already safe — it passes `model: 0` for an unadvertised car, names it “Unidentified car”, and logs “no Groundshock identity assumed” — so no student-facing screen showed a wrong identity; the defect lived at the library boundary and contradicted the stated invariant “missing model information must not silently become Groundshock.”
 
