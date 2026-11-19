@@ -31,6 +31,12 @@ Guardian's prior accepted ordinary-track scan,3 forward laps, left/right shifts 
 
 The audio investigation supports optional browser/phone playback. Spoken commentary is implemented; synthesized engine/effect sounds and an on-car audio retrofit are proposals, not completed features. No verified onboard sound opcode was found.
 
+## Published verification
+
+Implementation commit `748f645` was pushed and deployed to the existing Codespace on this branch. Its clean checkout and branch/head were verified. The managed live-only server restarted after the host page showed zero cars and STOPPED; no port visibility/access setting changed. The checkout completed despite the Codespace’s pre-existing missing Git LFS post-checkout hook warning; the hook was not removed.
+
+Anonymous public readiness/controller checks passed and teaching routes stayed isolated. Through the actual public HTTPS address, a fresh Student room was created without a host code, four distinct per-car invitations were generated, and the temporary room was deleted. The published browser loaded the Week 4 controls without console warnings/errors and was left stopped with zero cars. Phone hold/release and camera rendering were checked on the local simulator; a real phone on the classroom network and physical acceptance remain separate checks.
+
 ## Visual previews
 
 Simulator only; no physical acceptance is implied.
