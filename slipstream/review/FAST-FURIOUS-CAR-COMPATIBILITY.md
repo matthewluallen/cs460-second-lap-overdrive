@@ -47,3 +47,9 @@ The remaining acceptance run is startup-inclusive recording for each charged car
 ## Verification
 
 Node 22.23.5: **934/934 tests pass** (917 baseline plus 17 new compatibility/ordering regressions). Python 3.14.7: **38/38 pass**. CWE and dependency regressions pass; npm 11.9.0 audit reports **zero vulnerabilities**. No dependencies changed. The Student browser was checked with both simulated cars selected by physical name, separate green/blue colors and zero commanded speed, with no console warnings/errors. [Browser evidence](assets/ff-models-student.jpg). No physical car was connected.
+
+## Deployment
+
+Implementation **`7d33a30`** was pushed and fast-forwarded into the clean existing Codespace on this branch. The managed live-only server was identity-checked and restarted on its existing public port3000; access settings were unchanged. Anonymous readiness/controller/teaching-isolation preflight passes. The public model module returns200; compatibility and initialization test modules return404. The served application reports the expected build, and the served car module includes the repaired reply gate. The pre-existing missing Git LFS hook warning did not prevent the fast-forward; no hook was removed.
+
+Browser verification shows **Classic SDK connection**, the explicit F&F guidance, **STOPPED**, **0 / 4 cars**, and no console warnings/errors. [Published connection guidance](assets/ff-connection-public.jpg). The isolated simulator tab/server were closed. Refresh host and phones before reconnecting; this deployment still provides no new physical-car acceptance.
