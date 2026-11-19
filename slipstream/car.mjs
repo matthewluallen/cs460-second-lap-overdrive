@@ -76,7 +76,9 @@ export class Car {
     // Install the listener before queueing the request; some transports reply immediately.
     await new Promise((resolve, reject) => {
       let timer;
-      const replyGate=phase.sdkPlasticTrack?{ping:encode.ping(),entered:false}:null;
+      const request=phase.reply==='ping'?encode.ping():phase.reply==='version'?phase.packets.find(packet=>packet[1]===0x18):null;
+      if(phase.reply==='version' && !request) { reject(new Error('Firmware version phase has no request')); return; }
+      const replyGate=request?{request,entered:false}:null;
       if (replyGate) this.initializationReplyGate=replyGate;
       const finish = error => { clearTimeout(timer); off(); if(this.initializationReplyGate===replyGate)this.initializationReplyGate=null; error ? reject(error) : resolve(); };
       const off = this.on(message => {
@@ -85,7 +87,7 @@ export class Car {
       });
       timer = setTimeout(() => finish(new Error(phase.name + ' response timed out')), this.transport.initializationTimeoutMs ?? 3000);
       for (let i=0;i<phase.packets.length;i++) this.send('init-'+i, phase.packets[i]);
-      if (phase.reply === 'ping') this.send('init-ping', replyGate?.ping??encode.ping());
+      if (phase.reply === 'ping') this.send('init-ping', request);
     });
   }
   // Latest command per key wins, so a slow radio never builds a backlog.
@@ -152,9 +154,10 @@ export class Car {
         // An unsent correction must not consume the throttle for a newer code.
         // Entry into the transport is still not firmware measurement or ACK.
         if (calibration) this.lastCalibration=now;
-        // Only the optional comparison uses this gate. A premature pong cannot
-        // confirm a phase whose own ping has not entered the serialized radio.
-        if (this.initializationReplyGate?.ping===bytes) this.initializationReplyGate.entered=true;
+        // A premature pong/version cannot confirm a phase before its own
+        // request enters the serialized radio. Replies have no correlation ID:
+        // a later pong remains a sequence barrier, not semantic acceptance.
+        if (this.initializationReplyGate?.request===bytes) this.initializationReplyGate.entered=true;
         return this.transport.write(bytes);
       }), new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error('Car write timed out'), {writeTimedOut: true})), this.writeTimeoutMs);

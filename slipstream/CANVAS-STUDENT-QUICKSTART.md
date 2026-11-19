@@ -44,6 +44,8 @@ If scanning fails, read the visible reason. Confirm the car is stopped on track,
 use its **Recover** button when required, then **Clear pit · keep stopped**.
 A new **Scan track** action starts a separate countdown.
 
+For the Fast & Furious kit, use **Classic SDK connection** and match **Ice Charger / Dynamo** or **International MXT / Mammoth** in the model selector. The kit name does not require the experimental original-app handshake. Ice Charger and X52 Ice are different cars. Both F&F models still require their own supervised physical acceptance; a successful simulation is not that evidence.
+
 ## 4. Choose your controller
 
 Read the readiness panel below the header before starting. It names the car and

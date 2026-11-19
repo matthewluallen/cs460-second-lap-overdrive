@@ -21,6 +21,12 @@ The readiness panel below the header explains the exact blocking car/action when
 
 During optional telemetry recovery, the phone explains limited forward speed and locks steering, tilt, attacks and U-turns. After readings return, use a fresh steering action; enable tilt again if needed. A full STOP still requires released controls before rearming. After a software update, refresh **both** the host and every phone, reconnect cars and approve fresh invitations.
 
+### Fast & Furious cars
+
+Choose **Connection settings → Connection protocol → Classic SDK connection** before connecting. Select **Ice Charger / Dynamo** or **International MXT / Mammoth** in **Car model**, then check the physical LED color. The same car may advertise an ambiguous name such as “Z. Drive”; this does not identify its model. Ice Charger is not X52 Ice, and MXT does not use Supertruck rules.
+
+The original F&F app handshake is a separate experimental protocol option, not a required choice for an F&F shell. Protocol changes apply to the next connection. Both models now have dedicated software regression coverage, but neither has completed this build’s physical scan/steering/STOP acceptance. Keep the 300 mm/s starting ceiling. [Compatibility evidence and remaining limits](review/FAST-FURIOUS-CAR-COMPATIBILITY.md).
+
 ### Save your driving evidence
 
 Choose **STOP ALL**, confirm the physical stop, then **Run report**. Add only what you actually saw in **What you observed on the physical track**, choose **Update report**, and use **Download report** or **Print report**. The summary distinguishes written speed commands, reported speeds, active-driving telemetry gaps, controller lap counts and unverified human observations. It cannot prove physical movement or stopping. Missing history remains labeled; **Record from now** starts future capture when no recording is active. Close the report before starting another run, then stop and update it afterward.

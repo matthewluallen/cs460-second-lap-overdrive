@@ -9,6 +9,10 @@ of scope.
 preserved as `course-vulnerable-baseline`. Check that tag or commit out to
 reproduce the original exercises; the lab guides under `bench/` still describe its behavior.
 
+## Initialization reply ordering — 18 November 2026
+
+Reproduced early-pong/version regressions showed an initialization phase could advance while its own request was still queued, allowing later keyed commands to collapse a barrier. All SDK and app-mode ping/version phases now open their reply gate only at that request’s serialized transport entry. Native app `0x23` confirmation remains mandatory; unsupported MXT compact telemetry remains diagnostic/unknown. Replies contain no correlation token, so this ordering check is not cryptographic acknowledgment or proof of firmware state. STOP, write serialization, neutral arming and watchdogs remain unchanged. The public allowlist adds only the presentation module `vehicle-models.mjs`; new compatibility and initialization tests remain unavailable through the live server.
+
 ## Classroom phone recovery and presentation boundaries — 18 November 2026
 
 A source-level concern was reproduced in the host test harness: a phone could retain pre-gap steering/attack intent and present it again after the bounded telemetry recovery ended. The host now increments a per-seat `recoveryId` generation whenever it observes a new recovery episode, clears maneuver intent, and requires a matching generation plus an explicitly released steering/attack state before accepting a new maneuver. A stale packet or a phone that missed the degraded-state update cannot unlock that gate. The relay reconstructs only validated `steeringActive` and bounded integer `recoveryId` fields; this generation is not an authentication token and does not replace room/player authorization. Approved forward throttle during grace still obeys the existing cap/deadline. Full STOP, driver changes and disconnects retain the existing neutral-input arming rule.

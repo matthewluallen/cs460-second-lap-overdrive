@@ -1,4 +1,17 @@
-# Latest: Week 4 classroom readiness, phone health and run reports
+# Latest: Ice Charger and International MXT compatibility
+
+Branch **`week-4-student-driving`**, base **`5236343`**. Runtime **`2026-11-18-ff-compatibility`**. Do not merge main.
+
+- The retained F&F app identifies model 18 Mammoth as **International MXT** and model 19 Dynamo as **Ice Charger**. Both physical and later names now appear in the picker, connection, map, phone and report. Source tables/IDs/loadouts are unchanged; both remain ordinary cars, distinct from X52 Ice model 17. Missing advertisements still remain unidentified.
+- A reproduced startup sequencing defect is repaired: ping/version replies cannot advance initialization until that phase’s own request has entered transport. No packet bytes, native confirmation requirement, watchdogs or STOP priority changed.
+- **Connection protocol → Classic SDK connection** remains the classroom starting point for either model. The separately selectable original F&F app handshake is experimental; the kit branding does not require it. Reconnect to apply a protocol selection.
+- Added solo/pair/four-car scan/drive/steering/STOP simulator matrices and real HTTP/WebSocket seat-isolation checks. No physical cars moved. MXT9511’s retained incomplete app-mode startup and compact transitions remain unsupported, and Ice Charger has no physical acceptance trace.
+
+Validation: **934/934 Node tests, 38 Python tests, CWE/dependency checks pass; audit reports zero vulnerabilities.**
+
+Read [the compatibility evidence and limits](slipstream/review/FAST-FURIOUS-CAR-COMPATIBILITY.md) before claiming hardware support. Refresh host and phones after deploying this build.
+
+# Previous: Week 4 classroom readiness, phone health and run reports
 
 Branch **`week-4-student-driving`**, follow-up to **`9cb2bff`**. Do not merge main. Browser trace build: **`2026-11-18-week4-classroom`**. Refresh the host and every phone after updating; reconnect and approve fresh per-car invitations before driving.
 

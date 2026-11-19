@@ -29,3 +29,15 @@ test('an explicitly selected model is still honored, including Groundshock', () 
   assert.equal(guardian.car.model, 12);
   assert.equal(guardian.car.name, 'Guardian');
 });
+
+test('Fast & Furious physical names retain their original model IDs and later aliases', () => {
+  const g=game();
+  for(const [model,name,alias] of [[18,'International MXT','Mammoth'],[19,'Ice Charger','Dynamo']]) {
+    const driver=g.addCar(radio(),{model});
+    assert.ok(driver.car.name.includes(name), 'the model name printed on the F&F car must be visible');
+    assert.ok(driver.car.name.includes(alias), 'the later Overdrive alias stays recognizable');
+    assert.equal(driver.car.model,model);
+    assert.equal(g.vehicles.models[String(model)].name,alias,'source-derived tables remain unchanged');
+    assert.equal(g.vehicles.models[String(model)].truck,false,'MXT and Ice Charger are not Supertrucks');
+  }
+});

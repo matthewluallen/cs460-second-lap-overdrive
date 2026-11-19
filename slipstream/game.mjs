@@ -3,6 +3,7 @@ import {Car, LANE_STEP} from './car.mjs';
 import {Pieces, Track, TrackMapper, traversal, trackFromPlan, LANE_LIMIT, POSITION_MAX_AGE_MS} from './track.mjs';
 import {Battle, Bot, loadout} from './battle.mjs';
 import {PowerZoneController} from './power-zone.mjs';
+import {vehicleModelName} from './vehicle-models.mjs';
 
 export const MAX_CARS = 4;
 export const TEAM_COLORS = [[0, 1, 0], [0, 0.4, 1], [1, 0.5, 0], [1, 0, 1], [0, 1, 1], [1, 1, 0], [1, 1, 1], [1, 0, 0.3]];
@@ -35,7 +36,7 @@ export class Game {
     return mode;
   }
   get powerZoneMode() { return this.powerZones.mode; }
-  modelName(model) { return this.vehicles.models[String(model)]?.name ?? 'Unknown'; }
+  modelName(model) { return vehicleModelName(this.vehicles.models,model); }
   addCar(transport, {name, model = 0, simulated = false, control = 'none', beforeStart} = {}) {
     // Missing model information stays unidentified (model 0, "Unknown"). It must
     // not silently inherit a specific physical car such as Groundshock (model 8),

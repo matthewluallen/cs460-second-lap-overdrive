@@ -518,7 +518,7 @@ test('kit connection selects explicit SDK plastic comparison without changing or
     assert.equal(radio.sent.some(p=>p[1]===0x24 && (p[2]||p[3])),false,'connection cannot request forward speed');
     assert.equal(h.run('recorder.note'),'Existing connection recording');assert.equal(h.run("recorder.markers.some(m=>m.kind==='retained-evidence')"),true);
     assert.equal(h.run("recorder.markers.find(m=>m.kind==='connection-options').details.sdkPlasticTrackRequested"),kit==='sdk-plastic');
-    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-week4-classroom');
+    assert.equal(h.run('sessionTrace().diagnostics.build'),'2026-11-18-ff-compatibility');
     if(kit==='sdk-plastic') {
       const diagnostics=JSON.parse(h.run('JSON.stringify(sessionTrace().diagnostics.cars[0].sdkPlasticTrack)'));
       assert.deepEqual(diagnostics,{requested:true,sequenceComplete:true,firmwareApplied:null});
@@ -698,6 +698,26 @@ test('student hardware pairing separates Bluetooth identity from selected model 
   assert.ok(radio.sent.some(packet=>packet[1]===0x33),'initialization requests the assigned LED color');
   assert.equal(radio.sent.some(packet=>packet[1]===0x24&&(packet[2]||packet[3])),false);
   await h.run('game.removeCar(game.drivers[0])');
+});
+
+test('Fast & Furious names are selectable and advertised model IDs survive connection and phone state',async()=>{
+  for(const [model,physical,alias] of [[18,'International MXT','Mammoth'],[19,'Ice Charger','Dynamo']]) {
+    const radio=connectionRadio();radio.name='Z. Drive';radio.model=model;
+    const h=host({view:'student',bluetoothLink:radio});
+    await h.node('connect').click();await h.run('game.drivers[0].car.pumpPromise');
+    h.run('const d=game.drivers[0],ui=cards.get(d);');
+    assert.equal(h.run('d.car.model'),model);
+    assert.ok(h.run('d.car.name').includes(physical));
+    assert.ok(h.run('ui.model.children.some(o=>o.value==='+JSON.stringify(String(model))+'&&o.textContent.includes('+JSON.stringify(physical)+')&&o.textContent.includes('+JSON.stringify(alias)+'))'));
+    assert.equal(radio.initializationProfile,'sdk','the shell edition does not silently choose a protocol');
+    assert.equal(h.run('game.halted'),true);
+    assert.equal(radio.sent.some(p=>p[1]===0x24&&(p[2]||p[3])),false);
+    h.run("game.setControl(d,'phone');const player={id:1,approved:true,name:'Student',car:d.id};players.set(1,player);seat(player);let projected;room={link:{send:async value=>{projected=value;}}};pushState(game.snapshot(),250);");
+    assert.ok(h.run('projected.players[1].name').includes(physical));
+    assert.equal(h.run('projected.players[1].id'),1,'phone car ID is a seat, not the model ID');
+    assert.ok(h.run('sessionTrace().diagnostics.cars[0].model')===model);
+    await h.run('game.removeCar(d)');
+  }
 });
 
 test('student LED changes validate color and stopped state and preserve distinct encoded colors on later connections',async()=>{
@@ -906,7 +926,7 @@ test('Student readiness names an unapproved phone instead of silently disabling 
 
 test('four phone dashboards carry bounded health/effect durations without leaking host clocks',()=>{
   const h=host();for(let i=0;i<4;i++)h.node('addSim').click();
-  h.run(`game.useTrack(world.track);for(const d of game.drivers){game.setControl(d,'phone');const p={id:d.id,name:'Driver',approved:true,car:d.id};players.set(p.id,p);seat(p);}
+  h.run(`game.useTrack(world.track);for(const d of game.drivers){game.setModel(d,d.id%2?18:19);d.car.name=game.modelName(d.car.model);game.setControl(d,'phone');const p={id:d.id,name:'Driver',approved:true,car:d.id};players.set(p.id,p);seat(p);}
     room={link:{send:async value=>{window.lastDashboard=value;}}};
     session.start('team',scoringSnapshot(0),0,{mission:'dawn-patrol'});
     const rows=game.snapshot(200).map(s=>({...s,telemetryHealth:{state:'degraded',until:999999999,maximumSpeed:999999},speedPlan:{requested:9999,commanded:9999,rampMs:99999},powerZone:{effect:{type:'boost',at:123456},expiresAt:999999999}}));

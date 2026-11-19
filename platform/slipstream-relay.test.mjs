@@ -69,7 +69,7 @@ test('controller and relay do not exist unless the server is started with the sl
 test('enabled controller serves only its browser assets, with security headers', async t => {
   const {origin, host} = await start(t);
   for (const path of ['/slipstream/', '/slipstream/index.html', '/slipstream/pad.html', '/slipstream/style.css', '/slipstream/app.mjs', '/slipstream/pad.mjs', '/slipstream/student-lab.mjs', '/slipstream/camera-director.mjs', '/slipstream/power-zone.mjs',
-    '/slipstream/readiness.mjs', '/slipstream/run-report.mjs', '/slipstream/audio-cues.mjs', '/slipstream/wake-lock.mjs',
+    '/slipstream/vehicle-models.mjs', '/slipstream/readiness.mjs', '/slipstream/run-report.mjs', '/slipstream/audio-cues.mjs', '/slipstream/wake-lock.mjs',
     '/slipstream/protocol.mjs', '/slipstream/track.mjs', '/slipstream/battle.mjs', '/slipstream/trace.mjs', '/slipstream/data/pieces.json', '/slipstream/vendor/qrcode.mjs', '/slipstream/render3d.mjs', '/slipstream/vendor/three.module.js', '/slipstream/vendor/three.core.js']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 200, path);
@@ -79,7 +79,7 @@ test('enabled controller serves only its browser assets, with security headers',
     assert.equal(response.headers.get('cache-control'), 'no-store', path);
   }
   for (const path of ['/slipstream/core.test.mjs', '/slipstream/student-lab.test.mjs', '/slipstream/camera-director.test.mjs', '/slipstream/power-zone.test.mjs', '/slipstream/tools/extract_config.py', '/slipstream/README.md', '/slipstream/ANALYSIS.md', '/slipstream/fixtures/sim-capsule.json',
-    '/slipstream/readiness.test.mjs', '/slipstream/run-report.test.mjs', '/slipstream/client-comfort.test.mjs',
+    '/slipstream/fast-furious-models.test.mjs', '/slipstream/car-model-identity.test.mjs', '/slipstream/readiness.test.mjs', '/slipstream/run-report.test.mjs', '/slipstream/client-comfort.test.mjs',
     '/slipstream/../package.json', '/slipstream/data/../core.test.mjs', '/slipstream/vendor/qrcode.js', '/slipstream/vendor/three.cjs', '/slipstream/vendor/../package.json', '/slipstream/.git/config']) {
     const response = await fetch(origin + path); await response.arrayBuffer();
     assert.equal(response.status, 404, path);

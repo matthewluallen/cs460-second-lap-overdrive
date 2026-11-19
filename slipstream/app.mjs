@@ -70,10 +70,13 @@ function log(text) {
 // --- garage --------------------------------------------------------------------
 const cards = new Map();           // driver -> DOM refs
 const CONTROLS = [['none', 'Parked'], ['browser', 'On-screen controls'], ['keys1', 'Keyboard W A S D'], ['keys2', 'Keyboard arrows'], ['gamepad', 'Gamepad'], ['phone', 'Phone or link'], ['bot', 'Computer']];
-const MODELS = Object.entries(vehicles.models).filter(([, m]) => !['Future', 'Unrecognized'].includes(m.name)).sort((a, b) => a[1].name.localeCompare(b[1].name));
+const MODELS = Object.entries(vehicles.models).filter(([, m]) => !['Future', 'Unrecognized'].includes(m.name))
+  .map(([id,m])=>[id,{...m,name:game.modelName(id)}]).sort((a, b) => a[1].name.localeCompare(b[1].name));
+// Renaming a selector must not replace the established practice-car roster.
+const PRACTICE_MODELS=[...MODELS].sort((a,b)=>vehicles.models[a[0]].name.localeCompare(vehicles.models[b[0]].name));
 const connectionLabel = driver => driver.car.simulated ? 'Simulator' : driver.car.transport.initializationProfile === 'sdk'
   ? (driver.car.transport.initializationOptions?.plasticTrack === true ? 'Classic SDK · plastic-track comparison' : 'Classic SDK')
-  : driver.car.transport.initializationProfile === 'fast-furious' ? 'Fast & Furious · experimental' : 'Unspecified connection';
+  : driver.car.transport.initializationProfile === 'fast-furious' ? 'Original Fast & Furious app handshake · experimental' : 'Unspecified connection';
 const colorHex = color => '#' + color.map(v => Math.round(v * 255).toString(16).padStart(2, '0')).join('');
 const colorPacketKey = color => [...rgb(...color)].join(',');
 function assignDistinctColor(driver) {
@@ -251,7 +254,7 @@ $('layout').onchange = () => {
 };
 $('addSim').onclick = () => {
   if (game.drivers.length >= 4 || session.status === 'running' || session.status === 'paused' || countdown) return;
-  const taken = new Set(game.drivers.map(d => d.car.model)), next = MODELS.find(([id]) => !taken.has(Number(id))) ?? MODELS[0];
+  const taken = new Set(game.drivers.map(d => d.car.model)), next = PRACTICE_MODELS.find(([id]) => !taken.has(Number(id))) ?? PRACTICE_MODELS[0];
   const sim = world.addCar({model: Number(next[0])});
   if (isStudent()) halt('Adding a practice car');
   const driver = game.addCar(sim, {model: Number(next[0]), simulated: true, control: isStudent() ? 'browser' : game.drivers.some(d => d.control === 'keys1') ? 'bot' : 'keys1', beforeStart:assignDistinctColor});
@@ -262,7 +265,7 @@ const showKitNote=()=>{
   $('kitNote').hidden=false;
   $('kitNote').textContent='This choice applies to the next Connect car, separately from Car model. '+($('kit').value==='sdk-plastic'
     ? 'Explicit comparison: request the plastic-track parser with jump boosts off. Connecting does not start the car; firmware application is unconfirmed.'
-    : 'Classic SDK previously scanned Groundshock; current reliability is unverified. Fast & Furious remains experimental.');
+    : 'Classic SDK is the classroom starting point, including Ice Charger and International MXT. Their model is chosen separately. The original F&F app handshake is experimental; owning that kit does not require it. These two cars still need their own track acceptance.');
 };
 const KIT_CHOICES=['fast-furious','sdk','sdk-plastic'],KIT_STORAGE='slipstream.kit.v1';
 $('kit').value='sdk';
@@ -283,7 +286,7 @@ $('connect').onclick = async event => {
     link.initializationOptions = kit==='sdk-plastic' ? {plasticTrack:true} : {};
     if (game.drivers.length >= 4 || document.hidden) { link.close(); throw new Error('Connection cancelled: return to the host tab with an available garage slot.'); }
     if (isStudent()) halt('Connecting a car');
-    const driver = game.addCar(link, {model, name: model ? vehicles.models[String(model)].name : 'Unidentified car', control: isStudent() ? 'browser' : 'none', beforeStart: d => {
+    const driver = game.addCar(link, {model, name: model ? game.modelName(model) : 'Unidentified car', control: isStudent() ? 'browser' : 'none', beforeStart: d => {
       assignDistinctColor(d);
       if (!recorder.active) recorder.start(game.drivers.filter(x=>!x.car.simulated), 'Hardware connection and initialization');
       recorder.add(d); $('record').textContent='Stop recording'; $('saveTrace').disabled=false; $('traceNote').textContent='Recording from initialization…';
@@ -990,7 +993,7 @@ $('record').onclick = () => {
   recorder.start(game.drivers, 'layout: ' + (game.drivers.every(d => d.car.simulated) ? world.layoutName : 'real track'));
   $('record').textContent = 'Stop recording'; $('saveTrace').disabled = false; $('traceNote').textContent = 'Recording…';
 };
-function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-week4-classroom',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,model:d.car.model,simulated:d.car.simulated,...d.car.diagnostics()})),round:session.view(),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
+function sessionTrace() { return {...recorder.toJSON(),diagnostics:{schema:'slipstream-diagnostics-v1',build:'2026-11-18-ff-compatibility',exported:new Date().toISOString(),phase:game.phase,halted:game.halted,pitReason:game.pitReason,safety:{...game.safety},driving:{maximumSpeed:game.topSpeed,rampMs:game.rampMs,telemetryGraceMs:game.telemetryGraceMs,powerZoneMode:game.powerZoneMode??'off'},track:game.track?.toJSON()??null,trackChecks:trackValidation(game.track),cars:game.drivers.map(d=>({carId:d.id,model:d.car.model,simulated:d.car.simulated,...d.car.diagnostics()})),round:session.view(),operatorNotes:$('operatorNotes').value.slice(0,2000)}}; }
 function canReport(){return game.halted&&!countdown&&game.phase!=='scanning'&&!game.diagnostic&&!game.forwardBaseline&&!game.laneCancellationComparison&&game.drivers.every(d=>d.car.speed===0)&&(recorder.cars.length>0||game.drivers.length>0);}
 let reportText='';
 function refreshReport() {
